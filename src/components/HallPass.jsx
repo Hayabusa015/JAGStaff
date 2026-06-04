@@ -151,32 +151,41 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
 
         {/* Action zone */}
         {screen === "home" && (
-          <div>
-            <div style={{ textAlign: "center", fontWeight: 800, fontSize: "1.1rem", letterSpacing: "0.06em", marginBottom: "0.75rem" }}>TAP YOUR NAME — LEAVE OR RETURN</div>
-            {maxReached && <div style={{ textAlign: "center", color: "#fca5a5", fontWeight: 700, marginBottom: "0.75rem", fontSize: "0.85rem" }}>⛔ MAX STUDENTS OUT — RETURNS ONLY</div>}
-            <input
-              value={kioskSearch}
-              onChange={e => setKioskSearch(e.target.value)}
-              placeholder="Search your name…"
-              style={{ marginBottom: "0.75rem", background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)" }}
-            />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: "0.5rem" }}>
-              {filteredStudents.map(s => {
-                const isOut = activePasses.find(p => p.studentId === s.id);
-                const disabled = maxReached && !isOut;
-                return (
-                  <button key={s.id} onClick={() => !disabled && selectStudent(s)} style={{
-                    background: isOut ? "rgba(245,192,37,0.15)" : "rgba(255,255,255,0.06)",
-                    border: `1px solid ${isOut ? GOLD : "rgba(255,255,255,0.1)"}`,
-                    borderRadius: "8px", padding: "0.75rem 0.5rem", cursor: disabled ? "not-allowed" : "pointer",
-                    opacity: disabled ? 0.35 : 1, color: "#fff", textAlign: "center",
-                  }}>
-                    <div style={{ fontWeight: 800 }}>{s.firstName}</div>
-                    <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.6)" }}>{s.lastName}</div>
-                    {isOut && <div style={{ color: GOLD, fontSize: "0.7rem", fontWeight: 700, marginTop: "0.25rem" }}>TAP TO RETURN</div>}
-                  </button>
-                );
-              })}
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", fontWeight: 800, fontSize: "1.2rem", letterSpacing: "0.06em", marginBottom: "1rem" }}>TYPE YOUR NAME TO SIGN OUT OR RETURN</div>
+            {maxReached && <div style={{ textAlign: "center", color: "#fca5a5", fontWeight: 700, marginBottom: "0.75rem", fontSize: "0.9rem" }}>⛔ MAX STUDENTS OUT — RETURNS ONLY</div>}
+            <div style={{ position: "relative" }}>
+              <input
+                value={kioskSearch}
+                onChange={e => setKioskSearch(e.target.value)}
+                placeholder="Start typing your name…"
+                autoFocus
+                style={{ fontSize: "1.3rem", padding: "1rem 1.25rem", background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "10px" }}
+              />
+              {kioskSearch.trim().length > 0 && filteredStudents.length > 0 && (
+                <ul className="autocomplete-list" style={{ top: "calc(100% + 4px)", left: 0, right: 0, maxHeight: 320, overflowY: "auto", zIndex: 50 }}>
+                  {filteredStudents.slice(0, 8).map(s => {
+                    const isOut = activePasses.find(p => p.studentId === s.id);
+                    const disabled = maxReached && !isOut;
+                    return (
+                      <li key={s.id}
+                        className="autocomplete-item"
+                        style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1.1rem", padding: "0.85rem 1rem" }}
+                        onClick={() => { if (!disabled) { selectStudent(s); setKioskSearch(""); } }}
+                      >
+                        <span style={{ fontWeight: 700 }}>{s.firstName} {s.lastName}</span>
+                        {isOut
+                          ? <span style={{ color: GOLD, fontWeight: 800, fontSize: "0.85rem" }}>TAP TO RETURN ↩</span>
+                          : <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.85rem" }}>Sign Out →</span>
+                        }
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {kioskSearch.trim().length > 0 && filteredStudents.length === 0 && (
+                <div style={{ marginTop: "0.75rem", textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "0.9rem" }}>No students found</div>
+              )}
             </div>
           </div>
         )}
