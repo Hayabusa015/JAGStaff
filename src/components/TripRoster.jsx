@@ -70,10 +70,12 @@ export default function TripRoster({ tripRosters, setTripRosters, students }) {
               <label>Leaving</label>
               <input type="time" value={form.depart} onChange={e => setForm(f => ({ ...f, depart: e.target.value }))} />
             </div>
-            <div>
-              <label>Returning</label>
-              <input type="time" value={form.returnTime} onChange={e => setForm(f => ({ ...f, returnTime: e.target.value }))} />
-            </div>
+            {form.type !== "Early Release" && (
+              <div>
+                <label>Returning</label>
+                <input type="time" value={form.returnTime} onChange={e => setForm(f => ({ ...f, returnTime: e.target.value }))} />
+              </div>
+            )}
           </div>
 
           {students.length > 0 && (
@@ -121,7 +123,7 @@ export default function TripRoster({ tripRosters, setTripRosters, students }) {
                 <button className="btn btn-danger btn-sm" onClick={() => remove(trip.id)}>✕</button>
               </div>
             </div>
-            <div className="text-muted mt1">{trip.teacher}{trip.teacher ? " · " : ""}{d}{trip.depart ? ` · ${trip.depart}–${trip.returnTime}` : ""}</div>
+            <div className="text-muted mt1">{trip.teacher}{trip.teacher ? " · " : ""}{d}{trip.depart ? ` · ${trip.depart}${trip.returnTime ? `–${trip.returnTime}` : ""}` : ""}</div>
             {trip.notes && <div className="text-muted">{trip.notes}</div>}
             {open && (
               <div className="mt1">
