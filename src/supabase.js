@@ -439,3 +439,103 @@ export function useGmenRequests() {
 
   return { requests, addRequest, markArrived, clearAll };
 }
+
+// ─── Staff Directory ──────────────────────────────────────────────
+// Auto-registers each teacher when they open Hall Pass.
+// Powers the "Send to Teacher" dropdown for room passes.
+export function useStaffDirectory(user, room) {
+  const [staff, setStaff] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !user?.email) return;
+
+    // Upsert this teacher so others can see them in the dropdown.
+    supabase.from("staff_directory").upsert({
+      email: user.email,
+      name: user.name,
+      room: room || null,
+      last_seen: new Date().toISOString(),
+    }, { onConflict: "email" });
+
+    // Load all staff.
+    supabase.from("staff_directory")
+      .select("*")
+      .order("name")
+      .then(({ data }) => setStaff(data || []));
+  }, [user?.email, room]);
+
+  return staff;
+}
+
+// ─── Room Passes ──────────────────────────────────────────────────
+// Separate from hall passes — sending a student to a teacher's room.
+// Does not count toward the hall pass limit.
+const ROOM_PASS_REASONS = ["Extra Help", "Makeup Test", "Finish Lab", "Late Pass", "Other"];
+export { ROOM_PASS_REASONS };
+
+export function useRoomPasses(userEmail) {
+  const [passes, setPasses] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const { data } = await supabase
+        .from("room_passes")
+        .select("*")
+        .gte("created_at", today.toISOString())
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      setPasses(data || []);
+    }
+    load();
+
+    const channel = supabase
+      .channel("room-passes-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_passes" }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
+
+  const sentByMe   = passes.filter(p => p.from_email === userEmail);
+  const sentToMe   = passes.filter(p => p.to_email   === userEmail);
+
+  async function sendPass({ studentId, studentName, toTeacher, reason, fromTeacher, fromEmail, fromRoom }) {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(prev => [{
+        id: Date.now().toString(), student_id: studentId, student_name: studentName,
+        from_teacher: fromTeacher, from_email: fromEmail, from_room: fromRoom,
+        to_teacher: toTeacher.name, to_email: toTeacher.email,
+        reason, status: "pending", created_at: new Date().toISOString(),
+      }, ...prev]);
+      return;
+    }
+    await supabase.from("room_passes").insert({
+      student_id: studentId, student_name: studentName,
+      from_teacher: fromTeacher, from_email: fromEmail, from_room: fromRoom,
+      to_teacher: toTeacher.name, to_email: toTeacher.email,
+      reason, status: "pending",
+    });
+  }
+
+  async function markArrived(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(p => p.map(x => x.id === id ? { ...x, status: "arrived" } : x));
+      return;
+    }
+    await supabase.from("room_passes").update({ status: "arrived" }).eq("id", id);
+  }
+
+  async function dismiss(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(p => p.map(x => x.id === id ? { ...x, status: "dismissed" } : x));
+      return;
+    }
+    await supabase.from("room_passes").update({ status: "dismissed" }).eq("id", id);
+  }
+
+  return { sentByMe, sentToMe, sendPass, markArrived, dismiss };
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, SUPABASE_READY } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, SUPABASE_READY } from "../supabase.js";
 
 function elapsed(outTime) {
   if (!outTime) return 0;
@@ -219,8 +219,6 @@ export default function HallPass({ user, students }) {
   const { passes, log, ready, addPass, returnPass } = useSharedHallPasses();
   const [kioskMode, setKioskMode] = useState(false);
   const [subTab, setSubTab] = useState("overview");
-  const [logSearch, setLogSearch] = useState("");
-  const [confirmClear, setConfirmClear] = useState(false);
   const [settings, setSettings] = useState({
     teacherName: user?.name || "Teacher",
     room: "101",
@@ -230,6 +228,45 @@ export default function HallPass({ user, students }) {
     periodLength: 50,
     destinations: DESTINATIONS.map(d => d.key),
   });
+  const staff = useStaffDirectory(user, settings.room);
+  const { sentByMe, sentToMe, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
+
+  // Room pass form state
+  const [rpStudent, setRpStudent] = useState(null);
+  const [rpSearch, setRpSearch] = useState("");
+  const [rpSearchResults, setRpSearchResults] = useState([]);
+  const [rpTeacher, setRpTeacher] = useState("");
+  const [rpReason, setRpReason] = useState(ROOM_PASS_REASONS[0]);
+  const [rpSent, setRpSent] = useState(false);
+
+  useEffect(() => {
+    if (!rpSearch.trim()) { setRpSearchResults([]); return; }
+    setRpSearchResults(students.filter(s =>
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(rpSearch.toLowerCase())
+    ).slice(0, 6));
+  }, [rpSearch, students]);
+
+  async function handleSendRoomPass(e) {
+    e.preventDefault();
+    if (!rpStudent || !rpTeacher) return;
+    const toTeacher = staff.find(s => s.email === rpTeacher);
+    if (!toTeacher) return;
+    await sendPass({
+      studentId: rpStudent.id,
+      studentName: `${rpStudent.firstName} ${rpStudent.lastName}`,
+      toTeacher,
+      reason: rpReason,
+      fromTeacher: settings.teacherName,
+      fromEmail: user?.email,
+      fromRoom: settings.room,
+    });
+    setRpStudent(null); setRpSearch(""); setRpTeacher(""); setRpReason(ROOM_PASS_REASONS[0]);
+    setRpSent(true); setTimeout(() => setRpSent(false), 3000);
+  }
+
+  const incomingPending = sentToMe.filter(p => p.status === "pending");
+  const [logSearch, setLogSearch] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const activePasses = passes.filter(p => !p.returnTime);
   const todayLog = log;
@@ -313,8 +350,17 @@ export default function HallPass({ user, students }) {
 
       {/* Sub-tabs */}
       <div className="flex gap1 mb2">
-        {["overview","log","settings"].map(t => (
-          <button key={t} className={`btn btn-sm ${subTab === t ? "btn-primary" : "btn-ghost"}`} style={{ textTransform: "capitalize" }} onClick={() => setSubTab(t)}>{t}</button>
+        {["overview","log","room passes","settings"].map(t => (
+          <button key={t} className={`btn btn-sm ${subTab === t ? "btn-primary" : "btn-ghost"}`}
+            style={{ textTransform: "capitalize", position: "relative" }}
+            onClick={() => setSubTab(t)}>
+            {t}
+            {t === "room passes" && incomingPending.length > 0 && (
+              <span style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "#fff", borderRadius: "999px", fontSize: "0.6rem", fontWeight: 800, padding: "0.1rem 0.35rem", lineHeight: 1 }}>
+                {incomingPending.length}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -366,6 +412,126 @@ export default function HallPass({ user, students }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {subTab === "room passes" && (
+        <div>
+          {/* Incoming passes alert */}
+          {incomingPending.length > 0 && (
+            <div className="card mb2" style={{ borderLeft: "4px solid #f97316" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "0.08em", color: "#f97316", marginBottom: "0.5rem" }}>
+                📨 INCOMING — STUDENTS ON THEIR WAY TO YOUR ROOM
+              </div>
+              {incomingPending.map(p => (
+                <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div>
+                    <span style={{ fontWeight: 700 }}>{p.student_name}</span>
+                    <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>
+                      from {p.from_teacher} (Rm {p.from_room}) · {p.reason}
+                    </span>
+                  </div>
+                  <div className="flex gap1">
+                    <button className="btn btn-primary btn-sm" onClick={() => markRoomArrived(p.id)}>✓ Arrived</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => dismiss(p.id)}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Send a room pass */}
+          <div className="card mb2">
+            <div className="section-title">Send Student to Another Teacher's Room</div>
+            {rpSent && (
+              <div style={{ color: "#4ade80", fontWeight: 600, fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+                ✓ Pass sent — that teacher will see it immediately.
+              </div>
+            )}
+            <form onSubmit={handleSendRoomPass}>
+              {/* Student search */}
+              <div className="mb1" style={{ position: "relative" }}>
+                <label>Student</label>
+                {rpStudent ? (
+                  <div className="flex items-center gap1">
+                    <span style={{ fontWeight: 600 }}>{rpStudent.firstName} {rpStudent.lastName}</span>
+                    <span className="tag tag-amber">{rpStudent.grade}</span>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRpStudent(null); setRpSearch(""); }}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <input value={rpSearch} onChange={e => setRpSearch(e.target.value)} placeholder="Search student name…" />
+                    {rpSearchResults.length > 0 && (
+                      <div className="autocomplete-list">
+                        {rpSearchResults.map(s => (
+                          <div key={s.id} className="autocomplete-item" onClick={() => { setRpStudent(s); setRpSearch(""); setRpSearchResults([]); }}>
+                            {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="grid2 mb1">
+                <div>
+                  <label>Send To (Teacher)</label>
+                  <select value={rpTeacher} onChange={e => setRpTeacher(e.target.value)} required>
+                    <option value="">— Select teacher —</option>
+                    {staff.filter(s => s.email !== user?.email).map(s => (
+                      <option key={s.email} value={s.email}>
+                        {s.name}{s.room ? ` · Rm ${s.room}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Reason</label>
+                  <select value={rpReason} onChange={e => setRpReason(e.target.value)}>
+                    {ROOM_PASS_REASONS.map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={!rpStudent || !rpTeacher}>
+                Send Room Pass
+              </button>
+            </form>
+          </div>
+
+          {/* Passes I sent today */}
+          <div className="card mb2">
+            <div className="section-title">Passes I Sent Today</div>
+            {sentByMe.length === 0 && <p className="text-muted">No room passes sent today.</p>}
+            {sentByMe.map(p => (
+              <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div>
+                  <span style={{ fontWeight: 600 }}>{p.student_name}</span>
+                  <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>→ {p.to_teacher} · {p.reason}</span>
+                </div>
+                <span className={`tag ${p.status === "arrived" ? "tag-green" : p.status === "dismissed" ? "tag-amber" : "tag-blue"}`}>
+                  {p.status}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* All incoming (including arrived/dismissed) */}
+          {sentToMe.filter(p => p.status !== "pending").length > 0 && (
+            <div className="card">
+              <div className="section-title">Received Today (History)</div>
+              {sentToMe.filter(p => p.status !== "pending").map(p => (
+                <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div>
+                    <span style={{ fontWeight: 600 }}>{p.student_name}</span>
+                    <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>from {p.from_teacher} · {p.reason}</span>
+                  </div>
+                  <span className={`tag ${p.status === "arrived" ? "tag-green" : "tag-amber"}`}>{p.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
