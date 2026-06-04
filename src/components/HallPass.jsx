@@ -145,7 +145,12 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
                 const flagged = secs > flagSecs;
                 const accentColor = critical ? "#f87171" : flagged ? "#fb923c" : GOLD;
                 return (
-                  <div key={p.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${accentColor}55`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center", backdropFilter: "blur(4px)" }}>
+                  <div key={p.id}
+                    onClick={() => { setSelected({ id: p.studentId, firstName: p.studentName?.split(" ")[0] || "", lastName: p.studentName?.split(" ").slice(1).join(" ") || "", passId: p.id, dest: p.destination, outTime: p.outTime }); setScreen("confirm-return"); setKioskSearch(""); }}
+                    style={{ background: "rgba(255,255,255,0.04)", border: `2px solid ${accentColor}`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center", backdropFilter: "blur(4px)", cursor: "pointer", transition: "background 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = `${accentColor}18`}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                  >
                     {critical && <div style={{ background: "rgba(220,38,38,0.2)", color: "#fca5a5", fontSize: "0.68rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "4px", marginBottom: "0.5rem", letterSpacing: "0.08em" }}>⚠ CHECK ON STUDENT</div>}
                     <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${accentColor}22`, border: `2px solid ${accentColor}`, color: accentColor, fontWeight: 900, fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.75rem" }}>
                       {p.studentName?.split(" ").map(w => w[0]).join("").slice(0, 2)}
@@ -154,6 +159,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
                     <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>{destIcons[p.destination] || "📍"} {p.destination}</div>
                     <div style={{ color: accentColor, fontWeight: 800, marginTop: "0.5rem", fontSize: "1rem" }}>{fmtElapsed(secs)}</div>
                     <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", marginTop: "0.15rem" }}>since {fmtClock(p.outTime)}</div>
+                    <div style={{ marginTop: "0.75rem", background: `${accentColor}20`, borderRadius: "6px", padding: "0.3rem 0", fontSize: "0.72rem", fontWeight: 800, color: accentColor, letterSpacing: "0.08em" }}>TAP TO RETURN ↩</div>
                   </div>
                 );
               })}
