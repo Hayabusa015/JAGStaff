@@ -26,23 +26,17 @@ const TABS = [
   { key: "infractions", label: "Infractions",     icon: "⚠" },
 ];
 
-// Circular school logo — swap the SVG for <img src="/logo.png" ... /> once you have the file
 function SchoolLogo({ size = 42 }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%",
       border: `2px solid ${GOLD}`,
-      background: "linear-gradient(135deg, #1a1200 0%, #2a1e00 100%)",
+      background: "#000",
       display: "flex", alignItems: "center", justifyContent: "center",
       overflow: "hidden", flexShrink: 0,
-      boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.25)`,
+      boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.3)`,
     }}>
-      <svg viewBox="0 0 100 100" width={size * 0.65} height={size * 0.65}>
-        <text x="50" y="74" textAnchor="middle"
-          style={{ fontWeight: 900, fontSize: 74, fill: GOLD, fontFamily: "Georgia, serif" }}>
-          G
-        </text>
-      </svg>
+      <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );
 }
@@ -50,6 +44,7 @@ function SchoolLogo({ size = 42 }) {
 function LoginScreen({ signInWithGoogle, loading, error }) {
   return (
     <div className="login-bg">
+      <div className="login-mascot" aria-hidden="true" />
       <div className="login-card">
 
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
@@ -223,8 +218,17 @@ export default function App() {
 
       {/* Page content */}
       <div className="content-area">
-        {/* Subtle "G" watermark — visible but not distracting */}
-        <div className="mascot-watermark" aria-hidden="true">G</div>
+        {/* Mascot watermark */}
+        <img
+          src="/logo.png"
+          aria-hidden="true"
+          style={{
+            position: "fixed", bottom: "-60px", right: "-60px",
+            width: 420, height: 420, objectFit: "contain",
+            opacity: 0.045, pointerEvents: "none", zIndex: 0,
+            userSelect: "none",
+          }}
+        />
 
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}

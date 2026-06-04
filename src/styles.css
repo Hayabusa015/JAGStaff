@@ -453,18 +453,12 @@ label {
   overflow: hidden;
 }
 
-.login-bg::before {
-  content: "G";
+.login-mascot {
   position: absolute;
-  bottom: -80px;
-  right: -60px;
-  font-size: 500px;
-  font-weight: 900;
-  color: rgba(245,192,37,0.04);
-  line-height: 1;
+  inset: 0;
+  background: url('/logo.png') center/contain no-repeat;
+  opacity: 0.06;
   pointer-events: none;
-  letter-spacing: -0.05em;
-  user-select: none;
 }
 
 .login-card {
