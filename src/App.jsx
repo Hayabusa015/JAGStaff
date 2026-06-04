@@ -11,6 +11,7 @@ import HallPass from "./components/HallPass.jsx";
 import Requisition from "./components/Requisition.jsx";
 import FieldTrip from "./components/FieldTrip.jsx";
 import StudentRoster from "./components/StudentRoster.jsx";
+import Infractions from "./components/Infractions.jsx";
 
 const TABS = [
   { key: "dashboard",  label: "Dashboard" },
@@ -21,7 +22,8 @@ const TABS = [
   { key: "hallpass",   label: "Hall Pass" },
   { key: "requisition",label: "Requisitions" },
   { key: "fieldtrip",  label: "Field Trips" },
-  { key: "roster",     label: "Student Roster" },
+  { key: "roster",      label: "Student Roster" },
+  { key: "infractions", label: "Infractions" },
 ];
 
 function LoginScreen({ signInWithGoogle, loading, error }) {
@@ -195,7 +197,8 @@ export default function App() {
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "requisition" && <Requisition   {...sharedProps} />}
         {tab === "fieldtrip"   && <FieldTrip     {...sharedProps} />}
-        {tab === "roster"      && <StudentRoster {...sharedProps} />}
+        {tab === "roster"       && <StudentRoster  {...sharedProps} />}
+        {tab === "infractions"  && <Infractions students={students} user={user} />}
       </div>
     </div>
   );

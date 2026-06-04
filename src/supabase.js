@@ -218,3 +218,63 @@ export function useAuth(allowedDomain) {
 
   return { user, loading, error, signInWithGoogle, signOut };
 }
+
+// ─── Infraction Log (Supabase-backed) ────────────────────────────
+// Table: infractions — immutable append-only log, no update/delete RLS.
+// Falls back to local state when Supabase is not configured.
+export function useInfractions() {
+  const [infractions, setInfractions] = useState([]);
+  const [loading, setLoading] = useState(!SUPABASE_READY);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("infractions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      setInfractions(data || []);
+      setLoading(false);
+    }
+    load();
+
+    const channel = supabase
+      .channel("infractions-changes")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "infractions" }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
+
+  async function addInfraction(data) {
+    const row = {
+      id: Date.now().toString(),
+      student_id: data.studentId,
+      student_name: data.studentName,
+      type: data.type,
+      notes: data.notes || null,
+      teacher_name: data.teacherName,
+      room: data.room || null,
+      created_at: new Date().toISOString(),
+    };
+
+    if (!SUPABASE_READY || !supabase) {
+      setInfractions(prev => [row, ...prev]);
+      return;
+    }
+    await supabase.from("infractions").insert({
+      student_id: data.studentId,
+      student_name: data.studentName,
+      type: data.type,
+      notes: data.notes || null,
+      teacher_name: data.teacherName,
+      room: data.room || null,
+    });
+    // Realtime INSERT event triggers load() above — no local setState needed.
+  }
+
+  return { infractions, loading, addInfraction };
+}

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GOLD } from "../constants.js";
+import { useInfractions } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -8,7 +9,10 @@ function fmtTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
+const ESCALATION_THRESHOLD = 3;
+
 export default function Dashboard({ alerts, setAlerts, gmenRequests, setGmenRequests, weeklyEvents, tripRosters }) {
+  const { infractions } = useInfractions();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
   useEffect(() => {
     const id = setInterval(() => setNow({ date: fmtDate(), time: fmtTime() }), 30000);
@@ -99,6 +103,34 @@ export default function Dashboard({ alerts, setAlerts, gmenRequests, setGmenRequ
           )}
         </div>
       )}
+
+      {/* Escalation Watch */}
+      {(() => {
+        const cutoff = Date.now() - 7 * 86400000;
+        const map = {};
+        infractions.forEach(r => {
+          if (new Date(r.created_at).getTime() < cutoff) return;
+          if (!map[r.student_id]) map[r.student_id] = { name: r.student_name, count: 0 };
+          map[r.student_id].count++;
+        });
+        const watchList = Object.entries(map).filter(([, v]) => v.count >= ESCALATION_THRESHOLD).sort((a, b) => b[1].count - a[1].count);
+        if (!watchList.length) return null;
+        return (
+          <div className="card mb2" style={{ borderLeft: "4px solid #f97316" }}>
+            <div className="flex items-center gap1 mb1">
+              <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#f97316" }}>
+                ⚠ Infraction Escalation Watch
+              </span>
+            </div>
+            {watchList.map(([sid, { name, count }]) => (
+              <div key={sid} className="flex items-center justify-between" style={{ padding: "0.3rem 0", borderBottom: "1px solid rgba(200,200,200,0.15)" }}>
+                <span style={{ fontWeight: 600 }}>{name}</span>
+                <span className="tag tag-red">{count} this week — consider PBIS referral</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="grid2">
         {/* Weekly Events */}

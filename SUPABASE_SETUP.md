@@ -234,3 +234,39 @@ actually becomes an issue — the free tier handles a year of this easily.
 - **Cost:** realistic load (200 staff × 50 sign-outs/day) sits well inside the
   Supabase free tier.
 ```
+
+---
+
+## Infractions table
+
+Run this in the SQL Editor after the hall pass setup:
+
+```sql
+create table public.infractions (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   text not null,
+  student_name text not null,
+  type         text not null,
+  notes        text,
+  teacher_name text not null,
+  room         text,
+  created_at   timestamptz not null default now()
+);
+
+create index on public.infractions (student_id);
+create index on public.infractions (created_at);
+
+alter table public.infractions enable row level security;
+
+create policy "staff read infractions"
+  on public.infractions for select using (public.is_staff());
+
+create policy "staff insert infractions"
+  on public.infractions for insert with check (public.is_staff());
+-- No update/delete — log rows are immutable.
+
+alter publication supabase_realtime add table public.infractions;
+```
+
+The `public.is_staff()` function was created in the hall pass setup step — it
+already covers this table without any changes.
