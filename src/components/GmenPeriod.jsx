@@ -187,13 +187,11 @@ export default function GmenPeriod({ gmenRequests, setGmenRequests, setAlerts, s
           <div style={{ position: "relative" }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student name…" />
             {results.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid rgba(200,200,200,0.4)", borderRadius: "7px", zIndex: 100, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", marginTop: "2px" }}>
+              <div className="autocomplete-list">
                 {results.map(s => (
                   <div key={s.id}
                     onClick={() => addRequest(s)}
-                    style={{ padding: "0.5rem 0.75rem", cursor: "pointer", fontSize: "0.85rem", borderBottom: "1px solid rgba(200,200,200,0.2)" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(245,192,37,0.08)"}
-                    onMouseLeave={e => e.currentTarget.style.background = ""}
+                    className="autocomplete-item"
                   >
                     {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
                   </div>

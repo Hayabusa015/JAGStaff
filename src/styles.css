@@ -449,7 +449,31 @@ label {
   z-index: 1;
 }
 
-/* ── Scrollbar ── */
+/* ── Autocomplete dropdown ── */
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0; right: 0;
+  background: #1c1500;
+  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.autocomplete-item {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.1s;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover { background: rgba(245,192,37,0.1); color: var(--gold); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(245,192,37,0.25); border-radius: 3px; }
