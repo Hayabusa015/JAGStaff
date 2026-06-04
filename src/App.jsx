@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
-import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, SEED_STUDENTS, GOLD } from "./constants.js";
-import { useAuth, SUPABASE_READY } from "./supabase.js";
+import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
+import { useAuth, useStudents, SUPABASE_READY } from "./supabase.js";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
 import TripRoster from "./components/TripRoster.jsx";
@@ -130,7 +130,7 @@ export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
 
   const [tab, setTab] = useState("dashboard");
-  const [students, setStudents] = useState(SEED_STUDENTS);
+  const { students } = useStudents();
   const [weeklyEvents, setWeeklyEvents] = useState([
     { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
     { id: "ev2", type: "State Test", title: "ELA State Assessment", date: "2026-06-04", time: "08:00", details: "Grades 10 & 11 — quiet corridors after 7:55 AM." },
@@ -144,7 +144,6 @@ export default function App() {
       students: [{ name: "Marcus Thompson", grade: "10" }, { name: "Jordan Garcia", grade: "10" }],
     },
   ]);
-  const [gmenRequests, setGmenRequests] = useState([]);
   const [alerts, setAlerts] = useState([]);
 
   const resetTimer = useCallback(() => {
@@ -176,7 +175,7 @@ export default function App() {
 
   if (!user) return <LoginScreen signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
 
-  const sharedProps = { user, students, setStudents, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, gmenRequests, setGmenRequests, alerts, setAlerts };
+  const sharedProps = { user, students, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, alerts, setAlerts };
 
   return (
     <div className="app-shell">
@@ -236,7 +235,7 @@ export default function App() {
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "requisition" && <Requisition   {...sharedProps} />}
         {tab === "fieldtrip"   && <FieldTrip     {...sharedProps} />}
-        {tab === "roster"       && <StudentRoster  {...sharedProps} />}
+        {tab === "roster"       && <StudentRoster />}
         {tab === "infractions"  && <Infractions students={students} user={user} />}
       </div>
     </div>

@@ -279,6 +279,82 @@ export function useInfractions() {
   return { infractions, loading, addInfraction };
 }
 
+// ─── Student Roster (Supabase-backed) ────────────────────────────
+// Table: students — shared school roster (last_name, first_name, grade).
+// Falls back to local state (empty) when Supabase is not configured.
+export function useStudents() {
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) { setLoading(false); return; }
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("students")
+        .select("*")
+        .order("last_name").order("first_name");
+      if (!active) return;
+      setStudents((data || []).map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        grade: r.grade || "",
+      })));
+      setLoading(false);
+    }
+    load();
+    return () => { active = false; };
+  }, []);
+
+  // Replace the entire roster (used on CSV import).
+  async function importStudents(rows) {
+    if (!SUPABASE_READY || !supabase) {
+      setStudents(rows);
+      return;
+    }
+    // Delete all existing rows then insert fresh batch.
+    await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (rows.length === 0) { setStudents([]); return; }
+    const { data } = await supabase.from("students").insert(
+      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null }))
+    ).select("*");
+    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "" })));
+  }
+
+  async function addStudent(s) {
+    if (!SUPABASE_READY || !supabase) {
+      setStudents(prev => [...prev, { id: Date.now().toString(), ...s }]);
+      return;
+    }
+    const { data } = await supabase.from("students")
+      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null })
+      .select("*").single();
+    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "" }]);
+  }
+
+  async function updateStudent(id, s) {
+    if (!SUPABASE_READY || !supabase) {
+      setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
+      return;
+    }
+    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null }).eq("id", id);
+    setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
+  }
+
+  async function removeStudent(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setStudents(prev => prev.filter(x => x.id !== id));
+      return;
+    }
+    await supabase.from("students").delete().eq("id", id);
+    setStudents(prev => prev.filter(x => x.id !== id));
+  }
+
+  return { students, loading, importStudents, addStudent, updateStudent, removeStudent };
+}
+
 // ─── G-Men Requests (Supabase-backed) ────────────────────────────
 // Table: gmen_requests — today's remediation pull list, shared school-wide.
 // Falls back to local state when Supabase is not configured.
