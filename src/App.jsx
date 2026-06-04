@@ -14,16 +14,20 @@ import StudentRoster from "./components/StudentRoster.jsx";
 import Infractions from "./components/Infractions.jsx";
 
 const TABS = [
-  { key: "dashboard",   label: "Dashboard",      icon: "⊙" },
-  { key: "events",      label: "Weekly Events",   icon: "📅" },
-  { key: "trips",       label: "Trip Rosters",    icon: "🚌" },
-  { key: "ceu",         label: "CEU Tracker",     icon: "📋" },
-  { key: "gmen",        label: "G-Men Period",    icon: "👥" },
-  { key: "hallpass",    label: "Hall Pass",       icon: "🪪" },
-  { key: "requisition", label: "Requisitions",    icon: "📦" },
-  { key: "fieldtrip",   label: "Field Trips",     icon: "🗺" },
-  { key: "roster",      label: "Student Roster",  icon: "👤" },
-  { key: "infractions", label: "Infractions",     icon: "⚠" },
+  { key: "dashboard",   label: "Dashboard"        },
+  { key: "events",      label: "Weekly Events"    },
+  { key: "trips",       label: "Trip Rosters"     },
+  { key: "gmen",        label: "G-Men Period"     },
+  { key: "hallpass",    label: "Hall Pass"        },
+  { key: "infractions", label: "Infractions"      },
+  { key: "resources",   label: "Teacher Resources"},
+];
+
+const RESOURCE_TABS = [
+  { key: "ceu",         label: "CEU Tracker"         },
+  { key: "requisition", label: "Requisitions"         },
+  { key: "fieldtrip",   label: "Field Trip Request"   },
+  { key: "roster",      label: "Student Roster"       },
 ];
 
 function SchoolLogo({ size = 42 }) {
@@ -130,6 +134,7 @@ export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
 
   const [tab, setTab] = useState("dashboard");
+  const [resourceTab, setResourceTab] = useState("ceu");
   const { students } = useStudents();
   const [weeklyEvents, setWeeklyEvents] = useState([
     { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
@@ -230,13 +235,41 @@ export default function App() {
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}
         {tab === "trips"       && <TripRoster   {...sharedProps} />}
-        {tab === "ceu"         && <CeuTracker   {...sharedProps} />}
         {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
-        {tab === "requisition" && <Requisition   {...sharedProps} />}
-        {tab === "fieldtrip"   && <FieldTrip     {...sharedProps} />}
-        {tab === "roster"       && <StudentRoster />}
-        {tab === "infractions"  && <Infractions students={students} user={user} />}
+        {tab === "infractions" && <Infractions  students={students} user={user} />}
+
+        {tab === "resources" && (
+          <>
+            {/* Sub-tab bar */}
+            <div style={{
+              display: "flex", gap: 0, marginBottom: "1.25rem",
+              borderBottom: "1px solid var(--gold-border)",
+            }}>
+              {RESOURCE_TABS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setResourceTab(t.key)}
+                  style={{
+                    padding: "0.55rem 1.1rem",
+                    fontSize: "0.75rem", fontWeight: 600,
+                    background: "none", border: "none",
+                    borderBottom: resourceTab === t.key ? "2px solid var(--gold)" : "2px solid transparent",
+                    color: resourceTab === t.key ? "var(--gold)" : "var(--text-muted)",
+                    cursor: "pointer", letterSpacing: "0.04em",
+                    textTransform: "uppercase", transition: "all 0.15s",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {resourceTab === "ceu"         && <CeuTracker   {...sharedProps} />}
+            {resourceTab === "requisition" && <Requisition  {...sharedProps} />}
+            {resourceTab === "fieldtrip"   && <FieldTrip    {...sharedProps} />}
+            {resourceTab === "roster"      && <StudentRoster />}
+          </>
+        )}
       </div>
     </div>
   );
