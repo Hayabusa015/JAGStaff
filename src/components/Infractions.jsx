@@ -166,9 +166,9 @@ export default function Infractions({ students, user }) {
         <div className="card mb2" style={{ borderLeft: `4px solid ${GOLD}` }}>
           <div className="section-title">New Infraction</div>
           <form onSubmit={submit}>
-            <div className="grid2 mb1">
+            <div className="grid2 mb1" style={{ overflow: "visible" }}>
               {/* Student search */}
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative", zIndex: 20 }}>
                 <label>Student *</label>
                 <input
                   value={form.studentSearch}
@@ -177,17 +177,17 @@ export default function Infractions({ students, user }) {
                   autoFocus
                 />
                 {searchResults.length > 0 && (
-                  <div className="autocomplete-list">
+                  <ul className="autocomplete-list" style={{ zIndex: 100 }}>
                     {searchResults.map(s => (
-                      <div
+                      <li
                         key={s.id}
                         onClick={() => selectStudent(s)}
                         className="autocomplete-item"
                       >
                         {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
                 {/* Allow free-text entry if student not in roster */}
                 {form.studentSearch && !form.studentId && searchResults.length === 0 && (
@@ -335,11 +335,24 @@ export default function Infractions({ students, user }) {
                   </div>
                   <div className="flex items-center gap1">
                     {/* Mini stats */}
-                    <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.75rem", color: "rgba(0,0,0,0.45)" }}>
-                      <span><strong style={{ color: thisWeek >= ESCALATION_THRESHOLD ? "#dc2626" : "#1a1200" }}>{thisWeek}</strong> this week</span>
-                      <span><strong>{thisMonth}</strong> this month</span>
-                      <span><strong>{summary.records.length}</strong> total</span>
+                    <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.75rem", color: "rgba(240,234,216,0.5)" }}>
+                      <span><strong style={{ color: thisWeek >= ESCALATION_THRESHOLD ? "#f87171" : "#f0ead8" }}>{thisWeek}</strong> this week</span>
+                      <span><strong style={{ color: "#f0ead8" }}>{thisMonth}</strong> this month</span>
+                      <span><strong style={{ color: "#f0ead8" }}>{summary.records.length}</strong> total</span>
                     </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        const s = students.find(x => x.id === summary.id);
+                        setForm({ studentSearch: summary.name, studentId: summary.id, studentName: summary.name, studentGrade: s?.grade || summary.grade, type: INFRACTION_TYPES[0].label, notes: "" });
+                        setSearchResults([]);
+                        setShowForm(true);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      + Add
+                    </button>
                     <button
                       className="btn btn-ghost btn-sm"
                       style={{ color: copied === summary.id ? "#16a34a" : undefined }}
@@ -365,10 +378,10 @@ export default function Infractions({ students, user }) {
                 {isExpanded && (
                   <div style={{ marginTop: "0.5rem", paddingLeft: "2.75rem" }}>
                     {summary.records.slice(0, 10).map(r => (
-                      <div key={r.id} style={{ fontSize: "0.78rem", color: "rgba(0,0,0,0.55)", marginBottom: "0.2rem" }}>
+                      <div key={r.id} style={{ fontSize: "0.78rem", color: "rgba(240,234,216,0.6)", marginBottom: "0.2rem" }}>
                         {fmtTime(r.created_at)} · <span className={`tag ${typeColor(r.type)}`} style={{ fontSize: "0.65rem" }}>{r.type}</span>
                         {r.notes ? ` — ${r.notes}` : ""}
-                        {" "}<span style={{ color: "rgba(0,0,0,0.3)" }}>({r.teacher_name})</span>
+                        {" "}<span style={{ color: "rgba(240,234,216,0.35)" }}>({r.teacher_name})</span>
                       </div>
                     ))}
                     {summary.records.length > 10 && (
