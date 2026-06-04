@@ -1,48 +1,12 @@
 import { useState, useEffect } from "react";
-import { GOLD, SEED_ELECTIVES, KIOSK_PIN } from "../constants.js";
+import { GOLD, SEED_ELECTIVES } from "../constants.js";
 
 function initials(s) { return `${s.firstName[0]}${s.lastName[0]}`; }
 function fmtTime() { return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }); }
 function fmtDateLong() { return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
 
-function PinPad({ onSuccess, onCancel, correctPin }) {
-  const [entry, setEntry] = useState("");
-  const [err, setErr] = useState(false);
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
-
-  function press(k) {
-    if (k === "⌫") { setEntry(e => e.slice(0,-1)); setErr(false); return; }
-    if (!k) return;
-    const next = entry + k;
-    setEntry(next);
-    if (next.length === 4) {
-      if (next === correctPin) { onSuccess(); }
-      else { setErr(true); setEntry(""); }
-    }
-  }
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="card" style={{ width: 280, padding: "2rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em", marginBottom: "1rem" }}>ENTER PIN TO CLOSE</div>
-          <div style={{ fontSize: "2rem", letterSpacing: "0.5em" }}>{"●".repeat(entry.length) + "·".repeat(4 - entry.length)}</div>
-          {err && <div className="text-red" style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}>Incorrect PIN</div>}
-        </div>
-        <div className="pin-pad">
-          {keys.map((k, i) => (
-            <button key={i} className="pin-key" style={{ background: k ? "rgba(0,0,0,0.08)" : "transparent", cursor: k ? "pointer" : "default" }} onClick={() => press(k)}>{k}</button>
-          ))}
-        </div>
-        <button className="btn btn-ghost w-full mt2" style={{ justifyContent: "center" }} onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-function KioskDisplay({ requests, setRequests, onClose, pin }) {
+function KioskDisplay({ requests, setRequests, onClose }) {
   const [time, setTime] = useState(fmtTime());
-  const [showPin, setShowPin] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -62,7 +26,6 @@ function KioskDisplay({ requests, setRequests, onClose, pin }) {
 
   return (
     <div className="kiosk-overlay" style={{ color: "#fff", flexDirection: "column" }}>
-      {showPin && <PinPad correctPin={pin} onSuccess={() => { setShowPin(false); onClose(); }} onCancel={() => setShowPin(false)} />}
 
       {/* Header */}
       <div style={{ background: "#1a1200", borderBottom: `2px solid ${GOLD}`, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -78,7 +41,7 @@ function KioskDisplay({ requests, setRequests, onClose, pin }) {
             <div style={{ fontSize: "1.5rem", fontWeight: 900, color: GOLD }}>{time}</div>
             <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.45)" }}>{pending.length} pending · {arrived.length} arrived</div>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={() => setShowPin(true)}>🔒 Close</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={onClose}>Close</button>
         </div>
       </div>
 
@@ -147,7 +110,7 @@ export default function GmenPeriod({ gmenRequests, setGmenRequests, setAlerts, s
   const [electives] = useState(SEED_ELECTIVES);
   const [search, setSearch] = useState("");
   const [kioskMode, setKioskMode] = useState(false);
-  const [pin] = useState(KIOSK_PIN);
+
 
   const days = ["Tuesday", "Wednesday", "Thursday"];
   const dayElectives = electives.filter(e => e.day === activeDay);
@@ -176,7 +139,7 @@ export default function GmenPeriod({ gmenRequests, setGmenRequests, setAlerts, s
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
 
-  if (kioskMode) return <KioskDisplay requests={gmenRequests} setRequests={setGmenRequests} onClose={() => setKioskMode(false)} pin={pin} />;
+  if (kioskMode) return <KioskDisplay requests={gmenRequests} setRequests={setGmenRequests} onClose={() => setKioskMode(false)} />;
 
   return (
     <div>

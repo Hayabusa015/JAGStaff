@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GOLD, DESTINATIONS, KIOSK_PIN } from "../constants.js";
+import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, SUPABASE_READY } from "../supabase.js";
 
 function elapsed(outTime) {
@@ -17,46 +17,10 @@ function fmtClock(d) {
   return t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function PinPad({ onSuccess, onCancel }) {
-  const [entry, setEntry] = useState("");
-  const [err, setErr] = useState(false);
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
-
-  function press(k) {
-    if (k === "⌫") { setEntry(e => e.slice(0,-1)); setErr(false); return; }
-    if (!k) return;
-    const next = entry + k;
-    setEntry(next);
-    if (next.length === 4) {
-      if (next === KIOSK_PIN) onSuccess();
-      else { setErr(true); setEntry(""); }
-    }
-  }
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="card" style={{ width: 280, padding: "2rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: "0.8rem", marginBottom: "1rem" }}>ENTER PIN TO EXIT KIOSK</div>
-          <div style={{ fontSize: "2rem", letterSpacing: "0.5em" }}>{("●".repeat(entry.length) + "·".repeat(4 - entry.length))}</div>
-          {err && <div className="text-red" style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}>Incorrect PIN</div>}
-        </div>
-        <div className="pin-pad">
-          {keys.map((k, i) => (
-            <button key={i} className="pin-key" style={{ background: k ? "rgba(0,0,0,0.08)" : "transparent", cursor: k ? "pointer" : "default" }} onClick={() => press(k)}>{k}</button>
-          ))}
-        </div>
-        <button className="btn btn-ghost w-full mt2" style={{ justifyContent: "center" }} onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
 function KioskScreen({ passes, addPass, returnPass, settings, students, onClose }) {
   const [screen, setScreen] = useState("home"); // home | destination | confirm-return
   const [selected, setSelected] = useState(null);
   const [kioskSearch, setKioskSearch] = useState("");
-  const [showPin, setShowPin] = useState(false);
   const [flash, setFlash] = useState(null); // {type:'in'|'out', name, dest}
   const [tick, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
@@ -116,7 +80,6 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
 
   return (
     <div className="kiosk-overlay" style={{ color: "#fff" }}>
-      {showPin && <PinPad onSuccess={() => { setShowPin(false); onClose(); }} onCancel={() => setShowPin(false)} />}
 
       {flash && (
         <div className="flash-overlay" style={{ background: flash.type === "in" ? "rgba(22,163,74,0.9)" : "rgba(220,38,38,0.9)" }}>
@@ -144,7 +107,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
               {activePasses.length} / {settings.maxOut} OUT
             </div>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={() => setShowPin(true)}>🔒 Exit Kiosk</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={onClose}>Exit Kiosk</button>
         </div>
       </div>
 
