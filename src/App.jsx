@@ -14,89 +14,117 @@ import StudentRoster from "./components/StudentRoster.jsx";
 import Infractions from "./components/Infractions.jsx";
 
 const TABS = [
-  { key: "dashboard",  label: "Dashboard" },
-  { key: "events",     label: "Weekly Events" },
-  { key: "trips",      label: "Trip Rosters" },
-  { key: "ceu",        label: "CEU Tracker" },
-  { key: "gmen",       label: "G-Men Period" },
-  { key: "hallpass",   label: "Hall Pass" },
-  { key: "requisition",label: "Requisitions" },
-  { key: "fieldtrip",  label: "Field Trips" },
-  { key: "roster",      label: "Student Roster" },
-  { key: "infractions", label: "Infractions" },
+  { key: "dashboard",   label: "Dashboard",      icon: "⊙" },
+  { key: "events",      label: "Weekly Events",   icon: "📅" },
+  { key: "trips",       label: "Trip Rosters",    icon: "🚌" },
+  { key: "ceu",         label: "CEU Tracker",     icon: "📋" },
+  { key: "gmen",        label: "G-Men Period",    icon: "👥" },
+  { key: "hallpass",    label: "Hall Pass",       icon: "🪪" },
+  { key: "requisition", label: "Requisitions",    icon: "📦" },
+  { key: "fieldtrip",   label: "Field Trips",     icon: "🗺" },
+  { key: "roster",      label: "Student Roster",  icon: "👤" },
+  { key: "infractions", label: "Infractions",     icon: "⚠" },
 ];
+
+// Circular school logo — swap the SVG for <img src="/logo.png" ... /> once you have the file
+function SchoolLogo({ size = 42 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      border: `2px solid ${GOLD}`,
+      background: "linear-gradient(135deg, #1a1200 0%, #2a1e00 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      overflow: "hidden", flexShrink: 0,
+      boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.25)`,
+    }}>
+      <svg viewBox="0 0 100 100" width={size * 0.65} height={size * 0.65}>
+        <text x="50" y="74" textAnchor="middle"
+          style={{ fontWeight: 900, fontSize: 74, fill: GOLD, fontFamily: "Georgia, serif" }}>
+          G
+        </text>
+      </svg>
+    </div>
+  );
+}
 
 function LoginScreen({ signInWithGoogle, loading, error }) {
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center",
-      justifyContent: "center", background: "#1a1200", padding: "1rem",
-    }}>
-      <div className="card card-raised" style={{ width: "100%", maxWidth: 400, padding: "2.5rem", textAlign: "center" }}>
+    <div className="login-bg">
+      <div className="login-card">
 
-        {/* Logo */}
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%", background: GOLD,
-          margin: "0 auto 1.25rem", display: "flex", alignItems: "center",
-          justifyContent: "center", fontSize: "2rem", fontWeight: 900, color: "#1a1200",
-        }}>G</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
+          <SchoolLogo size={84} />
+        </div>
 
-        <h1 style={{ fontSize: "1.3rem", fontWeight: 800, letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
-          JAMES A. GARFIELD
+        <h1 style={{
+          fontSize: "1.5rem", fontWeight: 900, letterSpacing: "0.1em",
+          color: GOLD, marginBottom: "0.2rem", textTransform: "uppercase",
+        }}>
+          James A. Garfield
         </h1>
-        <p style={{ color: "rgba(0,0,0,0.45)", fontSize: "0.82rem", marginBottom: "2rem" }}>
-          Staff Portal · Sign In
+        <p style={{
+          color: "rgba(240,234,216,0.45)", fontSize: "0.72rem",
+          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.75rem",
+        }}>
+          Staff Portal
         </p>
+        <div style={{
+          display: "inline-block",
+          border: "1px solid rgba(245,192,37,0.25)",
+          borderRadius: "999px", padding: "0.22rem 0.9rem",
+          fontSize: "0.65rem", color: "rgba(245,192,37,0.5)",
+          letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2.25rem",
+        }}>
+          Internal Staff Access Only
+        </div>
 
-        {/* Error (domain mismatch or OAuth failure) */}
         {error && (
           <div style={{
-            background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)",
+            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
             borderRadius: "8px", padding: "0.65rem 0.9rem", marginBottom: "1.25rem",
-            fontSize: "0.82rem", color: "#dc2626", textAlign: "left",
+            fontSize: "0.82rem", color: "#f87171", textAlign: "left",
           }}>
             {error}
           </div>
         )}
 
-        {/* Google sign-in button */}
         {SUPABASE_READY ? (
           <button
             className="btn w-full"
             style={{
               justifyContent: "center", gap: "0.75rem",
-              background: "#fff", border: "1px solid rgba(0,0,0,0.15)",
-              color: "#1a1200", fontSize: "0.92rem", fontWeight: 600,
-              padding: "0.75rem 1rem", borderRadius: "8px",
+              background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
+              color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
+              padding: "0.9rem 1rem", borderRadius: "10px",
+              boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
               opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
             }}
             onClick={signInWithGoogle}
             disabled={loading}
           >
-            {/* Google "G" logo */}
             <svg width="20" height="20" viewBox="0 0 48 48">
               <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
               <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
               <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
               <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
             </svg>
-            {loading ? "Signing in…" : "Sign in with Google"}
+            {loading ? "Signing in…" : "Sign in with School Google Account"}
           </button>
         ) : (
-          /* Supabase not configured — show a clear message instead of a broken button */
           <div style={{
             background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
-            borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem", color: "#92700a",
+            borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem",
+            color: "rgba(245,192,37,0.8)", textAlign: "left",
           }}>
             <strong>Supabase not configured.</strong><br />
-            Copy <code>.env.example</code> to <code>.env.local</code> and add your
-            project URL + anon key, then restart the dev server.<br />
-            See <strong>SUPABASE_SETUP.md</strong> for instructions.
+            Copy <code>.env.example</code> to <code>.env.local</code>, add your
+            project URL + anon key, then restart the dev server.
           </div>
         )}
 
-        <p style={{ marginTop: "1.25rem", fontSize: "0.75rem", color: "rgba(0,0,0,0.35)" }}>
-          Only <strong>@{ALLOWED_DOMAIN}</strong> accounts are permitted.
+        <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(240,234,216,0.25)", lineHeight: 1.7 }}>
+          Only <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> accounts are permitted.<br />
+          Sessions expire after 7 hours of inactivity.
         </p>
       </div>
     </div>
@@ -124,7 +152,6 @@ export default function App() {
   const [gmenRequests, setGmenRequests] = useState([]);
   const [alerts, setAlerts] = useState([]);
 
-  // Inactivity timeout — signs the user out of Supabase after 7 hours idle.
   const resetTimer = useCallback(() => {
     clearTimeout(window._jagTimeout);
     window._jagTimeout = setTimeout(() => signOut(), SESSION_TIMEOUT_MS);
@@ -141,11 +168,13 @@ export default function App() {
     };
   }, [user, resetTimer]);
 
-  // Checking for an existing session on first load.
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#1a1200", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.1em", fontSize: "0.9rem" }}>
-        LOADING…
+    <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <SchoolLogo size={56} />
+        <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>
+          LOADING…
+        </div>
       </div>
     </div>
   );
@@ -156,39 +185,47 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <nav className="tab-nav">
-        <div style={{ display: "flex", alignItems: "center", padding: "0 0.5rem 0 0", marginRight: "0.5rem", borderRight: "1px solid rgba(255,255,255,0.1)" }}>
-          <span style={{ color: GOLD, fontWeight: 900, fontSize: "0.9rem", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
-            JAG
-          </span>
+      {/* Top nav */}
+      <nav className="top-nav">
+        {/* Brand */}
+        <div className="nav-brand">
+          <SchoolLogo size={38} />
+          <div className="nav-school-name">
+            <span className="name-line1">James A. Garfield</span>
+            <span className="name-line2">Staff Portal · G-Men</span>
+          </div>
         </div>
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            className={`tab-btn${tab === t.key ? " active" : ""}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", padding: "0 0.5rem", gap: "0.5rem" }}>
+
+        {/* Tabs */}
+        <div className="tab-nav-scroll">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              className={`tab-btn${tab === t.key ? " active" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* User info */}
+        <div className="nav-user">
           {user.avatarUrl && (
-            <img src={user.avatarUrl} alt="" style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${GOLD}60` }} />
+            <img src={user.avatarUrl} alt="" className="nav-avatar" />
           )}
-          <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>
-            {user.name}
-          </span>
-          <button
-            className="btn btn-sm btn-ghost"
-            style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.15)" }}
-            onClick={signOut}
-          >
+          <span className="nav-user-name">{user.name}</span>
+          <button className="btn btn-sm btn-ghost" onClick={signOut}>
             Sign Out
           </button>
         </div>
       </nav>
 
+      {/* Page content */}
       <div className="content-area">
+        {/* Subtle "G" watermark — visible but not distracting */}
+        <div className="mascot-watermark" aria-hidden="true">G</div>
+
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}
         {tab === "trips"       && <TripRoster   {...sharedProps} />}
