@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions, useGmenRequests } from "../supabase.js";
+import { useInfractions, useGmenRequests, useLateArrivals } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -11,9 +11,10 @@ function fmtTime() {
 
 const ESCALATION_THRESHOLD = 3;
 
-export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters }) {
+export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user }) {
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
+  const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
   useEffect(() => {
     const id = setInterval(() => setNow({ date: fmtDate(), time: fmtTime() }), 30000);
@@ -67,6 +68,33 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
       {alerts.length === 0 && (
         <div className="card mb2" style={{ borderLeft: "4px solid #16a34a" }}>
           <span className="text-green bold" style={{ fontSize: "0.85rem" }}>✓ All students accounted for — no active alerts.</span>
+        </div>
+      )}
+
+      {/* Late Arrivals */}
+      {lateArrivals.length > 0 && (
+        <div className="card mb2" style={{ borderLeft: "4px solid #f59e0b" }}>
+          <div className="flex items-center gap1 mb1">
+            <span className="pulse-dot" style={{ background: "#f59e0b" }} />
+            <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#f59e0b" }}>
+              🕐 Late Arrivals Today — {lateArrivals.length} student{lateArrivals.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          {lateArrivals.map(a => (
+            <div key={a.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(200,200,200,0.15)" }}>
+              <div>
+                <span style={{ fontWeight: 600 }}>{a.student_name}</span>
+                <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>
+                  arrived {new Date(a.arrived_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                  {a.notes ? ` · ${a.notes}` : ""}
+                </span>
+              </div>
+              {a.confirmed_by
+                ? <span className="tag tag-green">✓ {a.confirmed_by}</span>
+                : <button className="btn btn-primary btn-sm" onClick={() => confirmArrival(a.id, user?.name || "Teacher")}>✓ Entered Class</button>
+              }
+            </div>
+          ))}
         </div>
       )}
 
