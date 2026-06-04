@@ -232,7 +232,7 @@ export default function App() {
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}
         {tab === "trips"       && <TripRoster   {...sharedProps} />}
         {tab === "ceu"         && <CeuTracker   {...sharedProps} />}
-        {tab === "gmen"        && <GmenPeriod   {...sharedProps} />}
+        {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "requisition" && <Requisition   {...sharedProps} />}
         {tab === "fieldtrip"   && <FieldTrip     {...sharedProps} />}

@@ -278,3 +278,88 @@ export function useInfractions() {
 
   return { infractions, loading, addInfraction };
 }
+
+// ─── G-Men Requests (Supabase-backed) ────────────────────────────
+// Table: gmen_requests — today's remediation pull list, shared school-wide.
+// Falls back to local state when Supabase is not configured.
+export function useGmenRequests() {
+  const [requests, setRequests] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      // Only load today's requests
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from("gmen_requests")
+        .select("*")
+        .gte("created_at", today.toISOString())
+        .order("created_at", { ascending: true });
+      if (!active) return;
+      setRequests((data || []).map(r => ({
+        id: r.id,
+        student: { id: r.student_id, firstName: r.student_first, lastName: r.student_last, name: r.student_name, grade: r.grade },
+        arrived: r.arrived,
+        requestedBy: r.requested_by,
+        requestedAt: new Date(r.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      })));
+    }
+    load();
+
+    const channel = supabase
+      .channel("gmen-requests-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_requests" }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
+
+  async function addRequest(student, requestedBy) {
+    const localReq = {
+      id: Date.now().toString(),
+      student: { ...student, name: `${student.firstName} ${student.lastName}` },
+      arrived: false,
+      requestedBy,
+      requestedAt: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    if (!SUPABASE_READY || !supabase) {
+      setRequests(r => [...r, localReq]);
+      return localReq.id;
+    }
+    const { data } = await supabase.from("gmen_requests").insert({
+      student_id: student.id,
+      student_first: student.firstName,
+      student_last: student.lastName,
+      student_name: `${student.firstName} ${student.lastName}`,
+      grade: student.grade || null,
+      arrived: false,
+      requested_by: requestedBy,
+    }).select("id").single();
+    return data?.id;
+  }
+
+  async function markArrived(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setRequests(r => r.map(x => x.id === id ? { ...x, arrived: true } : x));
+      return;
+    }
+    await supabase.from("gmen_requests").update({ arrived: true }).eq("id", id);
+    // Realtime UPDATE triggers load() above
+  }
+
+  async function clearAll() {
+    if (!SUPABASE_READY || !supabase) {
+      setRequests([]);
+      return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await supabase.from("gmen_requests").delete().gte("created_at", today.toISOString());
+  }
+
+  return { requests, addRequest, markArrived, clearAll };
+}

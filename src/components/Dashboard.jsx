@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions } from "../supabase.js";
+import { useInfractions, useGmenRequests } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -11,8 +11,9 @@ function fmtTime() {
 
 const ESCALATION_THRESHOLD = 3;
 
-export default function Dashboard({ alerts, setAlerts, gmenRequests, setGmenRequests, weeklyEvents, tripRosters }) {
+export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters }) {
   const { infractions } = useInfractions();
+  const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
   useEffect(() => {
     const id = setInterval(() => setNow({ date: fmtDate(), time: fmtTime() }), 30000);
@@ -22,8 +23,8 @@ export default function Dashboard({ alerts, setAlerts, gmenRequests, setGmenRequ
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
 
-  function markArrived(id) {
-    setGmenRequests(r => r.map(x => x.id === id ? { ...x, arrived: true } : x));
+  async function markArrived(id) {
+    await markArrivedDB(id);
     setAlerts(a => a.filter(x => x.gmenId !== id));
   }
 

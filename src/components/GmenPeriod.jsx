@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { GOLD, SEED_ELECTIVES } from "../constants.js";
+import { useGmenRequests } from "../supabase.js";
 
 function initials(s) { return `${s.firstName[0]}${s.lastName[0]}`; }
 function fmtTime() { return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }); }
@@ -105,12 +106,12 @@ function KioskDisplay({ requests, setRequests, onClose }) {
   );
 }
 
-export default function GmenPeriod({ gmenRequests, setGmenRequests, setAlerts, students }) {
+export default function GmenPeriod({ setAlerts, students, user }) {
+  const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
   const [activeDay, setActiveDay] = useState("Tuesday");
   const [electives] = useState(SEED_ELECTIVES);
   const [search, setSearch] = useState("");
   const [kioskMode, setKioskMode] = useState(false);
-
 
   const days = ["Tuesday", "Wednesday", "Thursday"];
   const dayElectives = electives.filter(e => e.day === activeDay);
@@ -119,27 +120,23 @@ export default function GmenPeriod({ gmenRequests, setGmenRequests, setAlerts, s
     ? students.filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase())).slice(0, 8)
     : [];
 
-  function addRequest(student) {
+  async function addRequest(student) {
     if (gmenRequests.find(r => r.student.id === student.id)) return;
-    const req = {
-      id: Date.now().toString(),
-      student: { ...student, name: `${student.firstName} ${student.lastName}` },
-      arrived: false, requestedBy: "Mr. Shull", requestedAt: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    };
-    setGmenRequests(r => [...r, req]);
-    setAlerts(a => [...a, { id: req.id, gmenId: req.id, student: req.student.name, teacher: req.requestedBy }]);
+    const teacherName = user?.name || "Staff";
+    const id = await addRequestDB(student, teacherName);
+    setAlerts(a => [...a, { id, gmenId: id, student: `${student.firstName} ${student.lastName}`, teacher: teacherName }]);
     setSearch("");
   }
 
-  function markArrived(id) {
-    setGmenRequests(r => r.map(x => x.id === id ? { ...x, arrived: true } : x));
+  async function markArrived(id) {
+    await markArrivedDB(id);
     setAlerts(a => a.filter(x => x.gmenId !== id));
   }
 
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
 
-  if (kioskMode) return <KioskDisplay requests={gmenRequests} setRequests={setGmenRequests} onClose={() => setKioskMode(false)} />;
+  if (kioskMode) return <KioskDisplay requests={gmenRequests} setRequests={() => {}} onClose={() => setKioskMode(false)} />;
 
   return (
     <div>
