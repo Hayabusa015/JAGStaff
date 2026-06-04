@@ -3,6 +3,39 @@ import { useState } from "react";
 const TRIP_TYPES = ["Field Trip", "Early Release", "Athletic Event", "Competition"];
 const blank = { type: "Field Trip", title: "", teacher: "", date: "", depart: "", returnTime: "", notes: "", selectedIds: [], manual: "" };
 
+function TripCard({ trip, onRemove }) {
+  const [open, setOpen] = useState(false);
+  const d = trip.date ? new Date(trip.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  return (
+    <div className="card mb1">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="tag tag-amber" style={{ marginRight: "0.4rem" }}>{trip.type}</span>
+          <span style={{ fontWeight: 700 }}>{trip.title}</span>
+        </div>
+        <div className="flex gap1">
+          <button className="btn btn-ghost btn-sm" onClick={() => setOpen(o => !o)}>{open ? "▲ Hide" : "▼ Show"} Roster</button>
+          <button className="btn btn-danger btn-sm" onClick={() => onRemove(trip.id)}>✕</button>
+        </div>
+      </div>
+      <div className="text-muted mt1">{trip.teacher}{trip.teacher ? " · " : ""}{d}{trip.depart ? ` · ${trip.depart}${trip.returnTime ? `–${trip.returnTime}` : ""}` : ""}</div>
+      {trip.notes && <div className="text-muted">{trip.notes}</div>}
+      {open && (
+        <div className="mt1">
+          {trip.students.length === 0 && <p className="text-muted">No students listed.</p>}
+          <ul style={{ paddingLeft: "1.25rem" }}>
+            {trip.students.map((s, i) => (
+              <li key={i} style={{ fontSize: "0.82rem", marginBottom: "0.2rem" }}>
+                {s.name}{s.grade ? <span className="tag tag-amber" style={{ marginLeft: "0.4rem" }}>{s.grade}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TripRoster({ tripRosters, setTripRosters, students }) {
   const [form, setForm] = useState(blank);
   const [err, setErr] = useState("");
@@ -108,38 +141,9 @@ export default function TripRoster({ tripRosters, setTripRosters, students }) {
         </form>
       </div>
 
-      {tripRosters.map(trip => {
-        const [open, setOpen] = useState(false);
-        const d = trip.date ? new Date(trip.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
-        return (
-          <div key={trip.id} className="card mb1">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="tag tag-amber" style={{ marginRight: "0.4rem" }}>{trip.type}</span>
-                <span style={{ fontWeight: 700 }}>{trip.title}</span>
-              </div>
-              <div className="flex gap1">
-                <button className="btn btn-ghost btn-sm" onClick={() => setOpen(o => !o)}>{open ? "▲ Hide" : "▼ Show"} Roster</button>
-                <button className="btn btn-danger btn-sm" onClick={() => remove(trip.id)}>✕</button>
-              </div>
-            </div>
-            <div className="text-muted mt1">{trip.teacher}{trip.teacher ? " · " : ""}{d}{trip.depart ? ` · ${trip.depart}${trip.returnTime ? `–${trip.returnTime}` : ""}` : ""}</div>
-            {trip.notes && <div className="text-muted">{trip.notes}</div>}
-            {open && (
-              <div className="mt1">
-                {trip.students.length === 0 && <p className="text-muted">No students listed.</p>}
-                <ul style={{ paddingLeft: "1.25rem" }}>
-                  {trip.students.map((s, i) => (
-                    <li key={i} style={{ fontSize: "0.82rem", marginBottom: "0.2rem" }}>
-                      {s.name}{s.grade ? <span className="tag tag-amber" style={{ marginLeft: "0.4rem" }}>{s.grade}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {tripRosters.map(trip => (
+        <TripCard key={trip.id} trip={trip} onRemove={remove} />
+      ))}
     </div>
   );
 }
