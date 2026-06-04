@@ -53,132 +53,103 @@ body {
   user-select: none;
 }
 
-/* ── Top Nav ── */
+/* ── Top Nav — two-row layout ── */
 .top-nav {
   background: linear-gradient(180deg, #0a0700 0%, #0f0b00 100%);
   border-bottom: 1px solid var(--gold-border);
-  padding: 0 1.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 20px rgba(0,0,0,0.5);
 }
 
+/* Row 1: brand + user */
+.nav-row1 {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  gap: 0.75rem;
+}
+
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0;
-  margin-right: 1rem;
-  border-right: 1px solid var(--gold-border);
-  padding-right: 1.25rem;
+  gap: 0.65rem;
   flex-shrink: 0;
-}
-
-.nav-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid var(--gold);
-  background: #1a1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.nav-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-.nav-logo-fallback {
-  font-size: 1.1rem;
-  font-weight: 900;
-  color: var(--gold);
-  letter-spacing: -0.02em;
 }
 
 .nav-school-name {
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .nav-school-name .name-line1 {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 800;
   color: var(--gold);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 .nav-school-name .name-line2 {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: var(--text-muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-/* ── Tab Nav (inside top-nav) ── */
-.tab-nav-scroll {
-  display: flex;
-  overflow-x: auto;
-  scrollbar-width: none;
-  flex: 1;
-  gap: 0;
-}
-.tab-nav-scroll::-webkit-scrollbar { display: none; }
-
-.tab-btn {
-  padding: 0.85rem 1rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  border-bottom: 3px solid transparent;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  position: relative;
-}
-.tab-btn:hover { color: rgba(240,234,216,0.85); background: rgba(255,255,255,0.03); }
-.tab-btn.active {
-  color: var(--gold);
-  border-bottom-color: var(--gold);
-  background: rgba(245,192,37,0.06);
 }
 
 .nav-user {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
   margin-left: auto;
-  padding-left: 1rem;
-  border-left: 1px solid var(--gold-border);
   flex-shrink: 0;
 }
 
 .nav-avatar {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1.5px solid var(--gold-dim);
   object-fit: cover;
 }
 
 .nav-user-name {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* Row 2: tabs */
+.nav-row2 {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0.5rem;
+}
+.nav-row2::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.tab-btn:hover { color: rgba(240,234,216,0.85); background: rgba(255,255,255,0.03); }
+.tab-btn.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: rgba(245,192,37,0.05);
 }
 
 /* ── Cards ── */

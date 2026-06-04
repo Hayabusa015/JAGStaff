@@ -180,19 +180,28 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {/* Top nav */}
+      {/* Top nav — two rows */}
       <nav className="top-nav">
-        {/* Brand */}
-        <div className="nav-brand">
-          <SchoolLogo size={38} />
-          <div className="nav-school-name">
-            <span className="name-line1">James A. Garfield</span>
-            <span className="name-line2">Staff Portal · G-Men</span>
+        {/* Row 1: brand + user */}
+        <div className="nav-row1">
+          <div className="nav-brand">
+            <SchoolLogo size={36} />
+            <div className="nav-school-name">
+              <span className="name-line1">James A. Garfield</span>
+              <span className="name-line2">Staff Portal · G-Men</span>
+            </div>
+          </div>
+          <div className="nav-user">
+            {user.avatarUrl && (
+              <img src={user.avatarUrl} alt="" className="nav-avatar" />
+            )}
+            <span className="nav-user-name">{user.name}</span>
+            <button className="btn btn-sm btn-ghost" onClick={signOut}>Sign Out</button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="tab-nav-scroll">
+        {/* Row 2: tabs */}
+        <div className="nav-row2">
           {TABS.map(t => (
             <button
               key={t.key}
@@ -202,17 +211,6 @@ export default function App() {
               {t.label}
             </button>
           ))}
-        </div>
-
-        {/* User info */}
-        <div className="nav-user">
-          {user.avatarUrl && (
-            <img src={user.avatarUrl} alt="" className="nav-avatar" />
-          )}
-          <span className="nav-user-name">{user.name}</span>
-          <button className="btn btn-sm btn-ghost" onClick={signOut}>
-            Sign Out
-          </button>
         </div>
       </nav>
 
