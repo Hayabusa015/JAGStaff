@@ -539,3 +539,74 @@ export function useRoomPasses(userEmail) {
 
   return { sentByMe, sentToMe, sendPass, markArrived, dismiss };
 }
+
+// ─── Late Arrivals ────────────────────────────────────────────────
+// Students arriving after 7:45 AM sign in at the office.
+// All teachers see the entry in real-time and can confirm the student entered.
+//
+// SQL to run in Supabase:
+//   create table public.late_arrivals (
+//     id           uuid primary key default gen_random_uuid(),
+//     student_id   text not null,
+//     student_name text not null,
+//     arrived_at   timestamptz not null default now(),
+//     confirmed_by text,
+//     confirmed_at timestamptz,
+//     notes        text
+//   );
+//   alter table public.late_arrivals enable row level security;
+//   create policy "staff read"   on public.late_arrivals for select using (public.is_staff());
+//   create policy "staff insert" on public.late_arrivals for insert with check (public.is_staff());
+//   create policy "staff update" on public.late_arrivals for update using (public.is_staff());
+export function useLateArrivals() {
+  const [arrivals, setArrivals] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from("late_arrivals")
+        .select("*")
+        .gte("arrived_at", today.toISOString())
+        .order("arrived_at", { ascending: false });
+      if (!active) return;
+      setArrivals(data || []);
+    }
+    load();
+
+    const channel = supabase
+      .channel("late-arrivals-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "late_arrivals" }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
+
+  async function logArrival({ studentId, studentName, notes }) {
+    if (!SUPABASE_READY || !supabase) {
+      setArrivals(prev => [{
+        id: Date.now().toString(), student_id: studentId, student_name: studentName,
+        arrived_at: new Date().toISOString(), confirmed_by: null, confirmed_at: null, notes: notes || null,
+      }, ...prev]);
+      return;
+    }
+    await supabase.from("late_arrivals").insert({
+      student_id: studentId, student_name: studentName, notes: notes || null,
+    });
+  }
+
+  async function confirmArrival(id, teacherName) {
+    if (!SUPABASE_READY || !supabase) {
+      setArrivals(prev => prev.map(a => a.id === id ? { ...a, confirmed_by: teacherName, confirmed_at: new Date().toISOString() } : a));
+      return;
+    }
+    await supabase.from("late_arrivals").update({
+      confirmed_by: teacherName, confirmed_at: new Date().toISOString(),
+    }).eq("id", id);
+  }
+
+  return { arrivals, logArrival, confirmArrival };
+}

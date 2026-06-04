@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, SUPABASE_READY } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, SUPABASE_READY } from "../supabase.js";
 
 function elapsed(outTime) {
   if (!outTime) return 0;
@@ -268,8 +268,9 @@ export default function HallPass({ user, students }) {
   });
   const staff = useStaffDirectory(user, settings.room);
   const { sentByMe, sentToMe, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
+  const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
 
-  // Room pass form state
+  // Room pass form
   const [rpStudent, setRpStudent] = useState(null);
   const [rpSearch, setRpSearch] = useState("");
   const [rpSearchResults, setRpSearchResults] = useState([]);
@@ -277,12 +278,26 @@ export default function HallPass({ user, students }) {
   const [rpReason, setRpReason] = useState(ROOM_PASS_REASONS[0]);
   const [rpSent, setRpSent] = useState(false);
 
+  // Late arrival form
+  const [laSearch, setLaSearch] = useState("");
+  const [laResults, setLaResults] = useState([]);
+  const [laStudent, setLaStudent] = useState(null);
+  const [laNotes, setLaNotes] = useState("");
+  const [laLogged, setLaLogged] = useState(false);
+
   useEffect(() => {
     if (!rpSearch.trim()) { setRpSearchResults([]); return; }
     setRpSearchResults(students.filter(s =>
       `${s.firstName} ${s.lastName}`.toLowerCase().includes(rpSearch.toLowerCase())
     ).slice(0, 6));
   }, [rpSearch, students]);
+
+  useEffect(() => {
+    if (!laSearch.trim()) { setLaResults([]); return; }
+    setLaResults(students.filter(s =>
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(laSearch.toLowerCase())
+    ).slice(0, 6));
+  }, [laSearch, students]);
 
   async function handleSendRoomPass(e) {
     e.preventDefault();
@@ -292,8 +307,7 @@ export default function HallPass({ user, students }) {
     await sendPass({
       studentId: rpStudent.id,
       studentName: `${rpStudent.firstName} ${rpStudent.lastName}`,
-      toTeacher,
-      reason: rpReason,
+      toTeacher, reason: rpReason,
       fromTeacher: settings.teacherName,
       fromEmail: user?.email,
       fromRoom: settings.room,
@@ -302,9 +316,17 @@ export default function HallPass({ user, students }) {
     setRpSent(true); setTimeout(() => setRpSent(false), 3000);
   }
 
+  async function handleLogLateArrival(e) {
+    e.preventDefault();
+    if (!laStudent) return;
+    await logArrival({ studentId: laStudent.id, studentName: `${laStudent.firstName} ${laStudent.lastName}`, notes: laNotes });
+    setLaStudent(null); setLaSearch(""); setLaNotes("");
+    setLaLogged(true); setTimeout(() => setLaLogged(false), 3000);
+  }
+
   const incomingPending = sentToMe.filter(p => p.status === "pending");
+  const unconfirmedLate = lateArrivals.filter(a => !a.confirmed_by);
   const [logSearch, setLogSearch] = useState("");
-  const [confirmClear, setConfirmClear] = useState(false);
 
   const activePasses = passes.filter(p => !p.returnTime);
   const todayLog = log;
@@ -318,17 +340,19 @@ export default function HallPass({ user, students }) {
     overviewMap[p.studentId].dests.add(p.destination);
   });
   const overviewRows = Object.entries(overviewMap).sort((a, b) => b[1].totalMin - a[1].totalMin);
-
   const filteredLog = logSearch.trim()
     ? todayLog.filter(p => p.studentName?.toLowerCase().includes(logSearch.toLowerCase()))
     : todayLog;
 
   if (kioskMode) return (
-    <KioskScreen
-      passes={passes} addPass={addPass} returnPass={returnPass}
-      settings={settings} students={students} onClose={() => setKioskMode(false)}
-    />
+    <KioskScreen passes={passes} addPass={addPass} returnPass={returnPass}
+      settings={settings} students={students} onClose={() => setKioskMode(false)} />
   );
+
+  function fmtShortTime(iso) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
 
   return (
     <div>
@@ -346,281 +370,303 @@ export default function HallPass({ user, students }) {
         <button className="btn btn-primary" onClick={() => setKioskMode(true)}>🖥 Launch Kiosk Mode</button>
       </div>
 
-      {/* Stats */}
-      <div className="grid3 mb2">
-        <div className="card" style={{ textAlign: "center" }}>
-          <div className="stat-num" style={{ color: activePasses.length > 0 ? "#dc2626" : "#1a1200" }}>{activePasses.length}</div>
-          <div className="stat-label">Currently Out</div>
-        </div>
-        <div className="card" style={{ textAlign: "center" }}>
-          <div className="stat-num" style={{ color: GOLD }}>{todayLog.length}</div>
-          <div className="stat-label">Passes Today</div>
-        </div>
-        <div className="card" style={{ textAlign: "center" }}>
-          <div className="stat-num">{avgDuration ?? "—"}</div>
-          <div className="stat-label">Avg Duration (min)</div>
-        </div>
-      </div>
+      {/* Two-column layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.25rem", alignItems: "start" }}>
 
-      {/* Currently Out */}
-      {activePasses.length > 0 && (
-        <div className="card mb2" style={{ borderLeft: "4px solid #dc2626" }}>
-          <div className="flex items-center gap1 mb1">
-            <span className="pulse-dot" />
-            <span style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "0.08em", color: "#dc2626" }}>CURRENTLY OUT</span>
-          </div>
-          {activePasses.map(p => (
-            <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
-              <div className="flex items-center gap1">
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.78rem", color: "#1a1200" }}>
-                  {p.studentName?.split(" ").map(w => w[0]).join("").slice(0,2)}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{p.studentName}</div>
-                  <div className="text-muted" style={{ fontSize: "0.75rem" }}>{p.destination} · out at {fmtClock(p.outTime)}</div>
-                </div>
-              </div>
-              <button className="btn btn-danger btn-sm" onClick={() => returnPass(p.id, p)}>Force Return</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Sub-tabs */}
-      <div className="flex gap1 mb2">
-        {["overview","log","room passes","settings"].map(t => (
-          <button key={t} className={`btn btn-sm ${subTab === t ? "btn-primary" : "btn-ghost"}`}
-            style={{ textTransform: "capitalize", position: "relative" }}
-            onClick={() => setSubTab(t)}>
-            {t}
-            {t === "room passes" && incomingPending.length > 0 && (
-              <span style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "#fff", borderRadius: "999px", fontSize: "0.6rem", fontWeight: 800, padding: "0.1rem 0.35rem", lineHeight: 1 }}>
-                {incomingPending.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {subTab === "overview" && (
-        <div className="card">
-          <div className="section-title">Student Pass Usage Today</div>
-          {overviewRows.length === 0 && <p className="text-muted">No passes issued yet today.</p>}
-          <table className="stu-table">
-            <thead><tr><th>Student</th><th>Passes</th><th>Total Time</th><th>Destinations</th></tr></thead>
-            <tbody>
-              {overviewRows.map(([id, d]) => (
-                <tr key={id}>
-                  <td style={{ fontWeight: 600 }}>{d.name}</td>
-                  <td><span className={`tag ${d.passes >= 3 ? "tag-red" : "tag-gold"}`}>{d.passes}</span></td>
-                  <td>{d.totalMin} min</td>
-                  <td>{[...d.dests].map(dest => <span key={dest} className="tag tag-amber" style={{ marginRight: "0.25rem" }}>{dest}</span>)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {subTab === "log" && (
-        <div className="card">
-          <div className="flex items-center justify-between mb1">
-            <div className="section-title" style={{ margin: 0 }}>Pass Log</div>
-            {confirmClear
-              ? <div className="flex gap1">
-                  <button className="btn btn-danger btn-sm" onClick={() => { /* log is read-only from firebase */ setConfirmClear(false); }}>Confirm Clear</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setConfirmClear(false)}>Cancel</button>
-                </div>
-              : <button className="btn btn-ghost btn-sm" onClick={() => setConfirmClear(true)}>Clear Log</button>
-            }
-          </div>
-          <input value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Search student…" style={{ marginBottom: "0.75rem" }} />
-          <table className="stu-table">
-            <thead><tr><th>#</th><th>Student</th><th>Destination</th><th>Time Out</th><th>Time In</th><th>Duration</th></tr></thead>
-            <tbody>
-              {filteredLog.map((p, i) => (
-                <tr key={p.id}>
-                  <td className="text-muted">{filteredLog.length - i}</td>
-                  <td style={{ fontWeight: 600 }}>{p.studentName}</td>
-                  <td>{p.destination}</td>
-                  <td>{fmtClock(p.outTime)}</td>
-                  <td>{p.returnTime ? fmtClock(p.returnTime) : <span className="tag tag-red">Out</span>}</td>
-                  <td>{p.duration != null ? <span className={`tag ${p.duration > settings.flagAfter ? "tag-red" : "tag-green"}`}>{p.duration}m</span> : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {subTab === "room passes" && (
+        {/* ── LEFT: main hall pass content ── */}
         <div>
-          {/* Incoming passes alert */}
-          {incomingPending.length > 0 && (
-            <div className="card mb2" style={{ borderLeft: "4px solid #f97316" }}>
-              <div style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "0.08em", color: "#f97316", marginBottom: "0.5rem" }}>
-                📨 INCOMING — STUDENTS ON THEIR WAY TO YOUR ROOM
+          {/* Stats */}
+          <div className="grid3 mb2">
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="stat-num" style={{ color: activePasses.length > 0 ? "#dc2626" : GOLD }}>{activePasses.length}</div>
+              <div className="stat-label">Currently Out</div>
+            </div>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="stat-num" style={{ color: GOLD }}>{todayLog.length}</div>
+              <div className="stat-label">Passes Today</div>
+            </div>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="stat-num">{avgDuration ?? "—"}</div>
+              <div className="stat-label">Avg Duration (min)</div>
+            </div>
+          </div>
+
+          {/* Currently Out */}
+          {activePasses.length > 0 && (
+            <div className="card mb2" style={{ borderLeft: "4px solid #dc2626" }}>
+              <div className="flex items-center gap1 mb1">
+                <span className="pulse-dot" />
+                <span style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "0.08em", color: "#dc2626" }}>CURRENTLY OUT</span>
               </div>
-              {incomingPending.map(p => (
-                <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div>
-                    <span style={{ fontWeight: 700 }}>{p.student_name}</span>
-                    <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>
-                      from {p.from_teacher} (Rm {p.from_room}) · {p.reason}
-                    </span>
+              {activePasses.map(p => (
+                <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(200,200,200,0.15)" }}>
+                  <div className="flex items-center gap1">
+                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.75rem", color: "#1a1200" }}>
+                      {p.studentName?.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{p.studentName}</div>
+                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>{p.destination} · out at {fmtClock(p.outTime)}</div>
+                    </div>
                   </div>
-                  <div className="flex gap1">
-                    <button className="btn btn-primary btn-sm" onClick={() => markRoomArrived(p.id)}>✓ Arrived</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => dismiss(p.id)}>Dismiss</button>
-                  </div>
+                  <button className="btn btn-danger btn-sm" onClick={() => returnPass(p.id, p)}>Force Return</button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Send a room pass */}
-          <div className="card mb2">
-            <div className="section-title">Send Student to Another Teacher's Room</div>
-            {rpSent && (
-              <div style={{ color: "#4ade80", fontWeight: 600, fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-                ✓ Pass sent — that teacher will see it immediately.
+          {/* Sub-tabs */}
+          <div className="flex gap1 mb2">
+            {["overview", "log", "settings"].map(t => (
+              <button key={t} className={`btn btn-sm ${subTab === t ? "btn-primary" : "btn-ghost"}`}
+                style={{ textTransform: "capitalize" }} onClick={() => setSubTab(t)}>{t}
+              </button>
+            ))}
+          </div>
+
+          {subTab === "overview" && (
+            <div className="card">
+              <div className="section-title">Student Pass Usage Today</div>
+              {overviewRows.length === 0 && <p className="text-muted">No passes issued yet today.</p>}
+              <table className="stu-table">
+                <thead><tr><th>Student</th><th>Passes</th><th>Total Time</th><th>Destinations</th></tr></thead>
+                <tbody>
+                  {overviewRows.map(([id, d]) => (
+                    <tr key={id}>
+                      <td style={{ fontWeight: 600 }}>{d.name}</td>
+                      <td><span className={`tag ${d.passes >= 3 ? "tag-red" : "tag-gold"}`}>{d.passes}</span></td>
+                      <td>{d.totalMin} min</td>
+                      <td>{[...d.dests].map(dest => <span key={dest} className="tag tag-amber" style={{ marginRight: "0.25rem" }}>{dest}</span>)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {subTab === "log" && (
+            <div className="card">
+              <div className="section-title">Pass Log</div>
+              <input value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Search student…" style={{ marginBottom: "0.75rem" }} />
+              <table className="stu-table">
+                <thead><tr><th>#</th><th>Student</th><th>Destination</th><th>Time Out</th><th>Time In</th><th>Duration</th></tr></thead>
+                <tbody>
+                  {filteredLog.map((p, i) => (
+                    <tr key={p.id}>
+                      <td className="text-muted">{filteredLog.length - i}</td>
+                      <td style={{ fontWeight: 600 }}>{p.studentName}</td>
+                      <td>{p.destination}</td>
+                      <td>{fmtClock(p.outTime)}</td>
+                      <td>{p.returnTime ? fmtClock(p.returnTime) : <span className="tag tag-red">Out</span>}</td>
+                      <td>{p.duration != null ? <span className={`tag ${p.duration > settings.flagAfter ? "tag-red" : "tag-green"}`}>{p.duration}m</span> : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {subTab === "settings" && (
+            <div className="card">
+              <div className="section-title">Pass Settings</div>
+              <div className="grid2">
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Room Settings</div>
+                  <div className="mb1"><label>Teacher Name</label><input value={settings.teacherName} onChange={e => setSettings(s => ({ ...s, teacherName: e.target.value }))} /></div>
+                  <div className="mb1"><label>Room Number</label><input value={settings.room} onChange={e => setSettings(s => ({ ...s, room: e.target.value }))} /></div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Pass Rules</div>
+                  <div className="mb1">
+                    <label>Max Students Out at Once</label>
+                    <select value={settings.maxOut} onChange={e => setSettings(s => ({ ...s, maxOut: Number(e.target.value) }))}>
+                      {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div className="mb1">
+                    <label>Flag After (minutes)</label>
+                    <input type="number" min={1} max={60} value={settings.flagAfter} onChange={e => setSettings(s => ({ ...s, flagAfter: Number(e.target.value) }))} />
+                  </div>
+                  <div className="mb1">
+                    <label>Lockout (minutes at start/end of period)</label>
+                    <input type="number" min={0} max={20} value={settings.lockoutMin} onChange={e => setSettings(s => ({ ...s, lockoutMin: Number(e.target.value) }))} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt2">
+                <label>Active Destinations</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+                  {DESTINATIONS.map(d => {
+                    const active = settings.destinations.includes(d.key);
+                    return (
+                      <button key={d.key} type="button"
+                        className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
+                        onClick={() => setSettings(s => ({
+                          ...s,
+                          destinations: active ? s.destinations.filter(x => x !== d.key) : [...s.destinations, d.key],
+                        }))}>
+                        {d.icon} {d.key}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── RIGHT: Room Passes + Late Arrivals ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+          {/* Late Arrivals panel */}
+          <div className="card" style={{ borderLeft: "4px solid #f59e0b" }}>
+            <div style={{ fontWeight: 800, fontSize: "0.75rem", letterSpacing: "0.1em", color: "#f59e0b", marginBottom: "0.75rem" }}>🕐 LATE ARRIVALS</div>
+
+            {/* Unconfirmed alert */}
+            {unconfirmedLate.length > 0 && (
+              <div style={{ marginBottom: "0.75rem" }}>
+                {unconfirmedLate.map(a => (
+                  <div key={a.id} style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.4rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{a.student_name}</div>
+                        <div style={{ fontSize: "0.72rem", color: "rgba(240,234,216,0.5)", marginTop: "0.1rem" }}>Arrived {fmtShortTime(a.arrived_at)}{a.notes ? ` · ${a.notes}` : ""}</div>
+                      </div>
+                      <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }}
+                        onClick={() => confirmArrival(a.id, settings.teacherName)}>
+                        ✓ Entered
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-            <form onSubmit={handleSendRoomPass}>
-              {/* Student search */}
-              <div className="mb1" style={{ position: "relative" }}>
-                <label>Student</label>
-                {rpStudent ? (
+            {unconfirmedLate.length === 0 && lateArrivals.length === 0 && (
+              <p className="text-muted" style={{ fontSize: "0.8rem", marginBottom: "0.75rem" }}>No late arrivals logged today.</p>
+            )}
+
+            {/* Sign-in form */}
+            {laLogged && <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.5rem" }}>✓ Late arrival logged.</div>}
+            <form onSubmit={handleLogLateArrival}>
+              <div style={{ position: "relative", marginBottom: "0.5rem" }}>
+                {laStudent ? (
                   <div className="flex items-center gap1">
-                    <span style={{ fontWeight: 600 }}>{rpStudent.firstName} {rpStudent.lastName}</span>
-                    <span className="tag tag-amber">{rpStudent.grade}</span>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRpStudent(null); setRpSearch(""); }}>✕</button>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{laStudent.firstName} {laStudent.lastName}</span>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setLaStudent(null); setLaSearch(""); }}>✕</button>
                   </div>
                 ) : (
                   <>
-                    <input value={rpSearch} onChange={e => setRpSearch(e.target.value)} placeholder="Search student name…" />
-                    {rpSearchResults.length > 0 && (
-                      <div className="autocomplete-list">
-                        {rpSearchResults.map(s => (
-                          <div key={s.id} className="autocomplete-item" onClick={() => { setRpStudent(s); setRpSearch(""); setRpSearchResults([]); }}>
+                    <input value={laSearch} onChange={e => setLaSearch(e.target.value)} placeholder="Student name…" style={{ fontSize: "0.85rem" }} />
+                    {laResults.length > 0 && (
+                      <ul className="autocomplete-list" style={{ zIndex: 20 }}>
+                        {laResults.map(s => (
+                          <li key={s.id} className="autocomplete-item" onClick={() => { setLaStudent(s); setLaSearch(""); setLaResults([]); }}>
                             {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
-                          </div>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     )}
                   </>
                 )}
               </div>
+              <input value={laNotes} onChange={e => setLaNotes(e.target.value)} placeholder="Notes (optional)" style={{ marginBottom: "0.5rem", fontSize: "0.85rem" }} />
+              <button type="submit" className="btn btn-primary btn-sm" style={{ width: "100%" }} disabled={!laStudent}>
+                + Log Late Arrival
+              </button>
+            </form>
 
-              <div className="grid2 mb1">
-                <div>
-                  <label>Send To (Teacher)</label>
-                  <select value={rpTeacher} onChange={e => setRpTeacher(e.target.value)} required>
-                    <option value="">— Select teacher —</option>
-                    {staff.filter(s => s.email !== user?.email).map(s => (
-                      <option key={s.email} value={s.email}>
-                        {s.name}{s.room ? ` · Rm ${s.room}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Reason</label>
-                  <select value={rpReason} onChange={e => setRpReason(e.target.value)}>
-                    {ROOM_PASS_REASONS.map(r => <option key={r}>{r}</option>)}
-                  </select>
-                </div>
+            {/* Confirmed today */}
+            {lateArrivals.filter(a => a.confirmed_by).length > 0 && (
+              <div style={{ marginTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.35rem" }}>CONFIRMED</div>
+                {lateArrivals.filter(a => a.confirmed_by).map(a => (
+                  <div key={a.id} style={{ fontSize: "0.78rem", color: "rgba(240,234,216,0.5)", display: "flex", justifyContent: "space-between", padding: "0.15rem 0" }}>
+                    <span>{a.student_name}</span>
+                    <span style={{ color: "#4ade80" }}>✓ {a.confirmed_by}</span>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
 
-              <button type="submit" className="btn btn-primary" disabled={!rpStudent || !rpTeacher}>
+          {/* Room Passes panel */}
+          <div className="card" style={{ borderLeft: "4px solid #f97316" }}>
+            <div style={{ fontWeight: 800, fontSize: "0.75rem", letterSpacing: "0.1em", color: "#f97316", marginBottom: "0.75rem" }}>
+              📨 ROOM PASSES
+              {incomingPending.length > 0 && <span style={{ marginLeft: "0.5rem", background: "#ef4444", color: "#fff", borderRadius: "999px", fontSize: "0.65rem", padding: "0.1rem 0.45rem", fontWeight: 800 }}>{incomingPending.length}</span>}
+            </div>
+
+            {/* Incoming */}
+            {incomingPending.length > 0 && (
+              <div style={{ marginBottom: "0.75rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "rgba(240,234,216,0.4)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.35rem" }}>INCOMING — ON THEIR WAY</div>
+                {incomingPending.map(p => (
+                  <div key={p.id} style={{ background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.4rem" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>{p.student_name}</div>
+                    <div style={{ fontSize: "0.72rem", color: "rgba(240,234,216,0.5)" }}>from {p.from_teacher} · {p.reason}</div>
+                    <div className="flex gap1" style={{ marginTop: "0.4rem" }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => markRoomArrived(p.id)}>✓ Arrived</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => dismiss(p.id)}>Dismiss</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Send form */}
+            {rpSent && <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.5rem" }}>✓ Pass sent.</div>}
+            <form onSubmit={handleSendRoomPass}>
+              <div style={{ position: "relative", marginBottom: "0.5rem" }}>
+                {rpStudent ? (
+                  <div className="flex items-center gap1">
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{rpStudent.firstName} {rpStudent.lastName}</span>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRpStudent(null); setRpSearch(""); }}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <input value={rpSearch} onChange={e => setRpSearch(e.target.value)} placeholder="Student name…" style={{ fontSize: "0.85rem" }} />
+                    {rpSearchResults.length > 0 && (
+                      <ul className="autocomplete-list" style={{ zIndex: 20 }}>
+                        {rpSearchResults.map(s => (
+                          <li key={s.id} className="autocomplete-item" onClick={() => { setRpStudent(s); setRpSearch(""); setRpSearchResults([]); }}>
+                            {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+              <select value={rpTeacher} onChange={e => setRpTeacher(e.target.value)} style={{ marginBottom: "0.5rem", fontSize: "0.85rem" }} required>
+                <option value="">— Send to teacher —</option>
+                {staff.filter(s => s.email !== user?.email).map(s => (
+                  <option key={s.email} value={s.email}>{s.name}{s.room ? ` · Rm ${s.room}` : ""}</option>
+                ))}
+              </select>
+              <select value={rpReason} onChange={e => setRpReason(e.target.value)} style={{ marginBottom: "0.5rem", fontSize: "0.85rem" }}>
+                {ROOM_PASS_REASONS.map(r => <option key={r}>{r}</option>)}
+              </select>
+              <button type="submit" className="btn btn-primary btn-sm" style={{ width: "100%" }} disabled={!rpStudent || !rpTeacher}>
                 Send Room Pass
               </button>
             </form>
-          </div>
 
-          {/* Passes I sent today */}
-          <div className="card mb2">
-            <div className="section-title">Passes I Sent Today</div>
-            {sentByMe.length === 0 && <p className="text-muted">No room passes sent today.</p>}
-            {sentByMe.map(p => (
-              <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <div>
-                  <span style={{ fontWeight: 600 }}>{p.student_name}</span>
-                  <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>→ {p.to_teacher} · {p.reason}</span>
-                </div>
-                <span className={`tag ${p.status === "arrived" ? "tag-green" : p.status === "dismissed" ? "tag-amber" : "tag-blue"}`}>
-                  {p.status}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* All incoming (including arrived/dismissed) */}
-          {sentToMe.filter(p => p.status !== "pending").length > 0 && (
-            <div className="card">
-              <div className="section-title">Received Today (History)</div>
-              {sentToMe.filter(p => p.status !== "pending").map(p => (
-                <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div>
-                    <span style={{ fontWeight: 600 }}>{p.student_name}</span>
-                    <span className="text-muted" style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>from {p.from_teacher} · {p.reason}</span>
+            {/* History */}
+            {sentByMe.length > 0 && (
+              <div style={{ marginTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.35rem" }}>SENT TODAY</div>
+                {sentByMe.slice(0, 5).map(p => (
+                  <div key={p.id} style={{ fontSize: "0.78rem", color: "rgba(240,234,216,0.5)", display: "flex", justifyContent: "space-between", padding: "0.15rem 0" }}>
+                    <span>{p.student_name} → {p.to_teacher}</span>
+                    <span className={`tag ${p.status === "arrived" ? "tag-green" : p.status === "dismissed" ? "tag-amber" : "tag-blue"}`} style={{ fontSize: "0.62rem" }}>{p.status}</span>
                   </div>
-                  <span className={`tag ${p.status === "arrived" ? "tag-green" : "tag-amber"}`}>{p.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                ))}
+              </div>
+            )}
+          </div>
 
-      {subTab === "settings" && (
-        <div className="card">
-          <div className="section-title">Pass Settings</div>
-          <div className="grid2">
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Room Settings</div>
-              <div className="mb1"><label>Teacher Name</label><input value={settings.teacherName} onChange={e => setSettings(s => ({ ...s, teacherName: e.target.value }))} /></div>
-              <div className="mb1"><label>Room Number</label><input value={settings.room} onChange={e => setSettings(s => ({ ...s, room: e.target.value }))} /></div>
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Pass Rules</div>
-              <div className="mb1">
-                <label>Max Students Out at Once</label>
-                <select value={settings.maxOut} onChange={e => setSettings(s => ({ ...s, maxOut: Number(e.target.value) }))}>
-                  {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div className="mb1">
-                <label>Flag After (minutes)</label>
-                <input type="number" min={1} max={60} value={settings.flagAfter} onChange={e => setSettings(s => ({ ...s, flagAfter: Number(e.target.value) }))} />
-              </div>
-              <div className="mb1">
-                <label>Lockout (minutes at start/end of period)</label>
-                <input type="number" min={0} max={20} value={settings.lockoutMin} onChange={e => setSettings(s => ({ ...s, lockoutMin: Number(e.target.value) }))} />
-              </div>
-            </div>
-          </div>
-          <div className="mt2">
-            <label>Active Destinations</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
-              {DESTINATIONS.map(d => {
-                const active = settings.destinations.includes(d.key);
-                return (
-                  <button key={d.key} type="button"
-                    className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
-                    onClick={() => setSettings(s => ({
-                      ...s,
-                      destinations: active ? s.destinations.filter(x => x !== d.key) : [...s.destinations, d.key],
-                    }))}
-                  >
-                    {d.icon} {d.key}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
