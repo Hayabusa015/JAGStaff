@@ -6,12 +6,18 @@ function initials(s) { return `${s.firstName[0]}${s.lastName[0]}`; }
 function fmtTime() { return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }); }
 function fmtDateLong() { return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
 
-function KioskDisplay({ requests, setRequests, onClose }) {
-  const [time, setTime] = useState(fmtTime());
-  const [tick, setTick] = useState(0);
+function fmtClockDisplay() {
+  return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+function fmtDay() {
+  return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+function KioskDisplay({ requests, onClose }) {
+  const [clock, setClock] = useState(fmtClockDisplay());
 
   useEffect(() => {
-    const id = setInterval(() => { setTime(fmtTime()); setTick(t => t+1); }, 30000);
+    const id = setInterval(() => setClock(fmtClockDisplay()), 10000);
     return () => clearInterval(id);
   }, []);
 
@@ -25,55 +31,82 @@ function KioskDisplay({ requests, setRequests, onClose }) {
     byTeacher[key].push(r);
   });
 
+  const teacherInitials = name => name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
   return (
-    <div className="kiosk-overlay" style={{ color: "#fff", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#0a0800", color: "#fff", display: "flex", flexDirection: "column", fontFamily: "inherit", zIndex: 1000 }}>
+
+      {/* Watermark */}
+      <img src="/logo.png" alt="" aria-hidden style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(70vw,600px)", opacity: 0.06, pointerEvents: "none", userSelect: "none" }} />
 
       {/* Header */}
-      <div style={{ background: "#1a1200", borderBottom: `2px solid ${GOLD}`, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div className="flex items-center gap2">
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#1a1200", fontSize: "1.1rem" }}>G</div>
+      <div style={{ background: "#0f0a00", borderBottom: `2px solid ${GOLD}`, padding: "0 1.5rem", height: 80, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 1 }}>
+        {/* Left: logo + title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <img src="/logo.png" alt="G-Men" style={{ height: 52, width: 52, objectFit: "contain" }} />
           <div>
-            <div style={{ fontWeight: 900, letterSpacing: "0.1em", fontSize: "0.9rem" }}>G-MEN ENRICHMENT PERIOD</div>
-            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)" }}>12:40–1:10 PM · {fmtDateLong()}</div>
+            <div style={{ fontWeight: 900, fontSize: "1.15rem", letterSpacing: "0.12em", color: GOLD, lineHeight: 1.1 }}>G-MEN ENRICHMENT PERIOD</div>
+            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>JAMES A. GARFIELD HIGH SCHOOL</div>
           </div>
         </div>
-        <div className="flex items-center gap2">
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "1.5rem", fontWeight: 900, color: GOLD }}>{time}</div>
-            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.45)" }}>{pending.length} pending · {arrived.length} arrived</div>
+
+        {/* Center: clock */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2.8rem", fontWeight: 900, color: GOLD, lineHeight: 1, letterSpacing: "0.04em" }}>{clock}</div>
+          <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginTop: "0.15rem" }}>{fmtDay()}</div>
+        </div>
+
+        {/* Right: stat bubbles + close */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 900, color: GOLD, lineHeight: 1 }}>{pending.length}</div>
+            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>REQUESTED</div>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={onClose}>Close</button>
+          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 900, color: "#4ade80", lineHeight: 1 }}>{arrived.length}</div>
+            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>ARRIVED</div>
+          </div>
+          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", color: "rgba(255,255,255,0.7)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            🔒 Close
+          </button>
         </div>
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem", zIndex: 1 }}>
         {pending.length === 0 && arrived.length === 0 ? (
-          <div style={{ textAlign: "center", marginTop: "4rem" }}>
-            <div style={{ fontSize: "4rem" }}>🕵️</div>
-            <div style={{ fontWeight: 900, fontSize: "1.5rem", letterSpacing: "0.1em", marginTop: "1rem" }}>NO STUDENTS REQUESTED YET</div>
-            <div style={{ color: "rgba(255,255,255,0.45)", marginTop: "0.5rem" }}>Use the G-Men Period tab to request students.</div>
+          <div style={{ textAlign: "center", marginTop: "6rem" }}>
+            <div style={{ fontSize: "5rem", marginBottom: "1rem" }}>🕵️</div>
+            <div style={{ fontWeight: 900, fontSize: "1.8rem", letterSpacing: "0.12em", color: GOLD }}>NO STUDENTS REQUESTED YET</div>
+            <div style={{ color: "rgba(255,255,255,0.4)", marginTop: "0.75rem", fontSize: "1rem" }}>Use the G-Men Period tab to request students for remediation.</div>
           </div>
         ) : (
           <>
-            {Object.entries(byTeacher).map(([teacher, students]) => (
-              <div key={teacher} style={{ marginBottom: "2rem" }}>
-                <div className="flex items-center gap2 mb1">
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.8rem" }}>
-                    {teacher.split(" ").map(w => w[0]).join("").slice(0,2)}
+            {Object.entries(byTeacher).map(([teacher, studs]) => (
+              <div key={teacher} style={{ marginBottom: "2.5rem" }}>
+                {/* Teacher row */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: `${GOLD}25`, border: `1px solid ${GOLD}60`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.8rem", color: GOLD, flexShrink: 0 }}>
+                    {teacherInitials(teacher)}
                   </div>
-                  <span style={{ fontWeight: 700, letterSpacing: "0.05em" }}>{teacher}</span>
-                  <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
-                  <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>{students.length} student{students.length !== 1 ? "s" : ""}</span>
+                  <span style={{ fontWeight: 800, fontSize: "1rem", letterSpacing: "0.08em", color: GOLD, textTransform: "uppercase" }}>Requested by {teacher}</span>
+                  <div style={{ flex: 1, height: 1, background: `${GOLD}30` }} />
+                  <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>{studs.length} Student{studs.length !== 1 ? "s" : ""}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "0.75rem" }}>
-                  {students.map(r => (
-                    <div key={r.id} style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${GOLD}40`, borderRadius: "10px", padding: "1rem", textAlign: "center" }}>
-                      <div style={{ width: 52, height: 52, borderRadius: "50%", background: GOLD, margin: "0 auto 0.5rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#1a1200", fontSize: "1rem" }}>
+                {/* Student cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: "1rem" }}>
+                  {studs.map(r => (
+                    <div key={r.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${GOLD}35`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center", backdropFilter: "blur(4px)" }}>
+                      <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${GOLD}22`, border: `2px solid ${GOLD}`, margin: "0 auto 0.75rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: GOLD, fontSize: "1.2rem" }}>
                         {initials(r.student)}
                       </div>
-                      <div style={{ fontWeight: 700 }}>{r.student.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>Grade {r.student.grade}</div>
+                      <div style={{ fontWeight: 800, fontSize: "1rem", color: "#fff" }}>{r.student.name}</div>
+                      {r.student.grade && (
+                        <div style={{ display: "inline-block", background: `${GOLD}25`, border: `1px solid ${GOLD}50`, borderRadius: "999px", padding: "0.15rem 0.6rem", fontSize: "0.75rem", color: GOLD, fontWeight: 700, marginTop: "0.4rem" }}>{r.student.grade}</div>
+                      )}
+                      <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", marginTop: "0.5rem" }}>Requested {r.requestedAt}</div>
                     </div>
                   ))}
                 </div>
@@ -82,12 +115,17 @@ function KioskDisplay({ requests, setRequests, onClose }) {
 
             {arrived.length > 0 && (
               <div>
-                <div style={{ color: "#16a34a", fontWeight: 800, letterSpacing: "0.1em", marginBottom: "0.75rem" }}>✓ ARRIVED ({arrived.length})</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <span style={{ fontWeight: 800, fontSize: "1rem", letterSpacing: "0.08em", color: "#4ade80", textTransform: "uppercase" }}>✓ Arrived</span>
+                  <div style={{ flex: 1, height: 1, background: "rgba(74,222,128,0.2)" }} />
+                  <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)" }}>{arrived.length}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
                   {arrived.map(r => (
-                    <div key={r.id} style={{ background: "rgba(22,163,74,0.15)", border: "1px solid rgba(22,163,74,0.3)", borderRadius: "999px", padding: "0.3rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
-                      <span style={{ background: "#16a34a", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700 }}>{initials(r.student)}</span>
-                      {r.student.name} ✓
+                    <div key={r.id} style={{ background: "rgba(22,163,74,0.12)", border: "1px solid rgba(74,222,128,0.3)", borderRadius: "999px", padding: "0.35rem 1rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem" }}>
+                      <span style={{ background: "#16a34a", color: "#fff", borderRadius: "50%", width: 24, height: 24, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 800 }}>{initials(r.student)}</span>
+                      <span style={{ fontWeight: 600 }}>{r.student.name}</span>
+                      <span style={{ color: "#4ade80" }}>✓</span>
                     </div>
                   ))}
                 </div>
@@ -97,8 +135,8 @@ function KioskDisplay({ requests, setRequests, onClose }) {
         )}
       </div>
 
-      {/* Ticker */}
-      <div style={{ background: "#1a1200", borderTop: `1px solid ${GOLD}40`, padding: "0.5rem 1.5rem", display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em" }}>
+      {/* Footer ticker */}
+      <div style={{ background: "#0f0a00", borderTop: `1px solid ${GOLD}25`, padding: "0.5rem 1.5rem", display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", flexShrink: 0, zIndex: 1 }}>
         <span>GARFIELD G-MEN · ENRICHMENT PERIOD · 12:40–1:10 PM</span>
         <span>{pending.length} pending · {arrived.length} arrived · {requests.length} total</span>
       </div>
@@ -136,7 +174,7 @@ export default function GmenPeriod({ setAlerts, students, user }) {
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
 
-  if (kioskMode) return <KioskDisplay requests={gmenRequests} setRequests={() => {}} onClose={() => setKioskMode(false)} />;
+  if (kioskMode) return <KioskDisplay requests={gmenRequests} onClose={() => setKioskMode(false)} />;
 
   return (
     <div>

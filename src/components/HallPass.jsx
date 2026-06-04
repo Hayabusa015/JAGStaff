@@ -78,74 +78,91 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
 
   const destIcons = Object.fromEntries(DESTINATIONS.map(d => [d.key, d.icon]));
 
+  const fmtDayShort = () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
   return (
-    <div className="kiosk-overlay" style={{ color: "#fff" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#0a0800", color: "#fff", display: "flex", flexDirection: "column", fontFamily: "inherit", zIndex: 1000 }}>
+
+      {/* Watermark */}
+      <img src="/logo.png" alt="" aria-hidden style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(70vw,600px)", opacity: 0.06, pointerEvents: "none", userSelect: "none" }} />
 
       {flash && (
-        <div className="flash-overlay" style={{ background: flash.type === "in" ? "rgba(22,163,74,0.9)" : "rgba(220,38,38,0.9)" }}>
-          {flash.type === "in" ? `✓ ${flash.name} WELCOME BACK` : `🚶 ${flash.name} SIGNED OUT · ${flash.dest}`}
+        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, background: flash.type === "in" ? "rgba(22,163,74,0.92)" : "rgba(220,38,38,0.92)", fontSize: "2rem", fontWeight: 900, letterSpacing: "0.08em" }}>
+          {flash.type === "in" ? `✓ ${flash.name} — WELCOME BACK` : `🚶 ${flash.name} — SIGNED OUT · ${flash.dest}`}
         </div>
       )}
 
-      {/* Top bar */}
-      <div style={{ background: "#1a1200", borderBottom: `2px solid ${GOLD}`, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <div className="flex items-center gap2">
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#1a1200" }}>G</div>
+      {/* Header */}
+      <div style={{ background: "#0f0a00", borderBottom: `2px solid ${GOLD}`, padding: "0 1.5rem", height: 80, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 1 }}>
+        {/* Left */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <img src="/logo.png" alt="G-Men" style={{ height: 52, width: 52, objectFit: "contain" }} />
           <div>
-            <div style={{ fontWeight: 900, letterSpacing: "0.08em" }}>JAMES A. GARFIELD — HALL PASS</div>
-            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)" }}>Room {settings.room} · {settings.teacherName}</div>
+            <div style={{ fontWeight: 900, fontSize: "1.1rem", letterSpacing: "0.1em", color: GOLD, lineHeight: 1.1 }}>HALL PASS KIOSK</div>
+            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>Room {settings.room} · {settings.teacherName}</div>
           </div>
         </div>
-        <div className="flex items-center gap2">
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "1.6rem", fontWeight: 900, color: GOLD }}>{clockStr}</div>
-            <div style={{
-              fontSize: "0.72rem", fontWeight: 700, padding: "0.2rem 0.6rem",
-              borderRadius: "999px", background: maxReached ? "rgba(220,38,38,0.3)" : "rgba(245,192,37,0.15)",
-              color: maxReached ? "#fca5a5" : GOLD,
-            }}>
-              {activePasses.length} / {settings.maxOut} OUT
-            </div>
+
+        {/* Center: clock */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2.8rem", fontWeight: 900, color: GOLD, lineHeight: 1, letterSpacing: "0.04em" }}>{clockStr}</div>
+          <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginTop: "0.15rem" }}>{fmtDayShort()}</div>
+        </div>
+
+        {/* Right: stat bubbles + close */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 900, color: maxReached ? "#f87171" : GOLD, lineHeight: 1 }}>{activePasses.length}</div>
+            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>OUT NOW</div>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }} onClick={onClose}>Exit Kiosk</button>
+          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 900, color: "rgba(255,255,255,0.5)", lineHeight: 1 }}>{settings.maxOut}</div>
+            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>MAX</div>
+          </div>
+          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", color: "rgba(255,255,255,0.7)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            🔒 Close
+          </button>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 2rem", zIndex: 1 }}>
 
-        {/* Status board */}
+        {/* Status board — currently out */}
         {activePasses.length > 0 ? (
-          <div style={{ marginBottom: "1.5rem" }}>
-            <div className="flex items-center gap1" style={{ marginBottom: "0.75rem" }}>
+          <div style={{ marginBottom: "1.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
               <span className="pulse-dot" />
-              <span style={{ fontWeight: 800, letterSpacing: "0.1em", fontSize: "0.8rem", color: "#fca5a5" }}>STUDENTS CURRENTLY OUT</span>
+              <span style={{ fontWeight: 800, letterSpacing: "0.1em", fontSize: "0.85rem", color: "#fca5a5", textTransform: "uppercase" }}>Students Currently Out</span>
+              <div style={{ flex: 1, height: 1, background: "rgba(252,165,165,0.2)" }} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(activePasses.length, 3)},1fr)`, gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(180px,1fr))`, gap: "1rem" }}>
               {activePasses.map(p => {
                 const secs = elapsed(p.outTime);
                 const flagSecs = settings.flagAfter * 60;
                 const critical = secs > flagSecs * 1.5;
                 const flagged = secs > flagSecs;
-                const accentColor = critical ? "#dc2626" : flagged ? "#f97316" : GOLD;
+                const accentColor = critical ? "#f87171" : flagged ? "#fb923c" : GOLD;
                 return (
-                  <div key={p.id} style={{ background: "rgba(255,255,255,0.05)", border: `2px solid ${accentColor}`, borderRadius: "12px", padding: "1rem", textAlign: "center", boxShadow: `0 0 15px ${accentColor}30` }}>
-                    {critical && <div style={{ background: "rgba(220,38,38,0.2)", color: "#fca5a5", fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "4px", marginBottom: "0.5rem", letterSpacing: "0.08em" }}>⚠ CHECK ON STUDENT</div>}
-                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: accentColor, color: "#1a1200", fontWeight: 900, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.5rem" }}>
-                      {p.studentName?.split(" ").map(w => w[0]).join("").slice(0,2)}
+                  <div key={p.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${accentColor}55`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center", backdropFilter: "blur(4px)" }}>
+                    {critical && <div style={{ background: "rgba(220,38,38,0.2)", color: "#fca5a5", fontSize: "0.68rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "4px", marginBottom: "0.5rem", letterSpacing: "0.08em" }}>⚠ CHECK ON STUDENT</div>}
+                    <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${accentColor}22`, border: `2px solid ${accentColor}`, color: accentColor, fontWeight: 900, fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.75rem" }}>
+                      {p.studentName?.split(" ").map(w => w[0]).join("").slice(0, 2)}
                     </div>
                     <div style={{ fontWeight: 800, fontSize: "1rem" }}>{p.studentName}</div>
-                    <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)", marginTop: "0.25rem" }}>{fmtClock(p.outTime)}</div>
-                    <div style={{ marginTop: "0.25rem" }}>{destIcons[p.destination] || "📍"} {p.destination}</div>
-                    <div style={{ color: accentColor, fontWeight: 800, marginTop: "0.5rem", fontSize: "0.9rem" }}>ELAPSED: {fmtElapsed(secs)}</div>
+                    <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>{destIcons[p.destination] || "📍"} {p.destination}</div>
+                    <div style={{ color: accentColor, fontWeight: 800, marginTop: "0.5rem", fontSize: "1rem" }}>{fmtElapsed(secs)}</div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", marginTop: "0.15rem" }}>since {fmtClock(p.outTime)}</div>
                   </div>
                 );
               })}
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "1.5rem", marginBottom: "1.5rem" }}>
-            <div style={{ fontSize: "2.5rem" }}>✅</div>
-            <div style={{ fontWeight: 800, marginTop: "0.5rem", color: "#4ade80" }}>NO ACTIVE HALL PASSES</div>
+          <div style={{ textAlign: "center", padding: "2rem", marginBottom: "1.5rem" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>✅</div>
+            <div style={{ fontWeight: 800, fontSize: "1.2rem", color: "#4ade80", letterSpacing: "0.08em" }}>ALL STUDENTS PRESENT</div>
           </div>
         )}
 
@@ -219,6 +236,12 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
             </div>
           </div>
         )}
+      </div>
+
+      {/* Footer ticker */}
+      <div style={{ background: "#0f0a00", borderTop: `1px solid ${GOLD}25`, padding: "0.5rem 1.5rem", display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", flexShrink: 0, zIndex: 1 }}>
+        <span>GARFIELD G-MEN · HALL PASS KIOSK · Room {settings.room}</span>
+        <span>{activePasses.length} out · max {settings.maxOut}</span>
       </div>
     </div>
   );
