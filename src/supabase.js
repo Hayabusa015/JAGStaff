@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // Supabase project URL + anon key. The anon key is safe to ship in the
@@ -110,4 +110,111 @@ export function useSharedHallPasses() {
   }
 
   return { passes, log, ready, addPass, returnPass };
+}
+
+// ─── Auth ────────────────────────────────────────────────────────
+// useAuth() manages the full Google OAuth session lifecycle:
+//   - Resumes an existing session on page load (handles the OAuth redirect)
+//   - Exposes signInWithGoogle / signOut helpers
+//   - Enforces @jagschools.org domain: non-school accounts are signed out
+//     immediately with an explanatory error message
+//   - Returns { user, loading, error, signInWithGoogle, signOut }
+//     where user is null (unauthenticated) or { id, email, name, avatarUrl }
+export function useAuth(allowedDomain) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // true while checking session
+  const [error, setError] = useState(null);
+
+  // Parse a Supabase User object into the shape the rest of the app expects.
+  function parseUser(supabaseUser) {
+    if (!supabaseUser) return null;
+    const meta = supabaseUser.user_metadata || {};
+    const email = supabaseUser.email || "";
+    const name =
+      meta.full_name ||
+      meta.name ||
+      email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    return {
+      id: supabaseUser.id,
+      email,
+      name,
+      avatarUrl: meta.avatar_url || meta.picture || null,
+    };
+  }
+
+  // Called whenever Supabase fires an auth event.
+  const handleSession = useCallback(
+    async session => {
+      if (!session) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      const supabaseUser = session.user;
+      const email = supabaseUser?.email || "";
+
+      // Domain guard — belt-and-suspenders on top of the RLS policy.
+      if (allowedDomain && !email.toLowerCase().endsWith("@" + allowedDomain)) {
+        setError(`Only @${allowedDomain} accounts may sign in.`);
+        setUser(null);
+        // Sign the non-school account back out so the session doesn't linger.
+        await supabase?.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      setError(null);
+      setUser(parseUser(supabaseUser));
+      setLoading(false);
+    },
+    [allowedDomain]
+  );
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) {
+      // No Supabase config — stay in unauthenticated state but stop loading.
+      setLoading(false);
+      return;
+    }
+
+    // Check for an existing session on mount (also handles the OAuth redirect
+    // coming back to the page — Supabase parses the URL hash automatically).
+    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session));
+
+    // Keep auth state in sync for the lifetime of the component.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => handleSession(session)
+    );
+    return () => subscription.unsubscribe();
+  }, [handleSession]);
+
+  async function signInWithGoogle() {
+    if (!SUPABASE_READY || !supabase) return;
+    setError(null);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        // After Google redirects back, Supabase will restore the session and
+        // fire onAuthStateChange — no extra redirect handling needed.
+        redirectTo: window.location.origin,
+        // Ask for the scopes needed to read the user's name + avatar.
+        scopes: "openid email profile",
+        queryParams: {
+          // Prompt the account chooser every time so staff can switch accounts.
+          prompt: "select_account",
+          // If your district uses Google Workspace, lock the picker to your domain.
+          hd: allowedDomain || undefined,
+        },
+      },
+    });
+    if (oauthError) setError(oauthError.message);
+  }
+
+  async function signOut() {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.auth.signOut();
+    setUser(null);
+  }
+
+  return { user, loading, error, signInWithGoogle, signOut };
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, SEED_STUDENTS, GOLD } from "./constants.js";
+import { useAuth, SUPABASE_READY } from "./supabase.js";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
 import TripRoster from "./components/TripRoster.jsx";
@@ -23,80 +24,86 @@ const TABS = [
   { key: "roster",     label: "Student Roster" },
 ];
 
-function parseName(email) {
-  const local = email.split("@")[0];
-  return local
-    .replace(/[._-]+/g, " ")
-    .split(" ")
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
-function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("idle");
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed.endsWith("@" + ALLOWED_DOMAIN)) {
-      setStatus("domain-error");
-      return;
-    }
-    setStatus("idle");
-    onLogin({ email: trimmed, name: parseName(trimmed) });
-  }
-
+function LoginScreen({ signInWithGoogle, loading, error }) {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center",
       justifyContent: "center", background: "#1a1200", padding: "1rem",
     }}>
-      <div className="card card-raised" style={{ width: "100%", maxWidth: 420, padding: "2.5rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+      <div className="card card-raised" style={{ width: "100%", maxWidth: 400, padding: "2.5rem", textAlign: "center" }}>
+
+        {/* Logo */}
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%", background: GOLD,
+          margin: "0 auto 1.25rem", display: "flex", alignItems: "center",
+          justifyContent: "center", fontSize: "2rem", fontWeight: 900, color: "#1a1200",
+        }}>G</div>
+
+        <h1 style={{ fontSize: "1.3rem", fontWeight: 800, letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
+          JAMES A. GARFIELD
+        </h1>
+        <p style={{ color: "rgba(0,0,0,0.45)", fontSize: "0.82rem", marginBottom: "2rem" }}>
+          Staff Portal · Sign In
+        </p>
+
+        {/* Error (domain mismatch or OAuth failure) */}
+        {error && (
           <div style={{
-            width: 64, height: 64, borderRadius: "50%",
-            background: GOLD, margin: "0 auto 1rem",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "1.8rem", fontWeight: 900, color: "#1a1200",
-          }}>G</div>
-          <h1 style={{ fontSize: "1.3rem", fontWeight: 800, letterSpacing: "0.05em" }}>
-            JAMES A. GARFIELD
-          </h1>
-          <p style={{ color: "rgba(0,0,0,0.45)", fontSize: "0.8rem", marginTop: "0.25rem" }}>
-            Staff Portal · Sign In
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb2">
-            <label>School Email Address</label>
-            <input
-              type="email"
-              placeholder={`you@${ALLOWED_DOMAIN}`}
-              value={email}
-              onChange={e => { setEmail(e.target.value); setStatus("idle"); }}
-              autoFocus
-            />
+            background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)",
+            borderRadius: "8px", padding: "0.65rem 0.9rem", marginBottom: "1.25rem",
+            fontSize: "0.82rem", color: "#dc2626", textAlign: "left",
+          }}>
+            {error}
           </div>
+        )}
 
-          {status === "domain-error" && (
-            <p className="text-red" style={{ fontSize: "0.8rem", marginBottom: "0.75rem" }}>
-              Only @{ALLOWED_DOMAIN} accounts may sign in.
-            </p>
-          )}
-
-          <button type="submit" className="btn btn-primary w-full" style={{ justifyContent: "center" }}>
-            Sign In with School Email
+        {/* Google sign-in button */}
+        {SUPABASE_READY ? (
+          <button
+            className="btn w-full"
+            style={{
+              justifyContent: "center", gap: "0.75rem",
+              background: "#fff", border: "1px solid rgba(0,0,0,0.15)",
+              color: "#1a1200", fontSize: "0.92rem", fontWeight: 600,
+              padding: "0.75rem 1rem", borderRadius: "8px",
+              opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
+            }}
+            onClick={signInWithGoogle}
+            disabled={loading}
+          >
+            {/* Google "G" logo */}
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
+              <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
+              <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
+            </svg>
+            {loading ? "Signing in…" : "Sign in with Google"}
           </button>
-        </form>
+        ) : (
+          /* Supabase not configured — show a clear message instead of a broken button */
+          <div style={{
+            background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
+            borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem", color: "#92700a",
+          }}>
+            <strong>Supabase not configured.</strong><br />
+            Copy <code>.env.example</code> to <code>.env.local</code> and add your
+            project URL + anon key, then restart the dev server.<br />
+            See <strong>SUPABASE_SETUP.md</strong> for instructions.
+          </div>
+        )}
+
+        <p style={{ marginTop: "1.25rem", fontSize: "0.75rem", color: "rgba(0,0,0,0.35)" }}>
+          Only <strong>@{ALLOWED_DOMAIN}</strong> accounts are permitted.
+        </p>
       </div>
     </div>
   );
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
+
   const [tab, setTab] = useState("dashboard");
   const [students, setStudents] = useState(SEED_STUDENTS);
   const [weeklyEvents, setWeeklyEvents] = useState([
@@ -115,15 +122,15 @@ export default function App() {
   const [gmenRequests, setGmenRequests] = useState([]);
   const [alerts, setAlerts] = useState([]);
 
-  // Session timeout
+  // Inactivity timeout — signs the user out of Supabase after 7 hours idle.
   const resetTimer = useCallback(() => {
     clearTimeout(window._jagTimeout);
-    window._jagTimeout = setTimeout(() => setUser(null), SESSION_TIMEOUT_MS);
-  }, []);
+    window._jagTimeout = setTimeout(() => signOut(), SESSION_TIMEOUT_MS);
+  }, [signOut]);
 
   useEffect(() => {
     if (!user) return;
-    const events = ["mousemove","keydown","click","touchstart","scroll"];
+    const events = ["mousemove", "keydown", "click", "touchstart", "scroll"];
     events.forEach(ev => window.addEventListener(ev, resetTimer, { passive: true }));
     resetTimer();
     return () => {
@@ -132,7 +139,16 @@ export default function App() {
     };
   }, [user, resetTimer]);
 
-  if (!user) return <LoginScreen onLogin={setUser} />;
+  // Checking for an existing session on first load.
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#1a1200", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.1em", fontSize: "0.9rem" }}>
+        LOADING…
+      </div>
+    </div>
+  );
+
+  if (!user) return <LoginScreen signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
 
   const sharedProps = { user, students, setStudents, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, gmenRequests, setGmenRequests, alerts, setAlerts };
 
@@ -154,13 +170,16 @@ export default function App() {
           </button>
         ))}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", padding: "0 0.5rem", gap: "0.5rem" }}>
+          {user.avatarUrl && (
+            <img src={user.avatarUrl} alt="" style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${GOLD}60` }} />
+          )}
           <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>
             {user.name}
           </span>
           <button
             className="btn btn-sm btn-ghost"
             style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.15)" }}
-            onClick={() => setUser(null)}
+            onClick={signOut}
           >
             Sign Out
           </button>
