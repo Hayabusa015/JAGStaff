@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { GOLD, DESTINATIONS, KIOSK_PIN } from "../constants.js";
-import { useSharedHallPasses, FIREBASE_READY } from "../firebase.js";
+import { useSharedHallPasses, SUPABASE_READY } from "../supabase.js";
 
 function elapsed(outTime) {
   if (!outTime) return 0;
@@ -300,8 +300,8 @@ export default function HallPass({ user, students }) {
           <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Hall Pass Manager</h2>
           <div className="text-muted">
             Room {settings.room} · {settings.teacherName} ·{" "}
-            <span style={{ color: ready && FIREBASE_READY ? "#16a34a" : "#f59e0b", fontWeight: 600 }}>
-              {ready && FIREBASE_READY ? "● Live Sync" : "● Local Only"}
+            <span style={{ color: ready && SUPABASE_READY ? "#16a34a" : "#f59e0b", fontWeight: 600 }}>
+              {ready && SUPABASE_READY ? "● Live Sync" : "● Local Only"}
             </span>
           </div>
         </div>
