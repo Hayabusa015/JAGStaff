@@ -401,7 +401,7 @@ export default function HallPass({ user, students }) {
   const staff = useStaffDirectory(user, settings.room);
   const { sentByMe, sentToMe, allActive: allActiveRoomPasses, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
   const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
-  const { periods: bellPeriods } = useBellSchedule();
+  const { periodsToday: bellPeriods } = useBellSchedule();
 
   // Room pass form
   const [rpStudent, setRpStudent] = useState(null);

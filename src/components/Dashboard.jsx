@@ -128,7 +128,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
-  const { periods } = useBellSchedule();
+  const { periodsToday } = useBellSchedule();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
     return () => clearInterval(id);
   }, []);
 
-  const periodInfo = currentPeriodInfo(periods);
+  const periodInfo = currentPeriodInfo(periodsToday);
 
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);

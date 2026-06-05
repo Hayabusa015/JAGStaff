@@ -789,13 +789,20 @@ export function useGmenSettings() {
 }
 
 // ─── Bell Schedule ───────────────────────────────────────────────────────────
-// Single-row table (id=1) with a JSONB `periods` array:
-//   [{ name: "Period 1", start: "08:00", end: "08:50" }, ...]  (24h HH:MM)
+// Single-row table (id=1) with a JSONB `schedules` object:
+//   { twt: [...], mf: [...] }  each array: { name, start, end }  (24h HH:MM)
 const toMin = (s) => {
   if (!s || !s.includes(":")) return null;
   const [h, m] = s.split(":").map(Number);
   return h * 60 + m;
 };
+
+function daySchedule(schedules) {
+  const dow = new Date().getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  return (dow === 2 || dow === 3 || dow === 4)
+    ? (schedules?.twt || [])
+    : (schedules?.mf || []);
+}
 
 // Pure helper: which period (if any) contains the given time?
 export function periodForTime(periods, at = new Date()) {
@@ -825,30 +832,61 @@ export function currentPeriodInfo(periods, at = new Date()) {
   return { status: "after" };
 }
 
+const DEFAULT_TWT = [
+  { name: "1st Period",       start: "07:45", end: "08:33" },
+  { name: "2nd Period",       start: "08:37", end: "09:22" },
+  { name: "3rd Period",       start: "09:26", end: "10:11" },
+  { name: "G-Men Time",       start: "10:15", end: "10:47" },
+  { name: "5th Period",       start: "10:51", end: "11:21" },
+  { name: "6th Period",       start: "11:25", end: "11:36" },
+  { name: "7th Period-Lunch", start: "11:40", end: "12:10" },
+  { name: "8th Period",       start: "12:14", end: "12:25" },
+  { name: "9th Period-Lunch", start: "12:29", end: "12:59" },
+  { name: "10th Period",      start: "13:03", end: "13:48" },
+  { name: "11th Period",      start: "13:52", end: "14:37" },
+];
+
+const DEFAULT_MF = [
+  { name: "1st Period",       start: "07:45", end: "08:38" },
+  { name: "2nd Period",       start: "08:42", end: "09:32" },
+  { name: "3rd Period",       start: "09:36", end: "10:26" },
+  { name: "5th Period",       start: "10:30", end: "11:00" },
+  { name: "6th Period",       start: "11:04", end: "11:20" },
+  { name: "7th Period-Lunch", start: "11:24", end: "11:54" },
+  { name: "8th Period",       start: "11:58", end: "12:14" },
+  { name: "9th Period-Lunch", start: "12:18", end: "12:48" },
+  { name: "10th Period",      start: "12:52", end: "13:42" },
+  { name: "11th Period",      start: "13:46", end: "14:37" },
+];
+
 export function useBellSchedule() {
-  const [periods, setPeriods] = useState([]);
+  const [schedules, setSchedules] = useState({ twt: DEFAULT_TWT, mf: DEFAULT_MF });
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) return;
-    supabase.from("bell_schedule").select("periods").eq("id", 1).single().then(({ data }) => {
-      if (data?.periods) setPeriods(data.periods);
+    supabase.from("bell_schedule").select("schedules").eq("id", 1).single().then(({ data }) => {
+      if (data?.schedules) setSchedules(data.schedules);
     });
     const ch = supabase.channel("bell_schedule_ch")
       .on("postgres_changes", { event: "*", schema: "public", table: "bell_schedule" }, ({ new: row }) => {
-        if (row?.periods) setPeriods(row.periods);
+        if (row?.schedules) setSchedules(row.schedules);
       }).subscribe();
     return () => supabase.removeChannel(ch);
   }, []);
 
-  async function savePeriods(next, userEmail) {
-    setPeriods(next);
+  // The schedule for today based on day of week
+  const periodsToday = daySchedule(schedules);
+
+  async function saveSchedule(key, periods, userEmail) {
+    const next = { ...schedules, [key]: periods };
+    setSchedules(next);
     if (!SUPABASE_READY || !supabase) return;
     await supabase.from("bell_schedule").update({
-      periods: next, updated_at: new Date().toISOString(), updated_by: userEmail,
+      schedules: next, updated_at: new Date().toISOString(), updated_by: userEmail,
     }).eq("id", 1);
   }
 
-  return { periods, savePeriods };
+  return { schedules, periodsToday, saveSchedule };
 }
 
 // ─── Gmail Send (GIS incremental auth) ───────────────────────────────────────

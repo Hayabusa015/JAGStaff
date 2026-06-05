@@ -12,26 +12,31 @@ function fmt12(hhmm) {
 
 export default function AdminSettings({ user }) {
   const { staffList, toggleAdmin } = useAdminStaff();
-  const { periods, savePeriods } = useBellSchedule();
-  const [draft, setDraft] = useState(null); // null = not editing; array = editing copy
+  const { schedules, saveSchedule } = useBellSchedule();
+  const [schedTab, setSchedTab] = useState("twt"); // "twt" | "mf"
+  const [drafts, setDrafts] = useState({}); // { twt: [...] | null, mf: [...] | null }
 
-  const editing = draft !== null;
-  const rows = editing ? draft : periods;
+  const editing = !!drafts[schedTab];
+  const rows = drafts[schedTab] || schedules[schedTab] || [];
 
-  function startEdit() { setDraft(periods.length ? periods.map(p => ({ ...p })) : [{ name: "Period 1", start: "08:00", end: "08:50" }]); }
-  function cancelEdit() { setDraft(null); }
-  function updateRow(i, key, val) { setDraft(d => d.map((p, idx) => idx === i ? { ...p, [key]: val } : p)); }
+  function startEdit() {
+    const src = schedules[schedTab] || [];
+    setDrafts(d => ({ ...d, [schedTab]: src.length ? src.map(p => ({ ...p })) : [{ name: "Period 1", start: "07:45", end: "08:33" }] }));
+  }
+  function cancelEdit() { setDrafts(d => ({ ...d, [schedTab]: null })); }
+  function updateRow(i, key, val) { setDrafts(d => ({ ...d, [schedTab]: d[schedTab].map((p, idx) => idx === i ? { ...p, [key]: val } : p) })); }
   function addRow() {
-    setDraft(d => {
-      const last = d[d.length - 1];
-      return [...d, { name: `Period ${d.length + 1}`, start: last?.end || "08:00", end: "" }];
+    setDrafts(d => {
+      const arr = d[schedTab];
+      const last = arr[arr.length - 1];
+      return { ...d, [schedTab]: [...arr, { name: `Period ${arr.length + 1}`, start: last?.end || "07:45", end: "" }] };
     });
   }
-  function removeRow(i) { setDraft(d => d.filter((_, idx) => idx !== i)); }
+  function removeRow(i) { setDrafts(d => ({ ...d, [schedTab]: d[schedTab].filter((_, idx) => idx !== i) })); }
   async function saveEdit() {
-    const clean = draft.filter(p => p.name && p.start && p.end);
-    await savePeriods(clean, user?.email);
-    setDraft(null);
+    const clean = drafts[schedTab].filter(p => p.name && p.start && p.end);
+    await saveSchedule(schedTab, clean, user?.email);
+    setDrafts(d => ({ ...d, [schedTab]: null }));
   }
 
   const adminCount = staffList.filter(s => s.is_admin).length;
@@ -132,15 +137,26 @@ export default function AdminSettings({ user }) {
             <button onClick={startEdit} style={{
               background: "rgba(245,192,37,0.12)", border: `1px solid ${GOLD}`, color: GOLD,
               borderRadius: 6, padding: "0.3rem 0.85rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem",
-            }}>{periods.length ? "Edit" : "Set Up Schedule"}</button>
+            }}>Edit</button>
           )}
         </div>
-        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
-          Used for the live "current period" indicator on the Dashboard and to detect when a room pass's period has ended.
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.75rem" }}>
+          Two schedules: G-Men days (Tue/Wed/Thu) and regular days (Mon/Fri). The app automatically uses today's schedule.
+        </div>
+        {/* Schedule type tabs */}
+        <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.85rem" }}>
+          {[{ key: "twt", label: "Tue / Wed / Thu  (G-Men)" }, { key: "mf", label: "Mon / Fri" }].map(t => (
+            <button key={t.key} onClick={() => { cancelEdit(); setSchedTab(t.key); }} style={{
+              background: schedTab === t.key ? GOLD : "rgba(255,255,255,0.06)",
+              border: schedTab === t.key ? "none" : "1px solid rgba(255,255,255,0.12)",
+              color: schedTab === t.key ? "#000" : "rgba(255,255,255,0.55)",
+              borderRadius: 6, padding: "0.3rem 0.85rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem",
+            }}>{t.label}</button>
+          ))}
         </div>
 
         {!editing && rows.length === 0 && (
-          <p className="text-muted" style={{ fontSize: "0.85rem" }}>No schedule set yet.</p>
+          <p className="text-muted" style={{ fontSize: "0.85rem" }}>No periods yet — click Edit to add.</p>
         )}
 
         {!editing && rows.length > 0 && (
