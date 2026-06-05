@@ -3,8 +3,16 @@ import { createPortal } from "react-dom";
 import { GOLD } from "../constants.js";
 import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
-  useGmenChangeRequests, useGmenSettings, useGmailSend,
+  useGmenChangeRequests, useGmenSettings, useGmailSend, useBellSchedule,
 } from "../supabase.js";
+
+function fmt12(hhmm) {
+  if (!hhmm || !hhmm.includes(":")) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  const ap = h >= 12 ? "PM" : "AM";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")} ${ap}`;
+}
 import GmenClassManager from "./GmenClassManager.jsx";
 
 function initials(s) {
@@ -167,6 +175,11 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
   const { enrollments, seatCount } = useGmenEnrollments(settings.active_period || 1);
   const { changeRequests, approveChange, denyChange } = useGmenChangeRequests();
+  const { schedules } = useBellSchedule();
+
+  // G-Men is 4th period on Tue/Wed/Thu — pull its real time from the bell schedule
+  const gmenBlock = (schedules?.twt || []).find(p => /g-?men/i.test(p.name));
+  const gmenTime = gmenBlock ? `${fmt12(gmenBlock.start)}–${fmt12(gmenBlock.end)}` : "10:15–10:47 AM";
 
   const [subTab, setSubTab] = useState("today");
   const [search, setSearch] = useState("");
@@ -217,7 +230,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
       <div className="flex items-center justify-between mb2">
         <div>
           <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>G-Men Enrichment Period</h2>
-          <div className="text-muted">12:40–1:10 PM · Tue / Wed / Thu · Period {period}</div>
+          <div className="text-muted">{gmenTime} · 4th Period · Tue / Wed / Thu · Grading Period {period}</div>
         </div>
         <button className="btn btn-primary" onClick={() => setKioskMode(true)}>📺 Launch Projector Display</button>
       </div>
