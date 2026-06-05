@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, SUPABASE_READY, isStaffEmail } from "./supabase.js";
+import AdminSettings from "./components/AdminSettings.jsx";
 import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
@@ -22,6 +23,7 @@ const TABS = [
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
   { key: "resources",   label: "Teacher Resources"},
+  { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
 
 const RESOURCE_TABS = [
@@ -134,10 +136,14 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
 export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
   const [isStaff, setIsStaff] = useState(null); // null = checking
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (!user) { setIsStaff(null); return; }
-    isStaffEmail(user.email).then(result => setIsStaff(result));
+    if (!user) { setIsStaff(null); setIsAdmin(false); return; }
+    isStaffEmail(user.email).then(({ isStaff, isAdmin }) => {
+      setIsStaff(isStaff);
+      setIsAdmin(isAdmin);
+    });
   }, [user]);
 
   const [tab, setTab] = useState("dashboard");
@@ -226,7 +232,7 @@ export default function App() {
 
         {/* Row 2: tabs */}
         <div className="nav-row2">
-          {TABS.map(t => (
+          {TABS.filter(t => !t.adminOnly || isAdmin).map(t => (
             <button
               key={t.key}
               className={`tab-btn${tab === t.key ? " active" : ""}`}
@@ -256,7 +262,8 @@ export default function App() {
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}
         {tab === "trips"       && <TripRoster   {...sharedProps} />}
-        {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} />}
+        {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} isAdmin={isAdmin} />}
+        {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
 

@@ -707,13 +707,32 @@ export function useLateArrivals() {
 // ─── G-Men Period ───────────────────────────────────────────────────────────
 
 export async function isStaffEmail(email) {
-  if (!SUPABASE_READY || !supabase) return false;
+  if (!SUPABASE_READY || !supabase) return { isStaff: false, isAdmin: false };
   const { data } = await supabase
     .from("staff_directory")
-    .select("email")
+    .select("email, is_admin")
     .eq("email", email)
     .maybeSingle();
-  return !!data;
+  return { isStaff: !!data, isAdmin: !!data?.is_admin };
+}
+
+export function useAdminStaff() {
+  const [staffList, setStaffList] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("staff_directory").select("*").order("name").then(({ data }) => {
+      if (data) setStaffList(data);
+    });
+  }, []);
+
+  async function toggleAdmin(email, value) {
+    setStaffList(prev => prev.map(s => s.email === email ? { ...s, is_admin: value } : s));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("staff_directory").update({ is_admin: value }).eq("email", email);
+  }
+
+  return { staffList, toggleAdmin };
 }
 
 export function useGmenSettings() {

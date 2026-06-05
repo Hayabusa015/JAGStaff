@@ -161,7 +161,7 @@ function KioskDisplay({ requests, onClose }) {
   );
 }
 
-export default function GmenPeriod({ setAlerts, students, user }) {
+export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
   const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
@@ -394,13 +394,14 @@ export default function GmenPeriod({ setAlerts, students, user }) {
           denyChange={denyChange}
           user={user}
           students={students}
+          isAdmin={isAdmin}
         />
       )}
     </div>
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, user, students }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, user, students, isAdmin }) {
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
   const [pushProgress, setPushProgress] = useState({ sent: 0, total: 0 });
@@ -509,6 +510,19 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+      {/* ── School-wide controls — admin only ───────────────────────────── */}
+      {!isAdmin && (
+        <div className="card" style={{ textAlign: "center", padding: "1.5rem" }}>
+          <div style={{ fontSize: "1.1rem", marginBottom: "0.4rem" }}>🔒</div>
+          <div style={{ fontSize: "0.88rem", color: "rgba(255,255,255,0.4)" }}>
+            School-wide enrollment settings are managed by admin staff.
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+      <>
 
       {/* ── Enrollment Settings ──────────────────────────────────────────── */}
       <div className="card">
@@ -659,6 +673,9 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
           </div>
         )}
       </div>
+
+      </> /* end isAdmin block */
+      )}
 
       {/* ── Pending change requests ──────────────────────────────────────── */}
       <div className="card">
