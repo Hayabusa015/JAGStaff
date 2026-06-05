@@ -6,7 +6,13 @@ import {
 } from "../supabase.js";
 import GmenClassManager from "./GmenClassManager.jsx";
 
-function initials(s) { return `${s.firstName[0]}${s.lastName[0]}`; }
+function initials(s) {
+  const f = s?.firstName || s?.name || "";
+  const l = s?.lastName || "";
+  if (l) return `${f[0] || ""}${l[0] || ""}`.toUpperCase();
+  const parts = f.split(" ");
+  return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : (f[0] || "?").toUpperCase();
+}
 function fmtClockDisplay() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
@@ -87,17 +93,17 @@ function KioskDisplay({ requests, onClose }) {
                   <div style={{ flex: 1, height: 1, background: `${GOLD}30` }} />
                   <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>{studs.length} Student{studs.length !== 1 ? "s" : ""}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px,1fr))", gap: "1rem" }}>
                   {studs.map(r => (
-                    <div key={r.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${GOLD}35`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center" }}>
-                      <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${GOLD}22`, border: `2px solid ${GOLD}`, margin: "0 auto 0.75rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: GOLD, fontSize: "1.2rem" }}>
+                    <div key={r.id} style={{ background: "rgba(255,255,255,0.10)", border: `2px solid ${GOLD}`, borderRadius: "14px", padding: "1.25rem 1rem", textAlign: "center" }}>
+                      <div style={{ width: 64, height: 64, borderRadius: "50%", background: GOLD, margin: "0 auto 0.75rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#000", fontSize: "1.3rem" }}>
                         {initials(r.student)}
                       </div>
-                      <div style={{ fontWeight: 800, fontSize: "1rem", color: "#fff" }}>{r.student.name}</div>
+                      <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "#fff" }}>{r.student.name}</div>
                       {r.student.grade && (
-                        <div style={{ display: "inline-block", background: `${GOLD}25`, border: `1px solid ${GOLD}50`, borderRadius: "999px", padding: "0.15rem 0.6rem", fontSize: "0.75rem", color: GOLD, fontWeight: 700, marginTop: "0.4rem" }}>{r.student.grade}</div>
+                        <div style={{ display: "inline-block", background: `rgba(245,192,37,0.2)`, border: `1px solid ${GOLD}`, borderRadius: "999px", padding: "0.15rem 0.6rem", fontSize: "0.75rem", color: GOLD, fontWeight: 700, marginTop: "0.4rem" }}>{r.student.grade}</div>
                       )}
-                      <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", marginTop: "0.5rem" }}>Requested {r.requestedAt}</div>
+                      <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.55)", marginTop: "0.5rem" }}>Requested {r.requestedAt}</div>
                     </div>
                   ))}
                 </div>
