@@ -94,17 +94,74 @@ export default function StudentRoster() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb2">
-        <div>
-          <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Student Roster</h2>
-          <p className="text-muted" style={{ fontSize: "0.8rem" }}>
-            {loading ? "Loading from database…" : `Saved to Supabase — shared with all staff. Powers G-Men, Hall Pass & Infractions.${withEmail > 0 ? ` · ${withEmail} students have parent email.` : ""}`}
-          </p>
+      {/* ── Section header ── */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0.9rem 1.1rem",
+        background: "linear-gradient(135deg, rgba(245,192,37,0.07) 0%, rgba(245,192,37,0.02) 100%)",
+        border: "1px solid rgba(245,192,37,0.18)",
+        borderRadius: 12,
+        marginBottom: "1rem",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+          <span style={{ fontSize: "1.3rem" }}>🎓</span>
+          <div>
+            <h2 style={{ fontWeight: 800, fontSize: "1.05rem", letterSpacing: "0.01em" }}>Student Roster</h2>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+              {loading ? "Loading…" : `${students.length} students · shared school-wide · powers Hall Pass, G-Men & Infractions${withEmail > 0 ? ` · ${withEmail} with parent email` : ""}`}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap1">
-          <span className="tag tag-gold">{students.length} students</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowClassroomSync(true)}>Sync from Classroom</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>Import CSV</button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Sync from Classroom */}
+          <button
+            onClick={() => setShowClassroomSync(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              padding: "0.42rem 0.85rem",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.13)",
+              borderRadius: 8, cursor: "pointer", color: "var(--text)",
+              fontSize: "0.8rem", fontWeight: 600,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(66,133,244,0.18)"; e.currentTarget.style.borderColor = "rgba(66,133,244,0.45)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)"; }}
+          >
+            {/* Google Classroom icon */}
+            <svg width="16" height="16" viewBox="0 0 48 48" fill="none">
+              <rect width="48" height="48" rx="6" fill="#0F9D58"/>
+              <rect x="8" y="12" width="32" height="24" rx="2" fill="white" opacity="0.9"/>
+              <circle cx="24" cy="20" r="4" fill="#0F9D58"/>
+              <path d="M15 32c0-4 4-6 9-6s9 2 9 6" fill="#0F9D58"/>
+            </svg>
+            Sync from Classroom
+          </button>
+
+          {/* Import CSV */}
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              padding: "0.42rem 0.85rem",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.13)",
+              borderRadius: 8, cursor: "pointer", color: "var(--text)",
+              fontSize: "0.8rem", fontWeight: 600,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(34,197,94,0.15)"; e.currentTarget.style.borderColor = "rgba(34,197,94,0.4)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)"; }}
+          >
+            {/* Excel icon */}
+            <svg width="16" height="16" viewBox="0 0 48 48" fill="none">
+              <rect width="48" height="48" rx="6" fill="#1D6F42"/>
+              <path d="M8 12h20v24H8z" fill="white" opacity="0.15"/>
+              <path d="M28 12h12v4H28zM28 20h12v4H28zM28 28h12v4H28z" fill="white" opacity="0.7"/>
+              <path d="M12 18l4 6-4 6h4l2-3 2 3h4l-4-6 4-6h-4l-2 3-2-3z" fill="white"/>
+            </svg>
+            Import CSV
+          </button>
         </div>
       </div>
 
