@@ -1,0 +1,53 @@
+name: Friday Weekly Auto-Debug
+
+on:
+  schedule:
+    - cron: '0 20 * * 5'   # 4 PM EDT (UTC-4) every Friday
+  workflow_dispatch:         # allow manual trigger for testing
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  audit-and-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build check
+        run: npm run build
+        continue-on-error: true
+
+      - name: Claude Code auto-fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are doing a scheduled Friday health check on the JAGStaff school
+            staff portal (Vite + React + Supabase).
+
+            1. Run `npm run build`. Fix any compile or import errors you find.
+            2. Scan all JSX components for React hook rule violations —
+               hooks called inside .map(), conditions, or nested functions.
+               This has caused real bugs (useState inside .map crashed TripRoster
+               and Dashboard twice).
+            3. Check for hardcoded dark text colors like rgba(0,0,0,...) used
+               on dark backgrounds — replace with rgba(240,234,216,...) equivalents.
+            4. Check that all imports in src/ resolve to real files.
+            5. If everything is healthy, note that in the PR body. Still open
+               the PR as a weekly health-check record.
+
+            Commit any fixes. Open a pull request with a clear summary of what
+            you found and what (if anything) was fixed.
+          allowed_tools: 'Bash,Read,Edit,Write,Glob,Grep'
