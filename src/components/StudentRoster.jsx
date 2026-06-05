@@ -16,21 +16,21 @@ function guessCol(headers, patterns) {
     const i = headers.findIndex(h => h.includes(p));
     if (i !== -1) return String(i);
   }
-  return "0";
+  return "-1";
 }
 
 export default function StudentRoster() {
   const { students, loading, importStudents, addStudent, updateStudent, removeStudent } = useStudents();
   const [drag, setDrag] = useState(false);
   const [parsed, setParsed] = useState(null);
-  const [colMap, setColMap] = useState({ first: "0", last: "1", grade: "2" });
+  const [colMap, setColMap] = useState({ first: "0", last: "1", grade: "2", parentEmail: "-1" });
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState("All");
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
-  const [manualForm, setManualForm] = useState({ firstName: "", lastName: "", grade: "" });
+  const [manualForm, setManualForm] = useState({ firstName: "", lastName: "", grade: "", parentEmail: "" });
   const fileRef = useRef();
 
   function handleFile(file) {
@@ -39,9 +39,10 @@ export default function StudentRoster() {
       const result = parseCSV(e.target.result);
       if (!result) return;
       setColMap({
-        first: guessCol(result.headers, ["first","fname","given"]),
-        last:  guessCol(result.headers, ["last","lname","surname","family"]),
-        grade: guessCol(result.headers, ["grade","yr","year","level"]),
+        first:       guessCol(result.headers, ["first","fname","given"]),
+        last:        guessCol(result.headers, ["last","lname","surname","family"]),
+        grade:       guessCol(result.headers, ["grade","yr","year","level"]),
+        parentEmail: guessCol(result.headers, ["parent","email","guardian","contact"]),
       });
       setParsed(result);
       setImported(false);
@@ -53,10 +54,15 @@ export default function StudentRoster() {
     if (!parsed) return;
     setImporting(true);
     const { rows } = parsed;
-    const fi = Number(colMap.first), li = Number(colMap.last), gi = Number(colMap.grade);
+    const fi = Number(colMap.first), li = Number(colMap.last), gi = Number(colMap.grade), pi = Number(colMap.parentEmail);
     const newStudents = rows
       .filter(r => r[fi]?.trim() || r[li]?.trim())
-      .map(r => ({ firstName: r[fi]?.trim() || "", lastName: r[li]?.trim() || "", grade: r[gi]?.trim() || "" }));
+      .map(r => ({
+        firstName: r[fi]?.trim() || "",
+        lastName: r[li]?.trim() || "",
+        grade: r[gi]?.trim() || "",
+        parentEmail: pi >= 0 ? (r[pi]?.trim() || "") : "",
+      }));
     await importStudents(newStudents);
     setParsed(null);
     setImporting(false);
@@ -66,8 +72,8 @@ export default function StudentRoster() {
   async function addManual(e) {
     e.preventDefault();
     if (!manualForm.firstName.trim() && !manualForm.lastName.trim()) return;
-    await addStudent({ firstName: manualForm.firstName.trim(), lastName: manualForm.lastName.trim(), grade: manualForm.grade.trim() });
-    setManualForm({ firstName: "", lastName: "", grade: "" });
+    await addStudent({ firstName: manualForm.firstName.trim(), lastName: manualForm.lastName.trim(), grade: manualForm.grade.trim(), parentEmail: manualForm.parentEmail.trim() });
+    setManualForm({ firstName: "", lastName: "", grade: "", parentEmail: "" });
   }
 
   async function saveEdit(id) {
@@ -82,13 +88,15 @@ export default function StudentRoster() {
     return matchSearch && matchGrade;
   });
 
+  const withEmail = students.filter(s => s.parentEmail).length;
+
   return (
     <div>
       <div className="flex items-center justify-between mb2">
         <div>
           <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Student Roster</h2>
           <p className="text-muted" style={{ fontSize: "0.8rem" }}>
-            {loading ? "Loading from database…" : "Saved to Supabase — shared with all staff. Powers G-Men, Hall Pass & Infractions."}
+            {loading ? "Loading from database…" : `Saved to Supabase — shared with all staff. Powers G-Men, Hall Pass & Infractions.${withEmail > 0 ? ` · ${withEmail} students have parent email.` : ""}`}
           </p>
         </div>
         <div className="flex items-center gap1">
@@ -111,7 +119,7 @@ export default function StudentRoster() {
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📁</div>
           <div style={{ fontWeight: 600 }}>Drop your CSV file here, or click to browse</div>
           <div className="text-muted mt1" style={{ fontSize: "0.78rem" }}>
-            Needs at least: First Name, Last Name, Grade columns (any delimiter)
+            Columns: First Name, Last Name, Grade — optional: Parent Email
           </div>
         </div>
       )}
@@ -122,11 +130,12 @@ export default function StudentRoster() {
           <p className="text-muted mb1" style={{ fontSize: "0.82rem" }}>
             Found {parsed.rows.length} rows · {parsed.headers.length} columns. This will <strong>replace</strong> the current roster.
           </p>
-          <div className="grid3 mb1">
-            {[["First Name", "first"], ["Last Name", "last"], ["Grade", "grade"]].map(([label, key]) => (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px,1fr))", gap: "0.5rem", marginBottom: "0.75rem" }}>
+            {[["First Name", "first"], ["Last Name", "last"], ["Grade", "grade"], ["Parent Email", "parentEmail"]].map(([label, key]) => (
               <div key={key}>
                 <label>{label}</label>
                 <select value={colMap[key]} onChange={e => setColMap(m => ({ ...m, [key]: e.target.value }))}>
+                  <option value="-1">— skip —</option>
                   {parsed.headers.map((h, i) => <option key={i} value={String(i)}>{h}</option>)}
                 </select>
               </div>
@@ -134,13 +143,14 @@ export default function StudentRoster() {
           </div>
           <div style={{ marginBottom: "1rem", overflowX: "auto" }}>
             <table className="stu-table">
-              <thead><tr><th>Last Name</th><th>First Name</th><th>Grade</th></tr></thead>
+              <thead><tr><th>Last Name</th><th>First Name</th><th>Grade</th><th>Parent Email</th></tr></thead>
               <tbody>
                 {parsed.rows.slice(0, 5).map((r, i) => (
                   <tr key={i}>
                     <td>{r[Number(colMap.last)]  || <em className="text-muted">blank</em>}</td>
                     <td>{r[Number(colMap.first)] || <em className="text-muted">blank</em>}</td>
                     <td><span className="tag tag-amber">{r[Number(colMap.grade)] || "—"}</span></td>
+                    <td className="text-muted" style={{ fontSize: "0.78rem" }}>{Number(colMap.parentEmail) >= 0 ? (r[Number(colMap.parentEmail)] || "—") : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -171,6 +181,8 @@ export default function StudentRoster() {
             onChange={e => setManualForm(f => ({ ...f, firstName: e.target.value }))} placeholder="First name" />
           <input style={{ flex: "0 0 80px" }} value={manualForm.grade}
             onChange={e => setManualForm(f => ({ ...f, grade: e.target.value }))} placeholder="Grade" />
+          <input style={{ flex: 2, minWidth: 180 }} value={manualForm.parentEmail}
+            onChange={e => setManualForm(f => ({ ...f, parentEmail: e.target.value }))} placeholder="Parent email (optional)" type="email" />
           <button type="submit" className="btn btn-primary btn-sm">+ Add</button>
         </form>
       </div>
@@ -188,10 +200,10 @@ export default function StudentRoster() {
           </div>
 
           <table className="stu-table">
-            <thead><tr><th>#</th><th>Last Name</th><th>First Name</th><th>Grade</th><th>Actions</th></tr></thead>
+            <thead><tr><th>#</th><th>Last Name</th><th>First Name</th><th>Grade</th><th>Parent Email</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={5} className="text-muted" style={{ textAlign: "center", padding: "1rem" }}>No students match.</td></tr>
+                <tr><td colSpan={6} className="text-muted" style={{ textAlign: "center", padding: "1rem" }}>No students match.</td></tr>
               )}
               {filtered.map((s, i) => (
                 <tr key={s.id}>
@@ -201,6 +213,7 @@ export default function StudentRoster() {
                       <td><input value={editVal.lastName}  onChange={e => setEditVal(v => ({ ...v, lastName: e.target.value }))} /></td>
                       <td><input value={editVal.firstName} onChange={e => setEditVal(v => ({ ...v, firstName: e.target.value }))} /></td>
                       <td><input style={{ width: 70 }} value={editVal.grade} onChange={e => setEditVal(v => ({ ...v, grade: e.target.value }))} /></td>
+                      <td><input type="email" style={{ minWidth: 160 }} value={editVal.parentEmail || ""} onChange={e => setEditVal(v => ({ ...v, parentEmail: e.target.value }))} placeholder="parent@email.com" /></td>
                       <td className="flex gap1">
                         <button className="btn btn-primary btn-sm" onClick={() => saveEdit(s.id)}>Save</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setEditId(null)}>✕</button>
@@ -212,9 +225,14 @@ export default function StudentRoster() {
                       <td style={{ fontWeight: 600 }}>{s.lastName}</td>
                       <td>{s.firstName}</td>
                       <td><span className="tag tag-amber">{s.grade || "—"}</span></td>
+                      <td style={{ fontSize: "0.78rem" }}>
+                        {s.parentEmail
+                          ? <span style={{ color: "#4ade80" }}>📧 {s.parentEmail}</span>
+                          : <span className="text-muted">—</span>}
+                      </td>
                       <td className="flex gap1">
                         <button className="btn btn-ghost btn-sm"
-                          onClick={() => { setEditId(s.id); setEditVal({ firstName: s.firstName, lastName: s.lastName, grade: s.grade }); }}>
+                          onClick={() => { setEditId(s.id); setEditVal({ firstName: s.firstName, lastName: s.lastName, grade: s.grade, parentEmail: s.parentEmail || "" }); }}>
                           Edit
                         </button>
                         <button className="btn btn-danger btn-sm" onClick={() => removeStudent(s.id)}>✕</button>
@@ -225,7 +243,7 @@ export default function StudentRoster() {
               ))}
             </tbody>
           </table>
-          <div className="text-muted mt1" style={{ fontSize: "0.78rem" }}>{students.length} total students in roster</div>
+          <div className="text-muted mt1" style={{ fontSize: "0.78rem" }}>{students.length} total · {withEmail} with parent email</div>
         </div>
       )}
     </div>

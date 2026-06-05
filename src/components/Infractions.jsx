@@ -48,13 +48,16 @@ function buildSummary(studentName, studentGrade, records) {
     .map(([t, n]) => `${t} (${n})`)
     .join(", ");
 
-  return `${studentName}${studentGrade ? ` (Gr ${studentGrade})` : ""} — ${records.length} infraction${records.length !== 1 ? "s" : ""} since ${since}: ${breakdown}. Most recent: ${latestDate}.`;
+  const notifiedCount = records.filter(r => r.parent_notified).length;
+  const notifiedNote = notifiedCount > 0 ? ` Parent notified ${notifiedCount} time${notifiedCount !== 1 ? "s" : ""}.` : "";
+
+  return `${studentName}${studentGrade ? ` (Gr ${studentGrade})` : ""} — ${records.length} infraction${records.length !== 1 ? "s" : ""} since ${since}: ${breakdown}. Most recent: ${latestDate}.${notifiedNote}`;
 }
 
 export default function Infractions({ students, user }) {
   const { infractions, addInfraction } = useInfractions();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ studentSearch: "", studentId: "", studentName: "", studentGrade: "", type: INFRACTION_TYPES[0].label, notes: "" });
+  const [form, setForm] = useState({ studentSearch: "", studentId: "", studentName: "", studentGrade: "", studentParentEmail: "", type: INFRACTION_TYPES[0].label, notes: "", notifyParent: false });
   const [searchResults, setSearchResults] = useState([]);
   const [filterStudent, setFilterStudent] = useState("");
   const [filterType, setFilterType] = useState("All");
@@ -115,13 +118,14 @@ export default function Infractions({ students, user }) {
   }
 
   function selectStudent(s) {
-    setForm(f => ({ ...f, studentSearch: `${s.firstName} ${s.lastName}`, studentId: s.id, studentName: `${s.firstName} ${s.lastName}`, studentGrade: s.grade }));
+    setForm(f => ({ ...f, studentSearch: `${s.firstName} ${s.lastName}`, studentId: s.id, studentName: `${s.firstName} ${s.lastName}`, studentGrade: s.grade, studentParentEmail: s.parentEmail || "" }));
     setSearchResults([]);
   }
 
   async function submit(e) {
     e.preventDefault();
     if (!form.studentName.trim()) return;
+    const parentNotified = form.notifyParent && !!form.studentParentEmail;
     await addInfraction({
       studentId: form.studentId || "manual-" + Date.now(),
       studentName: form.studentName.trim(),
@@ -129,8 +133,27 @@ export default function Infractions({ students, user }) {
       notes: form.notes.trim(),
       teacherName: user?.name || "Staff",
       room: "",
+      parentNotified,
     });
-    setForm({ studentSearch: "", studentId: "", studentName: "", studentGrade: "", type: INFRACTION_TYPES[0].label, notes: "" });
+    if (parentNotified) {
+      const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const subject = `Behavior Notice — ${form.studentName.trim()} — ${date}`;
+      const body = [
+        `Dear Parent/Guardian,`,
+        ``,
+        `This is an automated notice from James A. Garfield High School.`,
+        ``,
+        `${form.studentName.trim()} received a behavioral note today for: ${form.type}.`,
+        form.notes.trim() ? `\nDetails: ${form.notes.trim()}\n` : "",
+        `This message is to keep you informed of classroom behavior. If you have any questions, please reply to this email or contact ${user?.name || "your teacher"} directly at ${user?.email || "the school"}.`,
+        ``,
+        `Thank you, and have a wonderful day!`,
+        ``,
+        `James A. Garfield High School Staff Portal`,
+      ].join("\n");
+      window.open(`mailto:${form.studentParentEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    }
+    setForm({ studentSearch: "", studentId: "", studentName: "", studentGrade: "", studentParentEmail: "", type: INFRACTION_TYPES[0].label, notes: "", notifyParent: false });
     setShowForm(false);
   }
 
@@ -220,9 +243,27 @@ export default function Infractions({ students, user }) {
               <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. 2nd warning this period, refused twice…" />
             </div>
 
+            {/* Parent notification checkbox */}
+            <div className="mb1" style={{ padding: "0.6rem 0.75rem", background: "rgba(245,192,37,0.07)", borderRadius: "8px", border: "1px solid rgba(245,192,37,0.2)" }}>
+              {form.studentParentEmail ? (
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontWeight: 600 }}>
+                  <input type="checkbox" checked={form.notifyParent}
+                    onChange={e => setForm(f => ({ ...f, notifyParent: e.target.checked }))}
+                    style={{ width: 16, height: 16, accentColor: GOLD, cursor: "pointer" }} />
+                  <span>📧 Notify parent via email</span>
+                  <span style={{ fontWeight: 400, fontSize: "0.78rem", color: "rgba(240,234,216,0.5)" }}>{form.studentParentEmail}</span>
+                </label>
+              ) : (
+                <span style={{ fontSize: "0.8rem", color: "rgba(240,234,216,0.4)" }}>
+                  📧 No parent email on file —{" "}
+                  <span style={{ color: GOLD }}>add one in Student Roster to enable email notifications</span>
+                </span>
+              )}
+            </div>
+
             <div className="flex gap1">
               <button type="submit" className="btn btn-primary" disabled={!form.studentName && !form.studentSearch}>
-                Log Infraction
+                {form.notifyParent && form.studentParentEmail ? "Log & Email Parent" : "Log Infraction"}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
             </div>
@@ -282,6 +323,7 @@ export default function Infractions({ students, user }) {
                   <th>Type</th>
                   <th>Notes</th>
                   <th>Logged by</th>
+                  <th title="Parent notified">📧</th>
                 </tr>
               </thead>
               <tbody>
@@ -301,6 +343,9 @@ export default function Infractions({ students, user }) {
                       <td><span className={`tag ${typeColor(r.type)}`}>{r.type}</span></td>
                       <td className="text-muted" style={{ fontSize: "0.8rem", maxWidth: 220 }}>{r.notes || "—"}</td>
                       <td className="text-muted" style={{ fontSize: "0.78rem" }}>{r.teacher_name}</td>
+                      <td style={{ textAlign: "center", fontSize: "1rem" }} title={r.parent_notified ? "Parent was notified" : "Parent not notified"}>
+                        {r.parent_notified ? "📧" : <span style={{ color: "rgba(240,234,216,0.2)" }}>—</span>}
+                      </td>
                     </tr>
                   );
                 })}
@@ -367,11 +412,17 @@ export default function Infractions({ students, user }) {
                   </div>
                 </div>
 
-                {/* Type breakdown chips */}
+                {/* Type breakdown chips + parent notification badge */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.4rem", paddingLeft: "2.75rem" }}>
                   {Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).map(([type, n]) => (
                     <span key={type} className={`tag ${typeColor(type)}`}>{type} × {n}</span>
                   ))}
+                  {(() => {
+                    const notifiedCount = summary.records.filter(r => r.parent_notified).length;
+                    return notifiedCount > 0 ? (
+                      <span className="tag tag-gold" title="Parent email notifications sent">📧 Parent notified × {notifiedCount}</span>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Expanded: recent record list */}

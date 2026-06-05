@@ -258,6 +258,7 @@ export function useInfractions() {
       notes: data.notes || null,
       teacher_name: data.teacherName,
       room: data.room || null,
+      parent_notified: data.parentNotified || false,
       created_at: new Date().toISOString(),
     };
 
@@ -272,6 +273,7 @@ export function useInfractions() {
       notes: data.notes || null,
       teacher_name: data.teacherName,
       room: data.room || null,
+      parent_notified: data.parentNotified || false,
     });
     // Realtime INSERT event triggers load() above — no local setState needed.
   }
@@ -301,6 +303,7 @@ export function useStudents() {
         firstName: r.first_name,
         lastName: r.last_name,
         grade: r.grade || "",
+        parentEmail: r.parent_email || "",
       })));
       setLoading(false);
     }
@@ -318,9 +321,9 @@ export function useStudents() {
     await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (rows.length === 0) { setStudents([]); return; }
     const { data } = await supabase.from("students").insert(
-      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null }))
+      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: r.parentEmail || null }))
     ).select("*");
-    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "" })));
+    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: r.parent_email || "" })));
   }
 
   async function addStudent(s) {
@@ -329,9 +332,9 @@ export function useStudents() {
       return;
     }
     const { data } = await supabase.from("students")
-      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null })
+      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null })
       .select("*").single();
-    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "" }]);
+    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "", parentEmail: data.parent_email || "" }]);
   }
 
   async function updateStudent(id, s) {
@@ -339,7 +342,7 @@ export function useStudents() {
       setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
       return;
     }
-    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null }).eq("id", id);
+    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null }).eq("id", id);
     setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
   }
 
