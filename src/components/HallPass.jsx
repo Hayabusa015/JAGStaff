@@ -784,13 +784,41 @@ export default function HallPass({ user, students }) {
             {/* History */}
             {sentByMe.length > 0 && (
               <div style={{ marginTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.5rem" }}>
-                <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.35rem" }}>SENT TODAY</div>
-                {sentByMe.slice(0, 5).map(p => (
-                  <div key={p.id} style={{ fontSize: "0.78rem", color: "rgba(240,234,216,0.5)", display: "flex", justifyContent: "space-between", padding: "0.15rem 0" }}>
-                    <span>{p.student_name} → {p.to_teacher}</span>
-                    <span className={`tag ${p.status === "arrived" ? "tag-green" : p.status === "dismissed" ? "tag-amber" : "tag-blue"}`} style={{ fontSize: "0.62rem" }}>{p.status}</span>
-                  </div>
-                ))}
+                <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>SENT TODAY</div>
+                {sentByMe.slice(0, 8).map(p => {
+                  const ageMin = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000);
+                  const expired = ageMin >= settings.periodLength;
+                  const active = p.status !== "dismissed";
+                  return (
+                    <div key={p.id} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "0.35rem 0.5rem", marginBottom: "0.25rem", borderRadius: 6,
+                      background: expired && active ? "rgba(245,158,11,0.07)" : "transparent",
+                      border: expired && active ? "1px solid rgba(245,158,11,0.2)" : "1px solid transparent",
+                      gap: "0.4rem",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "0.78rem", color: expired && active ? "#fbbf24" : "rgba(255,255,255,0.6)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {p.student_name} → {p.to_teacher}
+                        </div>
+                        <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.3)", marginTop: 1 }}>
+                          {ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin / 60)}h ${ageMin % 60}m ago`}
+                          {expired && active && " · period likely ended"}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
+                        <span className={`tag ${p.status === "arrived" ? "tag-green" : p.status === "dismissed" ? "tag-amber" : "tag-blue"}`} style={{ fontSize: "0.6rem" }}>{p.status}</span>
+                        {active && (
+                          <button onClick={() => dismiss(p.id)} title="Dismiss pass" style={{
+                            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 4, color: "rgba(255,255,255,0.4)", cursor: "pointer",
+                            fontSize: "0.7rem", padding: "0.1rem 0.35rem", lineHeight: 1.4,
+                          }}>✕</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
