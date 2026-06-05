@@ -73,8 +73,12 @@ function EventTicker({ events, tripRosters }) {
     blue:   { bg: "rgba(96,165,250,0.15)",  border: "rgba(96,165,250,0.35)",  text: "#60a5fa" },
   };
 
-  // Build repeated items so scroll looks seamless
-  const items = [...upcoming, ...upcoming];
+  // Repeat enough times so the track always spans well beyond the viewport.
+  // We need two identical halves for the -50% seamless loop trick.
+  const minReps = Math.max(2, Math.ceil(12 / upcoming.length));
+  const half = Array.from({ length: minReps }, () => upcoming).flat();
+  const items = [...half, ...half]; // two identical halves
+  const duration = half.length * 5; // 5s per item
 
   return (
     <div style={{
@@ -91,15 +95,16 @@ function EventTicker({ events, tripRosters }) {
       <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 60, background: "linear-gradient(270deg, #000, transparent)", zIndex: 2, pointerEvents: "none" }} />
 
       <div style={{
-        display: "flex",
-        animation: `ticker-scroll ${upcoming.length * 6}s linear infinite`,
+        display: "inline-flex",
+        animation: `ticker-scroll ${duration}s linear infinite`,
         whiteSpace: "nowrap",
         padding: "0.45rem 0",
+        willChange: "transform",
       }}>
         {items.map((e, i) => {
           const ac = accentColors[e.accent] || accentColors.gold;
           return (
-            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", paddingRight: "3rem" }}>
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", paddingRight: "4rem" }}>
               <span style={{
                 background: ac.bg, border: `1px solid ${ac.border}`,
                 borderRadius: 4, padding: "0.1rem 0.45rem",
