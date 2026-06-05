@@ -17,7 +17,7 @@ function fmtClock(d) {
   return t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function KioskScreen({ passes, addPass, returnPass, settings, students, onClose }) {
+function KioskScreen({ passes, addPass, returnPass, settings, students, onClose, allRoomPasses = [] }) {
   const [screen, setScreen] = useState("home"); // home | destination | confirm-return
   const [selected, setSelected] = useState(null);
   const [kioskSearch, setKioskSearch] = useState("");
@@ -121,6 +121,11 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
             <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>MAX</div>
           </div>
           <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <button
+            onClick={() => setScreen(s => s === "locator" ? "home" : "locator")}
+            style={{ background: screen === "locator" ? `rgba(245,192,37,0.15)` : "rgba(255,255,255,0.06)", border: `1px solid ${screen === "locator" ? "rgba(245,192,37,0.4)" : "rgba(255,255,255,0.15)"}`, borderRadius: "8px", color: screen === "locator" ? GOLD : "rgba(255,255,255,0.5)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
+            🔍 Locator
+          </button>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", color: "rgba(255,255,255,0.7)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
             🔒 Close
           </button>
@@ -129,8 +134,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
 
       <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 2rem", zIndex: 1 }}>
 
-        {/* Status board — currently out */}
-        {activePasses.length > 0 ? (
+        {/* Status board — currently out (hidden when locator is open) */}
+        {screen !== "locator" && activePasses.length > 0 ? (
           <div style={{ marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
               <span className="pulse-dot" />
@@ -165,12 +170,113 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose 
               })}
             </div>
           </div>
-        ) : (
+        ) : screen !== "locator" ? (
           <div style={{ textAlign: "center", padding: "2rem", marginBottom: "1.5rem" }}>
             <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>✅</div>
             <div style={{ fontWeight: 800, fontSize: "1.2rem", color: "#4ade80", letterSpacing: "0.08em" }}>ALL STUDENTS PRESENT</div>
           </div>
-        )}
+        ) : null}
+
+        {/* ── Admin Locator ── */}
+        {screen === "locator" && (() => {
+          const hallOut = activePasses.slice().sort((a, b) => elapsed(b.outTime) - elapsed(a.outTime));
+          const roomOut = allRoomPasses.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          const totalOut = hallOut.length + roomOut.length;
+          return (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
+                <span style={{ fontWeight: 900, fontSize: "1.1rem", letterSpacing: "0.1em", color: GOLD, textTransform: "uppercase" }}>📍 Student Locator</span>
+                <span style={{ background: totalOut > 0 ? "rgba(248,113,113,0.2)" : "rgba(74,222,128,0.15)", border: `1px solid ${totalOut > 0 ? "rgba(248,113,113,0.4)" : "rgba(74,222,128,0.3)"}`, borderRadius: 999, padding: "0.15rem 0.65rem", fontSize: "0.72rem", fontWeight: 800, color: totalOut > 0 ? "#fca5a5" : "#4ade80" }}>
+                  {totalOut} student{totalOut !== 1 ? "s" : ""} out of class
+                </span>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => setScreen("home")} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.6)", padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem" }}>← Back</button>
+              </div>
+
+              {totalOut === 0 ? (
+                <div style={{ textAlign: "center", padding: "4rem 0" }}>
+                  <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>✅</div>
+                  <div style={{ fontWeight: 800, fontSize: "1.2rem", color: "#4ade80", letterSpacing: "0.08em" }}>ALL STUDENTS IN CLASS</div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+
+                  {/* Hall passes */}
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.85rem" }}>
+                      {hallOut.length > 0 && <span className="pulse-dot" />}
+                      <span style={{ fontWeight: 800, fontSize: "0.78rem", letterSpacing: "0.12em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase" }}>🚶 Out of Room</span>
+                      <span style={{ background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "0.1rem 0.5rem", fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>{hallOut.length}</span>
+                    </div>
+                    {hallOut.length === 0 ? (
+                      <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.3)", padding: "1rem 0" }}>No hall passes active</div>
+                    ) : hallOut.map(p => {
+                      const secs = elapsed(p.outTime);
+                      const flagSecs = settings.flagAfter * 60;
+                      const critical = secs > flagSecs * 1.5;
+                      const flagged = secs > flagSecs;
+                      const ac = critical ? "#f87171" : flagged ? "#fb923c" : GOLD;
+                      return (
+                        <div key={p.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${ac}44`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                          <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${ac}22`, border: `2px solid ${ac}`, color: ac, fontWeight: 900, fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {p.studentName?.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: "0.92rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.studentName}</div>
+                            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", marginTop: "0.1rem" }}>
+                              {destIcons[p.destination] || "📍"} {p.destination} · Rm {p.room || "?"}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontWeight: 800, color: ac, fontSize: "0.88rem" }}>{fmtElapsed(secs)}</div>
+                            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>since {fmtClock(p.outTime)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Room passes */}
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.85rem" }}>
+                      {roomOut.length > 0 && <span className="pulse-dot" style={{ background: "#60a5fa" }} />}
+                      <span style={{ fontWeight: 800, fontSize: "0.78rem", letterSpacing: "0.12em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase" }}>🏫 Between Rooms</span>
+                      <span style={{ background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "0.1rem 0.5rem", fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>{roomOut.length}</span>
+                    </div>
+                    {roomOut.length === 0 ? (
+                      <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.3)", padding: "1rem 0" }}>No room passes active</div>
+                    ) : roomOut.map(p => {
+                      const secs = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000);
+                      const flagSecs = settings.flagAfter * 60;
+                      const critical = secs > flagSecs * 1.5;
+                      const flagged = secs > flagSecs;
+                      const ac = critical ? "#f87171" : flagged ? "#fb923c" : "#60a5fa";
+                      const statusColor = p.status === "arrived" ? "#4ade80" : "#60a5fa";
+                      return (
+                        <div key={p.id} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${ac}44`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                          <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${ac}22`, border: `2px solid ${ac}`, color: ac, fontWeight: 900, fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {p.student_name?.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: "0.92rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.student_name}</div>
+                            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", marginTop: "0.1rem" }}>
+                              Rm {p.from_room || "?"} → {p.to_teacher} {p.to_room ? `Rm ${p.to_room}` : ""}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ background: `${statusColor}22`, border: `1px solid ${statusColor}55`, borderRadius: 999, padding: "0.1rem 0.5rem", fontSize: "0.65rem", fontWeight: 800, color: statusColor, marginBottom: "0.2rem" }}>{p.status}</div>
+                            <div style={{ fontWeight: 700, color: ac, fontSize: "0.82rem" }}>{fmtElapsed(secs)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Action zone */}
         {screen === "home" && (
@@ -267,7 +373,7 @@ export default function HallPass({ user, students }) {
     destinations: DESTINATIONS.map(d => d.key),
   });
   const staff = useStaffDirectory(user, settings.room);
-  const { sentByMe, sentToMe, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
+  const { sentByMe, sentToMe, allActive: allActiveRoomPasses, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
   const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
 
   // Room pass form
@@ -346,7 +452,8 @@ export default function HallPass({ user, students }) {
 
   if (kioskMode) return (
     <KioskScreen passes={passes} addPass={addPass} returnPass={returnPass}
-      settings={settings} students={students} onClose={() => setKioskMode(false)} />
+      settings={settings} students={students} onClose={() => setKioskMode(false)}
+      allRoomPasses={allActiveRoomPasses} />
   );
 
   function fmtShortTime(iso) {

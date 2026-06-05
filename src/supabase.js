@@ -618,7 +618,8 @@ export function useRoomPasses(userEmail) {
     await supabase.from("room_passes").update({ status: "dismissed" }).eq("id", id);
   }
 
-  return { sentByMe, sentToMe, sendPass, markArrived, dismiss };
+  const allActive = passes.filter(p => p.status === "pending" || p.status === "arrived");
+  return { sentByMe, sentToMe, allActive, sendPass, markArrived, dismiss };
 }
 
 // ─── Late Arrivals ────────────────────────────────────────────────
