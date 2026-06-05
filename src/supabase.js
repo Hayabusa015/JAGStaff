@@ -708,11 +708,21 @@ export function useLateArrivals() {
 
 export async function isStaffEmail(email) {
   if (!SUPABASE_READY || !supabase) return { isStaff: false, isAdmin: false };
-  const { data } = await supabase
+  // Try with is_admin first; fall back to email-only if column doesn't exist yet
+  const { data, error } = await supabase
     .from("staff_directory")
     .select("email, is_admin")
     .eq("email", email)
     .maybeSingle();
+  if (error) {
+    // is_admin column likely not added yet — fall back to existence check only
+    const { data: d2 } = await supabase
+      .from("staff_directory")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
+    return { isStaff: !!d2, isAdmin: false };
+  }
   return { isStaff: !!data, isAdmin: !!data?.is_admin };
 }
 
