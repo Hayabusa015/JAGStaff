@@ -121,7 +121,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           </div>
         )}
 
-        <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(240,234,216,0.25)", lineHeight: 1.7 }}>
+        <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
           Only <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> accounts are permitted.<br />
           Sessions expire after 7 hours of inactivity.
         </p>
@@ -232,6 +232,7 @@ export default function App() {
           }}
         />
 
+        <div key={tab} className="page-enter">
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
         {tab === "events"      && <WeeklyEvents {...sharedProps} />}
         {tab === "trips"       && <TripRoster   {...sharedProps} />}
@@ -270,6 +271,7 @@ export default function App() {
             {resourceTab === "roster"      && <StudentRoster />}
           </>
         )}
+        </div>
       </div>
     </div>
   );

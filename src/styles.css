@@ -7,15 +7,15 @@
 :root {
   --gold:        #F5C025;
   --gold-dim:    rgba(245,192,37,0.6);
-  --gold-glow:   rgba(245,192,37,0.18);
-  --gold-border: rgba(245,192,37,0.22);
-  --bg-deep:     #080600;
-  --bg-main:     #0f0b00;
-  --bg-card:     rgba(255,255,255,0.04);
-  --bg-card-hover: rgba(255,255,255,0.07);
-  --border:      rgba(255,255,255,0.08);
-  --text:        #f0ead8;
-  --text-muted:  rgba(240,234,216,0.45);
+  --gold-glow:   rgba(245,192,37,0.12);
+  --gold-border: rgba(245,192,37,0.25);
+  --bg-deep:     #000000;
+  --bg-main:     #0d0d0d;
+  --bg-card:     rgba(255,255,255,0.05);
+  --bg-card-hover: rgba(255,255,255,0.09);
+  --border:      rgba(255,255,255,0.1);
+  --text:        #ffffff;
+  --text-muted:  rgba(255,255,255,0.45);
   --red:         #ef4444;
   --green:       #22c55e;
 }
@@ -59,7 +59,7 @@ body {
 
 /* ── Top Nav — two-row layout ── */
 .top-nav {
-  background: linear-gradient(180deg, #0a0700 0%, #0f0b00 100%);
+  background: linear-gradient(180deg, #000000 0%, #111111 100%);
   border-bottom: 1px solid var(--gold-border);
   position: sticky;
   top: 0;
@@ -259,7 +259,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(245,192,37,0.1);
   background: rgba(255,255,255,0.07);
 }
-select option { background: #1a1200; color: var(--text); }
+select option { background: #1a1a1a; color: var(--text); }
 label {
   font-size: 0.72rem;
   font-weight: 600;
@@ -334,6 +334,15 @@ label {
   border-radius: 10px;
   padding: 1.25rem;
   box-shadow: 0 0 24px rgba(245,192,37,0.12);
+}
+
+/* ── Page transition ── */
+@keyframes page-in {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* ── Pulse animation ── */
@@ -421,9 +430,9 @@ label {
   justify-content: center;
   padding: 1rem;
   background:
-    radial-gradient(ellipse at 60% 40%, rgba(245,192,37,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 20% 80%, rgba(245,192,37,0.05) 0%, transparent 50%),
-    linear-gradient(160deg, #0a0700 0%, #0f0b00 50%, #080500 100%);
+    radial-gradient(ellipse at 60% 40%, rgba(245,192,37,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 80%, rgba(245,192,37,0.06) 0%, transparent 50%),
+    linear-gradient(160deg, #000000 0%, #0d0d0d 50%, #000000 100%);
   position: relative;
   overflow: hidden;
 }
@@ -458,7 +467,7 @@ label {
   position: absolute;
   top: calc(100% + 3px);
   left: 0; right: 0;
-  background: #1c1500;
+  background: #1a1a1a;
   border: 1px solid var(--gold-border);
   border-radius: 8px;
   z-index: 200;
