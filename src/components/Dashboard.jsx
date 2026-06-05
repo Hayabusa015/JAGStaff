@@ -38,16 +38,11 @@ function DashTripCard({ trip }) {
 
 const ESCALATION_THRESHOLD = 3;
 
-function EventTicker({ events }) {
+const TICKER_TRIP_TYPES = ["Field Trip", "Early Release", "Late Start"];
+
+function EventTicker({ events, tripRosters }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const upcoming = events
-    .filter(e => e.date && new Date(e.date + "T12:00:00") >= today)
-    .sort((a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"))
-    .slice(0, 6);
-
-  if (upcoming.length === 0) return null;
 
   function fmtEventDate(dateStr, timeStr) {
     const d = new Date(dateStr + "T12:00:00");
@@ -55,6 +50,28 @@ function EventTicker({ events }) {
     const label = diffDays === 0 ? "TODAY" : diffDays === 1 ? "TOMORROW" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     return timeStr ? `${label} @ ${new Date("1970-01-01T" + timeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : label;
   }
+
+  // Weekly events (Early Release, etc. already in here too)
+  const upcomingEvents = events
+    .filter(e => e.date && new Date(e.date + "T12:00:00") >= today)
+    .map(e => ({ key: "ev-" + e.id, type: e.type, title: e.title, date: e.date, time: e.time || "", accent: e.type === "Early Release" || e.type === "Late Start" ? "orange" : "gold" }));
+
+  // Trip rosters — field trips and early releases not already in weekly events
+  const upcomingTrips = (tripRosters || [])
+    .filter(t => t.date && new Date(t.date + "T12:00:00") >= today && TICKER_TRIP_TYPES.includes(t.type))
+    .map(t => ({ key: "tr-" + t.id, type: t.type, title: t.title + (t.teacher ? ` · ${t.teacher}` : ""), date: t.date, time: t.depart || "", accent: t.type === "Field Trip" ? "blue" : "orange" }));
+
+  const upcoming = [...upcomingEvents, ...upcomingTrips]
+    .sort((a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"))
+    .slice(0, 8);
+
+  if (upcoming.length === 0) return null;
+
+  const accentColors = {
+    gold:   { bg: "rgba(245,192,37,0.15)",  border: "rgba(245,192,37,0.35)",  text: GOLD },
+    orange: { bg: "rgba(251,146,60,0.15)",  border: "rgba(251,146,60,0.35)",  text: "#fb923c" },
+    blue:   { bg: "rgba(96,165,250,0.15)",  border: "rgba(96,165,250,0.35)",  text: "#60a5fa" },
+  };
 
   // Build repeated items so scroll looks seamless
   const items = [...upcoming, ...upcoming];
@@ -79,20 +96,24 @@ function EventTicker({ events }) {
         whiteSpace: "nowrap",
         padding: "0.45rem 0",
       }}>
-        {items.map((e, i) => (
-          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", paddingRight: "3rem" }}>
-            <span style={{
-              background: "rgba(245,192,37,0.15)", border: "1px solid rgba(245,192,37,0.3)",
-              borderRadius: 4, padding: "0.1rem 0.45rem",
-              fontSize: "0.63rem", fontWeight: 800, color: GOLD,
-              letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0,
-            }}>{e.type}</span>
-            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff" }}>{e.title}</span>
-            <span style={{ fontSize: "0.7rem", color: "rgba(245,192,37,0.7)", fontWeight: 700, flexShrink: 0 }}>
-              {fmtEventDate(e.date, e.time)}
+        {items.map((e, i) => {
+          const ac = accentColors[e.accent] || accentColors.gold;
+          return (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", paddingRight: "3rem" }}>
+              <span style={{
+                background: ac.bg, border: `1px solid ${ac.border}`,
+                borderRadius: 4, padding: "0.1rem 0.45rem",
+                fontSize: "0.63rem", fontWeight: 800, color: ac.text,
+                letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0,
+              }}>{e.type}</span>
+              <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff" }}>{e.title}</span>
+              <span style={{ fontSize: "0.7rem", color: ac.text, opacity: 0.8, fontWeight: 700, flexShrink: 0 }}>
+                {fmtEventDate(e.date, e.time)}
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.15)", fontSize: "0.7rem" }}>◆</span>
             </span>
-          </span>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -134,7 +155,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
         </div>
       </div>
 
-      <EventTicker events={weeklyEvents} />
+      <EventTicker events={weeklyEvents} tripRosters={tripRosters} />
 
       {/* Intervention Alerts */}
       {alerts.length > 0 && (
