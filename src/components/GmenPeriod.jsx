@@ -24,8 +24,23 @@ function todayName() {
   return new Date().toLocaleDateString("en-US", { weekday: "long" });
 }
 
+function useFullscreen() {
+  const [isFs, setIsFs] = useState(!!document.fullscreenElement);
+  useEffect(() => {
+    const handler = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+  function toggle() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  return { isFs, toggle };
+}
+
 function KioskDisplay({ requests, onClose }) {
   const [clock, setClock] = useState(fmtClockDisplay());
+  const { isFs, toggle: toggleFs } = useFullscreen();
 
   useEffect(() => {
     const id = setInterval(() => setClock(fmtClockDisplay()), 10000);
@@ -70,6 +85,12 @@ function KioskDisplay({ requests, onClose }) {
             <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em" }}>ARRIVED</div>
           </div>
           <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.12)" }} />
+          <button onClick={toggleFs} title={isFs ? "Exit Fullscreen" : "Fullscreen"} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", color: "rgba(255,255,255,0.6)", padding: "0.45rem 0.7rem", cursor: "pointer", display: "flex", alignItems: "center" }}>
+            {isFs
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V3h4"/><path d="M21 7V3h-4"/><path d="M3 17v4h4"/><path d="M21 17v4h-4"/></svg>
+            }
+          </button>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", color: "rgba(255,255,255,0.7)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600 }}>
             🔒 Close
           </button>

@@ -18,6 +18,20 @@ function fmtClock(d) {
   return t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
+function useFullscreen() {
+  const [isFs, setIsFs] = useState(!!document.fullscreenElement);
+  useEffect(() => {
+    const handler = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+  function toggle() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  return { isFs, toggle };
+}
+
 function KioskScreen({ passes, addPass, returnPass, settings, students, onClose, allRoomPasses = [] }) {
   const [screen, setScreen] = useState("home"); // home | destination | confirm-return
   const [selected, setSelected] = useState(null);
@@ -25,6 +39,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const [flash, setFlash] = useState(null); // {type:'in'|'out', name, dest}
   const [tick, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
+  const { isFs, toggle: toggleFs } = useFullscreen();
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -126,6 +141,12 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
             onClick={() => setScreen(s => s === "locator" ? "home" : "locator")}
             style={{ background: screen === "locator" ? `rgba(245,192,37,0.15)` : "rgba(255,255,255,0.06)", border: `1px solid ${screen === "locator" ? "rgba(245,192,37,0.4)" : "rgba(255,255,255,0.15)"}`, borderRadius: "8px", color: screen === "locator" ? GOLD : "rgba(255,255,255,0.5)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
             🔍 Locator
+          </button>
+          <button onClick={toggleFs} title={isFs ? "Exit Fullscreen" : "Fullscreen"} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", color: "rgba(255,255,255,0.6)", padding: "0.45rem 0.7rem", cursor: "pointer", display: "flex", alignItems: "center" }}>
+            {isFs
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V3h4"/><path d="M21 7V3h-4"/><path d="M3 17v4h4"/><path d="M21 17v4h-4"/></svg>
+            }
           </button>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", color: "rgba(255,255,255,0.7)", padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
             🔒 Close
