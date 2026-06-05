@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { GOLD } from "../constants.js";
 import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
@@ -43,7 +44,7 @@ function KioskDisplay({ requests, onClose }) {
 
   const teacherInitials = name => name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, background: "#0a0800", color: "#fff", display: "flex", flexDirection: "column", fontFamily: "inherit", zIndex: 1000 }}>
       <img src="/logo.png" alt="" aria-hidden style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(70vw,600px)", opacity: 0.06, pointerEvents: "none", userSelect: "none" }} />
       <div style={{ background: "#0f0a00", borderBottom: `2px solid ${GOLD}`, padding: "0 1.5rem", height: 80, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zIndex: 1 }}>
@@ -134,7 +135,8 @@ function KioskDisplay({ requests, onClose }) {
         <span>GARFIELD G-MEN · ENRICHMENT PERIOD · 12:40–1:10 PM</span>
         <span>{pending.length} pending · {arrived.length} arrived · {requests.length} total</span>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -284,7 +286,7 @@ export default function GmenPeriod({ setAlerts, students, user }) {
 
           <div className="grid2">
             {/* Remediation Request */}
-            <div className="card">
+            <div className="card" style={{ position: "relative", zIndex: 10 }}>
               <div className="section-title">Remediation Request</div>
               <div style={{ position: "relative" }}>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student name…" />
