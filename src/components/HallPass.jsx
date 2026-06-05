@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, SUPABASE_READY } from "../supabase.js";
 
@@ -80,7 +81,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
 
   const fmtDayShort = () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, background: "#0a0800", color: "#fff", display: "flex", flexDirection: "column", fontFamily: "inherit", zIndex: 1000 }}>
 
       {/* Watermark */}
@@ -355,7 +356,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         <span>GARFIELD G-MEN · HALL PASS KIOSK · Room {settings.room}</span>
         <span>{activePasses.length} out · max {settings.maxOut}</span>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
