@@ -679,23 +679,23 @@ export function useLateArrivals() {
   }, []);
 
   async function logArrival({ studentId, studentName, notes }) {
-    if (!SUPABASE_READY || !supabase) {
-      setArrivals(prev => [{
-        id: Date.now().toString(), student_id: studentId, student_name: studentName,
-        arrived_at: new Date().toISOString(), confirmed_by: null, confirmed_at: null, notes: notes || null,
-      }, ...prev]);
-      return;
-    }
-    await supabase.from("late_arrivals").insert({
+    const optimistic = {
+      id: `opt-${Date.now()}`, student_id: studentId, student_name: studentName,
+      arrived_at: new Date().toISOString(), confirmed_by: null, confirmed_at: null, notes: notes || null,
+    };
+    setArrivals(prev => [optimistic, ...prev]);
+    if (!SUPABASE_READY || !supabase) return;
+    const { data } = await supabase.from("late_arrivals").insert({
       student_id: studentId, student_name: studentName, notes: notes || null,
-    });
+    }).select("*").single();
+    // Replace optimistic row with the real DB row (gets the real UUID)
+    if (data) setArrivals(prev => prev.map(a => a.id === optimistic.id ? data : a));
   }
 
   async function confirmArrival(id, teacherName) {
-    if (!SUPABASE_READY || !supabase) {
-      setArrivals(prev => prev.map(a => a.id === id ? { ...a, confirmed_by: teacherName, confirmed_at: new Date().toISOString() } : a));
-      return;
-    }
+    const now = new Date().toISOString();
+    setArrivals(prev => prev.map(a => a.id === id ? { ...a, confirmed_by: teacherName, confirmed_at: now } : a));
+    if (!SUPABASE_READY || !supabase) return;
     await supabase.from("late_arrivals").update({
       confirmed_by: teacherName, confirmed_at: new Date().toISOString(),
     }).eq("id", id);
