@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, SUPABASE_READY } from "../supabase.js";
+import HallPassAnalytics from "./HallPassAnalytics.jsx";
 
 function elapsed(outTime) {
   if (!outTime) return 0;
@@ -547,12 +548,14 @@ export default function HallPass({ user, students }) {
 
           {/* Sub-tabs */}
           <div className="flex gap1 mb2">
-            {["overview", "log", "settings"].map(t => (
+            {["overview", "analytics", "log", "settings"].map(t => (
               <button key={t} className={`btn btn-sm ${subTab === t ? "btn-primary" : "btn-ghost"}`}
                 style={{ textTransform: "capitalize" }} onClick={() => setSubTab(t)}>{t}
               </button>
             ))}
           </div>
+
+          {subTab === "analytics" && <HallPassAnalytics log={log} settings={settings} />}
 
           {subTab === "overview" && (
             <div className="card">
