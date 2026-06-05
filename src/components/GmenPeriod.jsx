@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
 import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
-  useGmenChangeRequests, useGmenSettings,
+  useGmenChangeRequests, useGmenSettings, useGmailSend,
 } from "../supabase.js";
 import GmenClassManager from "./GmenClassManager.jsx";
 
@@ -134,7 +134,7 @@ function KioskDisplay({ requests, onClose }) {
 
 export default function GmenPeriod({ setAlerts, students, user }) {
   const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
-  const { settings, setEnrollmentOpen, setActivePeriod } = useGmenSettings();
+  const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
   const { enrollments, seatCount } = useGmenEnrollments(settings.active_period || 1);
   const { changeRequests, approveChange, denyChange } = useGmenChangeRequests();
@@ -207,6 +207,31 @@ export default function GmenPeriod({ setAlerts, students, user }) {
           }
         </div>
       )}
+
+      {/* Period-end warning banner */}
+      {(() => {
+        const endKey = `period_${period}_end`;
+        const endDate = settings[endKey];
+        if (!endDate) return null;
+        const daysLeft = Math.ceil((new Date(endDate) - new Date()) / 86400000);
+        if (daysLeft > 28 || daysLeft < 0) return null;
+        const urgent = daysLeft <= 7;
+        return (
+          <div style={{
+            background: urgent ? "rgba(239,68,68,0.08)" : "rgba(245,192,37,0.07)",
+            border: `1px solid ${urgent ? "rgba(239,68,68,0.3)" : "rgba(245,192,37,0.25)"}`,
+            borderRadius: 8, padding: "0.6rem 1rem", marginBottom: "1rem",
+            fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem",
+          }}>
+            <span>{urgent ? "🚨" : "⏰"}</span>
+            <span>
+              <strong>Period {period} ends {new Date(endDate).toLocaleDateString("en-US", { month: "long", day: "numeric" })}</strong>
+              {" — "}{daysLeft <= 0 ? "today!" : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left.`}
+              {daysLeft <= 28 && " Time to set up classes for the next grading period."}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Sub-tabs */}
       <div className="flex gap1 mb2" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.5rem" }}>
@@ -335,18 +360,41 @@ export default function GmenPeriod({ setAlerts, students, user }) {
           changeRequests={pendingChanges}
           setEnrollmentOpen={setEnrollmentOpen}
           setActivePeriod={setActivePeriod}
+          setPeriodEndDate={setPeriodEndDate}
           approveChange={approveChange}
           denyChange={denyChange}
           user={user}
+          students={students}
         />
       )}
     </div>
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, approveChange, denyChange, user }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, user, students }) {
   const [working, setWorking] = useState(null);
+  const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
+  const [pushProgress, setPushProgress] = useState({ sent: 0, total: 0 });
+  const [pushError, setPushError] = useState(null);
+  const [pushDates, setPushDates] = useState({
+    1: settings.period_1_end || "",
+    2: settings.period_2_end || "",
+    3: settings.period_3_end || "",
+    4: settings.period_4_end || "",
+  });
+  const { requestGmailToken, sendEmail } = useGmailSend();
   const period = settings.active_period || 1;
+  const appUrl = window.location.origin;
+
+  // Keep local date state in sync when settings load
+  useState(() => {
+    setPushDates({
+      1: settings.period_1_end || "",
+      2: settings.period_2_end || "",
+      3: settings.period_3_end || "",
+      4: settings.period_4_end || "",
+    });
+  });
 
   async function handleApprove(id) {
     setWorking(id);
@@ -360,12 +408,83 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
     setWorking(null);
   }
 
+  async function handlePushSignup() {
+    setPushState("sending");
+    setPushError(null);
+    const targets = students.filter(s => s.studentEmail);
+    setPushProgress({ sent: 0, total: targets.length });
+
+    let token;
+    try {
+      token = await requestGmailToken();
+    } catch (e) {
+      setPushState("error");
+      setPushError("Could not get Gmail permission: " + e.message);
+      return;
+    }
+
+    const senderName = user?.name || "Staff";
+    const periodEndDate = settings[`period_${period}_end`];
+    const deadlineNote = periodEndDate
+      ? ` Please sign up before ${new Date(periodEndDate).toLocaleDateString("en-US", { month: "long", day: "numeric" })}.`
+      : "";
+
+    let sent = 0;
+    for (const student of targets) {
+      try {
+        const subject = `G-Men Period Enrollment is Open — Period ${period}`;
+        const body = [
+          `Hi ${student.firstName},`,
+          "",
+          `G-Men Enrichment Period enrollment is now open for Grading Period ${period}.${deadlineNote}`,
+          "",
+          "Click the link below to sign in with your school Google account and pick your class:",
+          "",
+          appUrl,
+          "",
+          "Once you sign in, you will see a list of available classes with descriptions and seat counts. Choose your class and you're all set.",
+          "",
+          "If you have any questions, reply to this email or see your teacher.",
+          "",
+          "— James A. Garfield High School",
+          `   ${senderName}`,
+        ].join("\n");
+
+        await sendEmail(token, {
+          to: student.studentEmail,
+          from: user?.email || "",
+          subject,
+          body,
+        });
+        sent++;
+        setPushProgress({ sent, total: targets.length });
+      } catch (e) {
+        // skip individual failures — continue the batch
+      }
+    }
+
+    setPushProgress({ sent, total: targets.length });
+    setPushState("done");
+  }
+
+  const studentsWithEmail = students.filter(s => s.studentEmail).length;
+  const inputStyle = {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 6, padding: "0.35rem 0.6rem", color: "#fff", fontSize: "0.82rem",
+    outline: "none",
+  };
+  const labelStyle = {
+    fontSize: "0.7rem", color: "rgba(255,255,255,0.35)",
+    textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 3,
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      {/* Global settings */}
+
+      {/* ── Enrollment Settings ──────────────────────────────────────────── */}
       <div className="card">
         <div className="section-title">Enrollment Settings</div>
-        <div style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "2rem", flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Enrollment Status</div>
             <button onClick={() => setEnrollmentOpen(!settings.enrollment_open, user?.email)} style={{
@@ -393,7 +512,126 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
         </div>
       </div>
 
-      {/* Pending change requests */}
+      {/* ── Grading Period End Dates ─────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Grading Period End Dates</div>
+        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          A reminder banner appears on the G-Men tab 28 days before the active period ends.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "0.75rem" }}>
+          {[1, 2, 3, 4].map(p => (
+            <div key={p}>
+              <label style={labelStyle}>Period {p} End Date</label>
+              <input
+                type="date"
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                value={pushDates[p]}
+                onChange={e => setPushDates(d => ({ ...d, [p]: e.target.value }))}
+                onBlur={e => setPeriodEndDate(p, e.target.value || null, user?.email)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Push Signup to Students ──────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Push Signup to Students</div>
+        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          Sends an enrollment invitation email to every student who has a school email on file.
+          The email comes from your <strong style={{ color: "rgba(255,255,255,0.65)" }}>{user?.email}</strong> address and links directly to the enrollment page.
+        </div>
+
+        {pushState === "idle" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.5)" }}>
+              {studentsWithEmail > 0
+                ? <><strong style={{ color: "#fff" }}>{studentsWithEmail}</strong> student{studentsWithEmail !== 1 ? "s" : ""} have school emails on file.</>
+                : "No student emails on file yet — sync from Google Classroom first."}
+            </div>
+            {studentsWithEmail > 0 && (
+              <button onClick={() => setPushState("confirm")} style={{
+                background: GOLD, border: "none", color: "#000",
+                fontWeight: 700, borderRadius: 8, padding: "0.55rem 1.25rem",
+                cursor: "pointer", fontSize: "0.9rem",
+              }}>📨 Push Signup to Students</button>
+            )}
+          </div>
+        )}
+
+        {pushState === "confirm" && (
+          <div style={{
+            background: "rgba(245,192,37,0.06)", border: "1px solid rgba(245,192,37,0.2)",
+            borderRadius: 10, padding: "1rem 1.25rem",
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: "0.4rem" }}>Ready to send?</div>
+            <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.55)", marginBottom: "1rem" }}>
+              This will send a G-Men enrollment email to <strong style={{ color: "#fff" }}>{studentsWithEmail} student{studentsWithEmail !== 1 ? "s" : ""}</strong> from your school Gmail account.
+              {settings[`period_${period}_end`] && (
+                <> The email will include a deadline of <strong style={{ color: "#fff" }}>{new Date(settings[`period_${period}_end`]).toLocaleDateString("en-US", { month: "long", day: "numeric" })}</strong>.</>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button onClick={handlePushSignup} style={{
+                background: GOLD, border: "none", color: "#000",
+                fontWeight: 700, borderRadius: 7, padding: "0.5rem 1.25rem", cursor: "pointer",
+              }}>Send Now</button>
+              <button onClick={() => setPushState("idle")} style={{
+                background: "transparent", border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)", borderRadius: 7, padding: "0.5rem 1rem", cursor: "pointer",
+              }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {pushState === "sending" && (
+          <div>
+            <div style={{ fontSize: "0.88rem", marginBottom: "0.6rem" }}>
+              Sending… <strong>{pushProgress.sent}</strong> of <strong>{pushProgress.total}</strong>
+            </div>
+            <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 3, background: GOLD,
+                width: `${pushProgress.total > 0 ? Math.round((pushProgress.sent / pushProgress.total) * 100) : 0}%`,
+                transition: "width 0.3s",
+              }} />
+            </div>
+          </div>
+        )}
+
+        {pushState === "done" && (
+          <div style={{
+            background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)",
+            borderRadius: 8, padding: "0.75rem 1rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem",
+          }}>
+            <span style={{ fontSize: "0.9rem" }}>
+              ✓ Sent to <strong>{pushProgress.sent}</strong> student{pushProgress.sent !== 1 ? "s" : ""}.
+            </span>
+            <button onClick={() => setPushState("idle")} style={{
+              background: "transparent", border: "1px solid rgba(255,255,255,0.15)",
+              color: "rgba(255,255,255,0.5)", borderRadius: 6, padding: "0.3rem 0.75rem",
+              cursor: "pointer", fontSize: "0.8rem",
+            }}>Send Again</button>
+          </div>
+        )}
+
+        {pushState === "error" && (
+          <div style={{
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+            borderRadius: 8, padding: "0.75rem 1rem",
+          }}>
+            <div style={{ color: "#ef4444", fontSize: "0.88rem", marginBottom: "0.5rem" }}>{pushError}</div>
+            <button onClick={() => setPushState("idle")} style={{
+              background: "transparent", border: "1px solid rgba(239,68,68,0.3)",
+              color: "#ef4444", borderRadius: 6, padding: "0.3rem 0.75rem",
+              cursor: "pointer", fontSize: "0.8rem",
+            }}>Try Again</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Pending change requests ──────────────────────────────────────── */}
       <div className="card">
         <div className="section-title">Pending Change Requests{changeRequests.length > 0 ? ` (${changeRequests.length})` : ""}</div>
         {changeRequests.length === 0 ? (
@@ -439,7 +677,7 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
         )}
       </div>
 
-      {/* All classes overview */}
+      {/* ── All classes overview ─────────────────────────────────────────── */}
       <div className="card">
         <div className="section-title">All Classes — Period {period}</div>
         {classes.filter(c => c.grading_period === period).length === 0 ? (

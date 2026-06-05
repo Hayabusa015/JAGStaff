@@ -304,6 +304,7 @@ export function useStudents() {
         lastName: r.last_name,
         grade: r.grade || "",
         parentEmail: r.parent_email || "",
+        studentEmail: r.student_email || "",
       })));
       setLoading(false);
     }
@@ -321,9 +322,9 @@ export function useStudents() {
     await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (rows.length === 0) { setStudents([]); return; }
     const { data } = await supabase.from("students").insert(
-      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: r.parentEmail || null }))
+      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: r.parentEmail || null, student_email: r.studentEmail || null }))
     ).select("*");
-    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: r.parent_email || "" })));
+    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: r.parent_email || "", studentEmail: r.student_email || "" })));
   }
 
   async function addStudent(s) {
@@ -332,9 +333,9 @@ export function useStudents() {
       return;
     }
     const { data } = await supabase.from("students")
-      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null })
+      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null })
       .select("*").single();
-    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "", parentEmail: data.parent_email || "" }]);
+    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "", parentEmail: data.parent_email || "", studentEmail: data.student_email || "" }]);
   }
 
   async function updateStudent(id, s) {
@@ -342,7 +343,7 @@ export function useStudents() {
       setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
       return;
     }
-    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null }).eq("id", id);
+    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null }).eq("id", id);
     setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
   }
 
@@ -367,13 +368,22 @@ export function useStudents() {
     const { data: current } = await supabase.from("students").select("first_name, last_name");
     const existingKeys = new Set((current || []).map(r => `${r.first_name}|${r.last_name}`));
     const toInsert = incomingRows.filter(r => !existingKeys.has(`${r.firstName}|${r.lastName}`));
+    // For existing students, upsert their email if we now have it
+    const toUpdateEmail = incomingRows.filter(r =>
+      existingKeys.has(`${r.firstName}|${r.lastName}`) && r.studentEmail
+    );
+    for (const r of toUpdateEmail) {
+      await supabase.from("students")
+        .update({ student_email: r.studentEmail })
+        .eq("first_name", r.firstName).eq("last_name", r.lastName);
+    }
     if (toInsert.length > 0) {
       const { data } = await supabase.from("students").insert(
-        toInsert.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: null }))
+        toInsert.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: null, student_email: r.studentEmail || null }))
       ).select("*");
       setStudents(prev => [
         ...prev,
-        ...(data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: "" })),
+        ...(data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: "", studentEmail: r.student_email || "" })),
       ]);
     }
     return { added: toInsert.length, skipped: incomingRows.length - toInsert.length };
@@ -429,6 +439,7 @@ export function useClassroomSync() {
       .map(s => ({
         firstName: s.profile?.name?.givenName || "",
         lastName: s.profile?.name?.familyName || "",
+        studentEmail: s.profile?.emailAddress || "",
       }))
       .filter(s => s.firstName || s.lastName);
   }
@@ -706,7 +717,10 @@ export async function isStaffEmail(email) {
 }
 
 export function useGmenSettings() {
-  const [settings, setSettings] = useState({ enrollment_open: false, active_period: 1 });
+  const [settings, setSettings] = useState({
+    enrollment_open: false, active_period: 1,
+    period_1_end: null, period_2_end: null, period_3_end: null, period_4_end: null,
+  });
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) return;
@@ -734,7 +748,66 @@ export function useGmenSettings() {
     }).eq("id", 1);
   }
 
-  return { settings, setEnrollmentOpen, setActivePeriod };
+  async function setPeriodEndDate(period, date, userEmail) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_settings").update({
+      [`period_${period}_end`]: date || null,
+      updated_at: new Date().toISOString(), updated_by: userEmail,
+    }).eq("id", 1);
+  }
+
+  return { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate };
+}
+
+// ─── Gmail Send (GIS incremental auth) ───────────────────────────────────────
+export function useGmailSend() {
+  async function requestGmailToken() {
+    await loadGIS();
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID is not set.");
+    return new Promise((resolve, reject) => {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/gmail.send",
+        callback: response => {
+          if (response.error) reject(new Error(response.error_description || response.error));
+          else resolve(response.access_token);
+        },
+      });
+      client.requestAccessToken({ prompt: "" });
+    });
+  }
+
+  // Encode a simple email as base64url RFC 2822 message
+  function buildRawEmail({ to, from, subject, body }) {
+    const msg = [
+      `To: ${to}`,
+      `From: ${from}`,
+      `Subject: ${subject}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "",
+      body,
+    ].join("\r\n");
+    return btoa(unescape(encodeURIComponent(msg)))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  async function sendEmail(token, { to, from, subject, body }) {
+    const raw = buildRawEmail({ to, from, subject, body });
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ raw }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Gmail API error ${res.status}`);
+    }
+    return res.json();
+  }
+
+  return { requestGmailToken, sendEmail };
 }
 
 export function useGmenClasses() {
