@@ -336,6 +336,12 @@ label {
   box-shadow: 0 0 24px rgba(245,192,37,0.12);
 }
 
+/* ── Event ticker ── */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* ── Page transition ── */
 @keyframes page-in {
   0%   { opacity: 0; transform: translateY(10px); }

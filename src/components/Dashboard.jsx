@@ -38,6 +38,66 @@ function DashTripCard({ trip }) {
 
 const ESCALATION_THRESHOLD = 3;
 
+function EventTicker({ events }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcoming = events
+    .filter(e => e.date && new Date(e.date + "T12:00:00") >= today)
+    .sort((a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"))
+    .slice(0, 6);
+
+  if (upcoming.length === 0) return null;
+
+  function fmtEventDate(dateStr, timeStr) {
+    const d = new Date(dateStr + "T12:00:00");
+    const diffDays = Math.round((d - today) / 86400000);
+    const label = diffDays === 0 ? "TODAY" : diffDays === 1 ? "TOMORROW" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return timeStr ? `${label} @ ${new Date("1970-01-01T" + timeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : label;
+  }
+
+  // Build repeated items so scroll looks seamless
+  const items = [...upcoming, ...upcoming];
+
+  return (
+    <div style={{
+      overflow: "hidden",
+      background: "linear-gradient(90deg, #000 0%, #111 20%, #111 80%, #000 100%)",
+      borderTop: `1px solid rgba(245,192,37,0.3)`,
+      borderBottom: `1px solid rgba(245,192,37,0.3)`,
+      position: "relative",
+      marginBottom: "1rem",
+      borderRadius: 8,
+    }}>
+      {/* Fade edges */}
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 60, background: "linear-gradient(90deg, #000, transparent)", zIndex: 2, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 60, background: "linear-gradient(270deg, #000, transparent)", zIndex: 2, pointerEvents: "none" }} />
+
+      <div style={{
+        display: "flex",
+        animation: `ticker-scroll ${upcoming.length * 6}s linear infinite`,
+        whiteSpace: "nowrap",
+        padding: "0.45rem 0",
+      }}>
+        {items.map((e, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", paddingRight: "3rem" }}>
+            <span style={{
+              background: "rgba(245,192,37,0.15)", border: "1px solid rgba(245,192,37,0.3)",
+              borderRadius: 4, padding: "0.1rem 0.45rem",
+              fontSize: "0.63rem", fontWeight: 800, color: GOLD,
+              letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0,
+            }}>{e.type}</span>
+            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff" }}>{e.title}</span>
+            <span style={{ fontSize: "0.7rem", color: "rgba(245,192,37,0.7)", fontWeight: 700, flexShrink: 0 }}>
+              {fmtEventDate(e.date, e.time)}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user }) {
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
@@ -59,7 +119,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   return (
     <div>
       {/* Header */}
-      <div className="card mb2" style={{ background: "#1a1200", color: "#fff" }}>
+      <div className="card mb2" style={{ background: "#111", color: "#fff" }}>
         <div className="flex items-center justify-between">
           <div>
             <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Command Center</div>
@@ -73,6 +133,8 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
           </div>
         </div>
       </div>
+
+      <EventTicker events={weeklyEvents} />
 
       {/* Intervention Alerts */}
       {alerts.length > 0 && (
