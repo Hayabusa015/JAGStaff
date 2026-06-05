@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useStudents } from "../supabase.js";
+import ClassroomSyncModal from "./ClassroomSyncModal.jsx";
 
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -20,7 +21,8 @@ function guessCol(headers, patterns) {
 }
 
 export default function StudentRoster() {
-  const { students, loading, importStudents, addStudent, updateStudent, removeStudent } = useStudents();
+  const { students, loading, importStudents, syncClassroomStudents, addStudent, updateStudent, removeStudent } = useStudents();
+  const [showClassroomSync, setShowClassroomSync] = useState(false);
   const [drag, setDrag] = useState(false);
   const [parsed, setParsed] = useState(null);
   const [colMap, setColMap] = useState({ first: "0", last: "1", grade: "2", parentEmail: "-1" });
@@ -101,6 +103,7 @@ export default function StudentRoster() {
         </div>
         <div className="flex items-center gap1">
           <span className="tag tag-gold">{students.length} students</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowClassroomSync(true)}>Sync from Classroom</button>
           <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>Import CSV</button>
         </div>
       </div>
@@ -245,6 +248,13 @@ export default function StudentRoster() {
           </table>
           <div className="text-muted mt1" style={{ fontSize: "0.78rem" }}>{students.length} total · {withEmail} with parent email</div>
         </div>
+      )}
+      {showClassroomSync && (
+        <ClassroomSyncModal
+          onClose={() => setShowClassroomSync(false)}
+          students={students}
+          syncClassroomStudents={syncClassroomStudents}
+        />
       )}
     </div>
   );

@@ -355,7 +355,85 @@ export function useStudents() {
     setStudents(prev => prev.filter(x => x.id !== id));
   }
 
-  return { students, loading, importStudents, addStudent, updateStudent, removeStudent };
+  async function syncClassroomStudents(incomingRows) {
+    if (!SUPABASE_READY || !supabase) {
+      setStudents(prev => {
+        const existing = new Set(prev.map(s => `${s.firstName}|${s.lastName}`));
+        const toAdd = incomingRows.filter(r => !existing.has(`${r.firstName}|${r.lastName}`));
+        return [...prev, ...toAdd.map(r => ({ id: Date.now().toString() + Math.random(), ...r }))];
+      });
+      return { added: incomingRows.length, skipped: 0 };
+    }
+    const { data: current } = await supabase.from("students").select("first_name, last_name");
+    const existingKeys = new Set((current || []).map(r => `${r.first_name}|${r.last_name}`));
+    const toInsert = incomingRows.filter(r => !existingKeys.has(`${r.firstName}|${r.lastName}`));
+    if (toInsert.length > 0) {
+      const { data } = await supabase.from("students").insert(
+        toInsert.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: null }))
+      ).select("*");
+      setStudents(prev => [
+        ...prev,
+        ...(data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: "" })),
+      ]);
+    }
+    return { added: toInsert.length, skipped: incomingRows.length - toInsert.length };
+  }
+
+  return { students, loading, importStudents, syncClassroomStudents, addStudent, updateStudent, removeStudent };
+}
+
+// ─── Google Classroom Sync ────────────────────────────────────────
+function loadGIS() {
+  return new Promise(resolve => {
+    if (window.google?.accounts?.oauth2) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+}
+
+export function useClassroomSync() {
+  async function requestToken() {
+    await loadGIS();
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID is not set in your .env.local file.");
+    return new Promise((resolve, reject) => {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.rosters.readonly",
+        callback: response => {
+          if (response.error) reject(new Error(response.error_description || response.error));
+          else resolve(response.access_token);
+        },
+      });
+      client.requestAccessToken({ prompt: "" });
+    });
+  }
+
+  async function listCourses(token) {
+    const url = "https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE&teacherId=me&pageSize=100";
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Classroom API error: ${res.status}`);
+    const data = await res.json();
+    return (data.courses || []).map(c => ({ id: c.id, name: c.name, section: c.section || "" }));
+  }
+
+  async function listStudents(token, courseId) {
+    const url = `https://classroom.googleapis.com/v1/courses/${courseId}/students?pageSize=200`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Classroom API error: ${res.status}`);
+    const data = await res.json();
+    return (data.students || [])
+      .map(s => ({
+        firstName: s.profile?.name?.givenName || "",
+        lastName: s.profile?.name?.familyName || "",
+      }))
+      .filter(s => s.firstName || s.lastName);
+  }
+
+  return { requestToken, listCourses, listStudents };
 }
 
 // ─── G-Men Requests (Supabase-backed) ────────────────────────────
