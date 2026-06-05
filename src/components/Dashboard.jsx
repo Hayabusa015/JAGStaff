@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions, useGmenRequests, useLateArrivals } from "../supabase.js";
+import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -128,11 +128,15 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
+  const { periods } = useBellSchedule();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setNow({ date: fmtDate(), time: fmtTime() }), 30000);
+    const id = setInterval(() => { setNow({ date: fmtDate(), time: fmtTime() }); setTick(t => t + 1); }, 30000);
     return () => clearInterval(id);
   }, []);
+
+  const periodInfo = currentPeriodInfo(periods);
 
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
@@ -153,9 +157,23 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
             <div style={{ color: GOLD, fontWeight: 800, fontSize: "1.4rem" }}>{now.time}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ background: GOLD, color: "#1a1200", borderRadius: "999px", padding: "0.3rem 0.9rem", fontSize: "0.75rem", fontWeight: 800 }}>
-              SCHOOL DAY
-            </div>
+            {periodInfo?.status === "in" ? (
+              <div style={{ background: GOLD, color: "#1a1200", borderRadius: 10, padding: "0.4rem 0.9rem", fontWeight: 800 }}>
+                <div style={{ fontSize: "0.9rem" }}>{periodInfo.period.name}</div>
+                <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.75 }}>
+                  {periodInfo.remaining} min remaining
+                </div>
+              </div>
+            ) : periodInfo?.status === "before" ? (
+              <div style={{ background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)", color: "#60a5fa", borderRadius: 10, padding: "0.4rem 0.9rem", fontWeight: 800 }}>
+                <div style={{ fontSize: "0.9rem" }}>{periodInfo.next.name} next</div>
+                <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.8 }}>in {periodInfo.until} min</div>
+              </div>
+            ) : (
+              <div style={{ background: GOLD, color: "#1a1200", borderRadius: "999px", padding: "0.3rem 0.9rem", fontSize: "0.75rem", fontWeight: 800 }}>
+                {periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}
+              </div>
+            )}
           </div>
         </div>
       </div>

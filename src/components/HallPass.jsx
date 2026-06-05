@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, SUPABASE_READY } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
+
+const timeToMin = (s) => { if (!s || !s.includes(":")) return null; const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
 function elapsed(outTime) {
   if (!outTime) return 0;
@@ -399,6 +401,7 @@ export default function HallPass({ user, students }) {
   const staff = useStaffDirectory(user, settings.room);
   const { sentByMe, sentToMe, allActive: allActiveRoomPasses, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
   const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
+  const { periods: bellPeriods } = useBellSchedule();
 
   // Room pass form
   const [rpStudent, setRpStudent] = useState(null);
@@ -790,7 +793,11 @@ export default function HallPass({ user, students }) {
                 <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>SENT TODAY</div>
                 {sentByMe.slice(0, 8).map(p => {
                   const ageMin = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000);
-                  const expired = ageMin >= settings.periodLength;
+                  // Prefer the real bell schedule: a pass expires when its period has ended.
+                  const sentPeriod = periodForTime(bellPeriods, p.created_at);
+                  const expired = sentPeriod
+                    ? (new Date().getHours() * 60 + new Date().getMinutes()) >= timeToMin(sentPeriod.end)
+                    : ageMin >= settings.periodLength;
                   const active = p.status !== "dismissed";
                   return (
                     <div key={p.id} style={{

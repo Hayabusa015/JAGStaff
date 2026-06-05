@@ -788,6 +788,69 @@ export function useGmenSettings() {
   return { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate };
 }
 
+// ─── Bell Schedule ───────────────────────────────────────────────────────────
+// Single-row table (id=1) with a JSONB `periods` array:
+//   [{ name: "Period 1", start: "08:00", end: "08:50" }, ...]  (24h HH:MM)
+const toMin = (s) => {
+  if (!s || !s.includes(":")) return null;
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+};
+
+// Pure helper: which period (if any) contains the given time?
+export function periodForTime(periods, at = new Date()) {
+  if (!periods?.length) return null;
+  const d = at instanceof Date ? at : new Date(at);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  return periods.find(p => {
+    const s = toMin(p.start), e = toMin(p.end);
+    return s != null && e != null && mins >= s && mins < e;
+  }) || null;
+}
+
+// Pure helper: current period status — in a period, before the next, or after the day.
+export function currentPeriodInfo(periods, at = new Date()) {
+  if (!periods?.length) return null;
+  const d = at instanceof Date ? at : new Date(at);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const sorted = [...periods]
+    .filter(p => toMin(p.start) != null && toMin(p.end) != null)
+    .sort((a, b) => toMin(a.start) - toMin(b.start));
+  if (!sorted.length) return null;
+  for (const p of sorted) {
+    const s = toMin(p.start), e = toMin(p.end);
+    if (mins >= s && mins < e) return { status: "in", period: p, remaining: e - mins };
+    if (mins < s) return { status: "before", next: p, until: s - mins };
+  }
+  return { status: "after" };
+}
+
+export function useBellSchedule() {
+  const [periods, setPeriods] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("bell_schedule").select("periods").eq("id", 1).single().then(({ data }) => {
+      if (data?.periods) setPeriods(data.periods);
+    });
+    const ch = supabase.channel("bell_schedule_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bell_schedule" }, ({ new: row }) => {
+        if (row?.periods) setPeriods(row.periods);
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  async function savePeriods(next, userEmail) {
+    setPeriods(next);
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("bell_schedule").update({
+      periods: next, updated_at: new Date().toISOString(), updated_by: userEmail,
+    }).eq("id", 1);
+  }
+
+  return { periods, savePeriods };
+}
+
 // ─── Gmail Send (GIS incremental auth) ───────────────────────────────────────
 export function useGmailSend() {
   async function requestGmailToken() {

@@ -1,8 +1,38 @@
+import { useState } from "react";
 import { GOLD, ALLOWED_DOMAIN, SESSION_TIMEOUT_MS } from "../constants.js";
-import { useAdminStaff } from "../supabase.js";
+import { useAdminStaff, useBellSchedule } from "../supabase.js";
+
+function fmt12(hhmm) {
+  if (!hhmm || !hhmm.includes(":")) return "—";
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 export default function AdminSettings({ user }) {
   const { staffList, toggleAdmin } = useAdminStaff();
+  const { periods, savePeriods } = useBellSchedule();
+  const [draft, setDraft] = useState(null); // null = not editing; array = editing copy
+
+  const editing = draft !== null;
+  const rows = editing ? draft : periods;
+
+  function startEdit() { setDraft(periods.length ? periods.map(p => ({ ...p })) : [{ name: "Period 1", start: "08:00", end: "08:50" }]); }
+  function cancelEdit() { setDraft(null); }
+  function updateRow(i, key, val) { setDraft(d => d.map((p, idx) => idx === i ? { ...p, [key]: val } : p)); }
+  function addRow() {
+    setDraft(d => {
+      const last = d[d.length - 1];
+      return [...d, { name: `Period ${d.length + 1}`, start: last?.end || "08:00", end: "" }];
+    });
+  }
+  function removeRow(i) { setDraft(d => d.filter((_, idx) => idx !== i)); }
+  async function saveEdit() {
+    const clean = draft.filter(p => p.name && p.start && p.end);
+    await savePeriods(clean, user?.email);
+    setDraft(null);
+  }
 
   const adminCount = staffList.filter(s => s.is_admin).length;
 
@@ -90,6 +120,80 @@ export default function AdminSettings({ user }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* Bell Schedule */}
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>Bell Schedule</div>
+          {!editing && (
+            <button onClick={startEdit} style={{
+              background: "rgba(245,192,37,0.12)", border: `1px solid ${GOLD}`, color: GOLD,
+              borderRadius: 6, padding: "0.3rem 0.85rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem",
+            }}>{periods.length ? "Edit" : "Set Up Schedule"}</button>
+          )}
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          Used for the live "current period" indicator on the Dashboard and to detect when a room pass's period has ended.
+        </div>
+
+        {!editing && rows.length === 0 && (
+          <p className="text-muted" style={{ fontSize: "0.85rem" }}>No schedule set yet.</p>
+        )}
+
+        {!editing && rows.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            {rows.map((p, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "0.45rem 0.75rem", background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)", borderRadius: 7,
+              }}>
+                <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{p.name}</span>
+                <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.55)" }}>{fmt12(p.start)} – {fmt12(p.end)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {editing && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {rows.map((p, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <input
+                  value={p.name}
+                  onChange={e => updateRow(i, "name", e.target.value)}
+                  placeholder="Period name"
+                  style={{ flex: "1 1 140px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0.35rem 0.6rem", color: "#fff", fontSize: "0.82rem", outline: "none" }}
+                />
+                <input type="time" value={p.start} onChange={e => updateRow(i, "start", e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0.3rem 0.5rem", color: "#fff", fontSize: "0.82rem", outline: "none" }} />
+                <span style={{ color: "rgba(255,255,255,0.3)" }}>–</span>
+                <input type="time" value={p.end} onChange={e => updateRow(i, "end", e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0.3rem 0.5rem", color: "#fff", fontSize: "0.82rem", outline: "none" }} />
+                <button onClick={() => removeRow(i)} title="Remove" style={{
+                  background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444",
+                  borderRadius: 6, padding: "0.25rem 0.6rem", cursor: "pointer", fontSize: "0.8rem",
+                }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+              <button onClick={addRow} style={{
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.7)", borderRadius: 6, padding: "0.4rem 0.85rem", cursor: "pointer", fontSize: "0.82rem",
+              }}>+ Add Period</button>
+              <div style={{ flex: 1 }} />
+              <button onClick={cancelEdit} style={{
+                background: "transparent", border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)", borderRadius: 6, padding: "0.4rem 1rem", cursor: "pointer", fontSize: "0.82rem",
+              }}>Cancel</button>
+              <button onClick={saveEdit} style={{
+                background: GOLD, border: "none", color: "#000", fontWeight: 700,
+                borderRadius: 6, padding: "0.4rem 1.25rem", cursor: "pointer", fontSize: "0.82rem",
+              }}>Save Schedule</button>
+            </div>
           </div>
         )}
       </div>
