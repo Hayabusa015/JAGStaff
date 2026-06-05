@@ -692,3 +692,182 @@ export function useLateArrivals() {
 
   return { arrivals, logArrival, confirmArrival };
 }
+
+// ─── G-Men Period ───────────────────────────────────────────────────────────
+
+export async function isStaffEmail(email) {
+  if (!SUPABASE_READY || !supabase) return false;
+  const { data } = await supabase
+    .from("staff_directory")
+    .select("email")
+    .eq("email", email)
+    .maybeSingle();
+  return !!data;
+}
+
+export function useGmenSettings() {
+  const [settings, setSettings] = useState({ enrollment_open: false, active_period: 1 });
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("gmen_settings").select("*").eq("id", 1).single().then(({ data }) => {
+      if (data) setSettings(data);
+    });
+    const ch = supabase.channel("gmen_settings_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_settings" }, ({ new: row }) => {
+        if (row) setSettings(row);
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  async function setEnrollmentOpen(open, userEmail) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_settings").update({
+      enrollment_open: open, updated_at: new Date().toISOString(), updated_by: userEmail,
+    }).eq("id", 1);
+  }
+
+  async function setActivePeriod(period, userEmail) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_settings").update({
+      active_period: period, updated_at: new Date().toISOString(), updated_by: userEmail,
+    }).eq("id", 1);
+  }
+
+  return { settings, setEnrollmentOpen, setActivePeriod };
+}
+
+export function useGmenClasses() {
+  const [classes, setClasses] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("gmen_classes").select("*").order("created_at").then(({ data }) => {
+      if (data) setClasses(data);
+    });
+    const ch = supabase.channel("gmen_classes_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_classes" }, () => {
+        supabase.from("gmen_classes").select("*").order("created_at").then(({ data }) => {
+          if (data) setClasses(data);
+        });
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  async function addGmenClass(fields) {
+    if (!SUPABASE_READY || !supabase) return;
+    const { data, error } = await supabase.from("gmen_classes").insert([fields]).select().single();
+    if (!error && data) setClasses(prev => [...prev, data]);
+    return { data, error };
+  }
+
+  async function updateGmenClass(id, fields) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_classes").update(fields).eq("id", id);
+  }
+
+  async function deleteGmenClass(id) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_classes").delete().eq("id", id);
+  }
+
+  async function toggleOpen(id, isOpen) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_classes").update({ is_open: isOpen }).eq("id", id);
+  }
+
+  return { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen };
+}
+
+export function useGmenEnrollments(period) {
+  const [enrollments, setEnrollments] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !period) return;
+    supabase.from("gmen_enrollments").select("*").eq("grading_period", period).then(({ data }) => {
+      if (data) setEnrollments(data);
+    });
+    const ch = supabase.channel(`gmen_enrollments_${period}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_enrollments",
+        filter: `grading_period=eq.${period}` }, () => {
+        supabase.from("gmen_enrollments").select("*").eq("grading_period", period).then(({ data }) => {
+          if (data) setEnrollments(data);
+        });
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [period]);
+
+  async function enroll(studentEmail, studentName, classId, gradingPeriod) {
+    if (!SUPABASE_READY || !supabase) return { error: "Supabase not ready" };
+    const { data, error } = await supabase.from("gmen_enrollments").insert([{
+      student_email: studentEmail, student_name: studentName,
+      class_id: classId, grading_period: gradingPeriod,
+    }]).select().single();
+    return { data, error };
+  }
+
+  async function unenroll(studentEmail, gradingPeriod) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_enrollments")
+      .delete()
+      .eq("student_email", studentEmail)
+      .eq("grading_period", gradingPeriod);
+  }
+
+  function seatCount(classId) {
+    return enrollments.filter(e => e.class_id === classId).length;
+  }
+
+  return { enrollments, enroll, unenroll, seatCount };
+}
+
+export function useGmenChangeRequests() {
+  const [changeRequests, setChangeRequests] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("gmen_change_requests").select("*").order("created_at", { ascending: false }).then(({ data }) => {
+      if (data) setChangeRequests(data);
+    });
+    const ch = supabase.channel("gmen_change_requests_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_change_requests" }, () => {
+        supabase.from("gmen_change_requests").select("*").order("created_at", { ascending: false }).then(({ data }) => {
+          if (data) setChangeRequests(data);
+        });
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  async function requestChange(studentEmail, studentName, fromClassId, toClassId, gradingPeriod) {
+    if (!SUPABASE_READY || !supabase) return { error: "Supabase not ready" };
+    const { data, error } = await supabase.from("gmen_change_requests").insert([{
+      student_email: studentEmail, student_name: studentName,
+      from_class_id: fromClassId, to_class_id: toClassId,
+      grading_period: gradingPeriod, status: "pending",
+    }]).select().single();
+    return { data, error };
+  }
+
+  async function approveChange(requestId, reviewerName) {
+    if (!SUPABASE_READY || !supabase) return;
+    const req = changeRequests.find(r => r.id === requestId);
+    if (!req) return;
+    // Swap enrollment
+    await supabase.from("gmen_enrollments")
+      .update({ class_id: req.to_class_id })
+      .eq("student_email", req.student_email)
+      .eq("grading_period", req.grading_period);
+    await supabase.from("gmen_change_requests").update({
+      status: "approved", reviewed_by: reviewerName,
+    }).eq("id", requestId);
+  }
+
+  async function denyChange(requestId, reviewerName) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_change_requests").update({
+      status: "denied", reviewed_by: reviewerName,
+    }).eq("id", requestId);
+  }
+
+  return { changeRequests, requestChange, approveChange, denyChange };
+}

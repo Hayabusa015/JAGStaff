@@ -44,11 +44,3 @@ export const SEED_CEU = [
   { id: "c5", name: "ODE Science Standards Update",        hours: 12, date: "2026-03" },
 ];
 
-export const SEED_ELECTIVES = [
-  { id: "e1", title: "Kickball",      teacher: "Mr. Benson",   day: "Tuesday",   count: 18, max: 20 },
-  { id: "e2", title: "Chess Club",    teacher: "Ms. Rivera",   day: "Tuesday",   count: 12, max: 15 },
-  { id: "e3", title: "Art Studio",    teacher: "Mrs. Kim",     day: "Wednesday", count: 10, max: 18 },
-  { id: "e4", title: "Coding Lab",    teacher: "Mr. Shull",    day: "Wednesday", count: 15, max: 15 },
-  { id: "e5", title: "Study Hall",    teacher: "Mr. Davis",    day: "Thursday",  count: 9,  max: 25 },
-  { id: "e6", title: "Drama",         teacher: "Ms. Powell",   day: "Thursday",  count: 14, max: 20 },
-];

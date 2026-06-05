@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
-import { useAuth, useStudents, SUPABASE_READY } from "./supabase.js";
+import { useAuth, useStudents, SUPABASE_READY, isStaffEmail } from "./supabase.js";
+import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
 import TripRoster from "./components/TripRoster.jsx";
@@ -132,6 +133,12 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
 
 export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
+  const [isStaff, setIsStaff] = useState(null); // null = checking
+
+  useEffect(() => {
+    if (!user) { setIsStaff(null); return; }
+    isStaffEmail(user.email).then(result => setIsStaff(result));
+  }, [user]);
 
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
@@ -179,6 +186,19 @@ export default function App() {
   );
 
   if (!user) return <LoginScreen signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
+
+  // While checking staff status, show spinner
+  if (isStaff === null) return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <SchoolLogo size={56} />
+        <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>LOADING…</div>
+      </div>
+    </div>
+  );
+
+  // Non-staff @jagschools.org account → student enrollment view
+  if (isStaff === false) return <GmenEnrollmentView user={user} signOut={signOut} />;
 
   const sharedProps = { user, students, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, alerts, setAlerts };
 
