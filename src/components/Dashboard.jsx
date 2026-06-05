@@ -9,6 +9,33 @@ function fmtTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
+function DashTripCard({ trip }) {
+  const [open, setOpen] = useState(false);
+  const d = trip.date ? new Date(trip.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  return (
+    <div className="card" style={{ marginBottom: "0.5rem", padding: "0.75rem" }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="tag tag-amber" style={{ marginRight: "0.4rem" }}>{trip.type}</span>
+          <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{trip.title}</span>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setOpen(o => !o)}>
+          {open ? "▲" : "▼"}
+        </button>
+      </div>
+      <div className="text-muted mt1">{trip.teacher}{trip.teacher ? " · " : ""}{d}{trip.depart ? ` · ${trip.depart}${trip.returnTime ? `–${trip.returnTime}` : ""}` : ""}</div>
+      {open && (
+        <ul style={{ marginTop: "0.5rem", paddingLeft: "1rem" }}>
+          {trip.students.length === 0 && <li style={{ fontSize: "0.8rem" }} className="text-muted">No students listed.</li>}
+          {trip.students.map((s, i) => (
+            <li key={i} style={{ fontSize: "0.8rem" }}>{s.name}{s.grade ? <span className="tag tag-amber" style={{ marginLeft: "0.35rem" }}>{s.grade}</span> : null}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const ESCALATION_THRESHOLD = 3;
 
 export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user }) {
@@ -186,31 +213,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
         <div className="card">
           <div className="section-title">Field Trips &amp; Early Releases</div>
           {tripRosters.length === 0 && <p className="text-muted">No trips on record.</p>}
-          {tripRosters.map(trip => {
-            const [open, setOpen] = useState(false);
-            const d = trip.date ? new Date(trip.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
-            return (
-              <div key={trip.id} className="card" style={{ marginBottom: "0.5rem", padding: "0.75rem" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="tag tag-amber" style={{ marginRight: "0.4rem" }}>{trip.type}</span>
-                    <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{trip.title}</span>
-                  </div>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setOpen(o => !o)}>
-                    {open ? "▲" : "▼"}
-                  </button>
-                </div>
-                <div className="text-muted mt1">{trip.teacher} · {d} · {trip.depart}–{trip.returnTime}</div>
-                {open && trip.students.length > 0 && (
-                  <ul style={{ marginTop: "0.5rem", paddingLeft: "1rem" }}>
-                    {trip.students.map((s, i) => (
-                      <li key={i} style={{ fontSize: "0.8rem" }}>{s.name} <span className="tag tag-amber">{s.grade}</span></li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+          {tripRosters.map(trip => <DashTripCard key={trip.id} trip={trip} />)}
         </div>
       </div>
     </div>
