@@ -480,10 +480,10 @@ export default function Gradebook({ students, user }) {
         <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
           <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>📊</div>
           <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>Set up your gradebook first</div>
-          <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.45)", marginBottom: "1.25rem" }}>Choose a grade weight profile to get started.</div>
-          <button onClick={() => setSubTab("settings")} style={{ background: GOLD, border: "none", color: "#000", fontWeight: 700, borderRadius: 8, padding: "0.6rem 1.5rem", cursor: "pointer" }}>Go to Settings →</button>
+          <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.45)", marginBottom: "1.25rem" }}>Pick a grade weight profile below to get started — tap a preset, then Save Profile.</div>
+          <button onClick={() => document.getElementById("gb-settings-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })} style={{ background: GOLD, border: "none", color: "#000", fontWeight: 700, borderRadius: 8, padding: "0.6rem 1.5rem", cursor: "pointer" }}>Choose a Profile ↓</button>
         </div>
-        <div style={{ marginTop: "1.5rem" }}>
+        <div id="gb-settings-anchor" style={{ marginTop: "1.5rem", scrollMarginTop: "1rem" }}>
           <GradebookSettings profiles={profiles} settings={settings} saveProfile={saveProfile} setActiveProfile={setActiveProfile} deleteProfile={deleteProfile} saveSettings={saveSettings} user={user} />
         </div>
       </div>

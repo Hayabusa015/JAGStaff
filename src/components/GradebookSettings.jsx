@@ -39,7 +39,9 @@ export default function GradebookSettings({ profiles, settings, saveProfile, set
       ...(editingProfile.id ? { id: editingProfile.id } : {}),
       name: editingProfile.name,
       categories: editingProfile.categories.map(({ _key, ...rest }) => ({ ...rest, weight: Number(rest.weight) })),
-      is_active: editingProfile.id ? (profiles.find(p => p.id === editingProfile.id)?.is_active || false) : false,
+      // First profile a teacher creates becomes active automatically so the
+      // gradebook is usable immediately.
+      is_active: editingProfile.id ? (profiles.find(p => p.id === editingProfile.id)?.is_active || false) : profiles.length === 0,
     };
     await saveProfile(clean);
     setEditingProfile(null);
