@@ -1074,3 +1074,130 @@ export function useGmenChangeRequests() {
 
   return { changeRequests, requestChange, approveChange, denyChange };
 }
+
+// ─── Gradebook ───────────────────────────────────────────────────────────────
+export function useGradebook(teacherEmail) {
+  const [assignments, setAssignments] = useState([]);
+  const [grades, setGrades] = useState([]);        // flat array of all grade rows
+  const [profiles, setProfiles] = useState([]);
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+
+    async function load() {
+      const [a, g, p, s] = await Promise.all([
+        supabase.from("gradebook_assignments").select("*").eq("teacher_email", teacherEmail).order("created_at"),
+        supabase.from("gradebook_grades").select("*").eq("teacher_email", teacherEmail),
+        supabase.from("gradebook_profiles").select("*").eq("teacher_email", teacherEmail).order("created_at"),
+        supabase.from("gradebook_settings").select("*").eq("teacher_email", teacherEmail).maybeSingle(),
+      ]);
+      if (!active) return;
+      if (a.data) setAssignments(a.data);
+      if (g.data) setGrades(g.data);
+      if (p.data) setProfiles(p.data);
+      setSettings(s.data || null);
+    }
+
+    load();
+    const ch = supabase.channel("gradebook_" + teacherEmail)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gradebook_assignments", filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gradebook_grades",      filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gradebook_profiles",    filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gradebook_settings",    filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, [teacherEmail]);
+
+  // ── Assignments ──────────────────────────────────────────────────────────
+  async function addAssignment(data) {
+    const row = { ...data, teacher_email: teacherEmail };
+    if (!SUPABASE_READY || !supabase) {
+      const opt = { id: `opt-${Date.now()}`, ...row, created_at: new Date().toISOString() };
+      setAssignments(prev => [...prev, opt]);
+      return opt;
+    }
+    const { data: d } = await supabase.from("gradebook_assignments").insert(row).select("*").single();
+    if (d) setAssignments(prev => [...prev, d]);
+    return d;
+  }
+
+  async function updateAssignment(id, data) {
+    setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...data } : a));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gradebook_assignments").update(data).eq("id", id);
+  }
+
+  async function deleteAssignment(id) {
+    setAssignments(prev => prev.filter(a => a.id !== id));
+    setGrades(prev => prev.filter(g => g.assignment_id !== id));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gradebook_assignments").delete().eq("id", id);
+  }
+
+  // ── Grades ────────────────────────────────────────────────────────────────
+  async function saveGrade(assignmentId, studentId, studentName, data) {
+    const existing = grades.find(g => g.assignment_id === assignmentId && g.student_id === studentId);
+    const row = {
+      assignment_id: assignmentId, teacher_email: teacherEmail,
+      student_id: studentId, student_name: studentName,
+      graded_at: new Date().toISOString(), ...data,
+    };
+    if (existing) {
+      setGrades(prev => prev.map(g => (g.assignment_id === assignmentId && g.student_id === studentId) ? { ...g, ...row } : g));
+      if (!SUPABASE_READY || !supabase) return;
+      await supabase.from("gradebook_grades").update(row).eq("id", existing.id);
+    } else {
+      const opt = { id: `opt-${Date.now()}`, ...row, created_at: new Date().toISOString() };
+      setGrades(prev => [...prev, opt]);
+      if (!SUPABASE_READY || !supabase) return;
+      const { data: d } = await supabase.from("gradebook_grades").insert(row).select("*").single();
+      if (d) setGrades(prev => prev.map(g => g.id === opt.id ? d : g));
+    }
+  }
+
+  // ── Profiles ─────────────────────────────────────────────────────────────
+  async function saveProfile(profile) {
+    if (profile.id) {
+      setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, ...profile } : p));
+      if (!SUPABASE_READY || !supabase) return;
+      await supabase.from("gradebook_profiles").update(profile).eq("id", profile.id);
+    } else {
+      const row = { ...profile, teacher_email: teacherEmail };
+      const opt = { id: `opt-${Date.now()}`, ...row, created_at: new Date().toISOString() };
+      setProfiles(prev => [...prev, opt]);
+      if (!SUPABASE_READY || !supabase) return;
+      const { data: d } = await supabase.from("gradebook_profiles").insert(row).select("*").single();
+      if (d) setProfiles(prev => prev.map(p => p.id === opt.id ? d : p));
+    }
+  }
+
+  async function setActiveProfile(profileId) {
+    setProfiles(prev => prev.map(p => ({ ...p, is_active: p.id === profileId })));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gradebook_profiles").update({ is_active: false }).eq("teacher_email", teacherEmail);
+    await supabase.from("gradebook_profiles").update({ is_active: true }).eq("id", profileId);
+  }
+
+  async function deleteProfile(profileId) {
+    setProfiles(prev => prev.filter(p => p.id !== profileId));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gradebook_profiles").delete().eq("id", profileId);
+  }
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+  async function saveSettings(data) {
+    const next = { ...settings, ...data, teacher_email: teacherEmail, updated_at: new Date().toISOString() };
+    setSettings(next);
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gradebook_settings").upsert(next, { onConflict: "teacher_email" });
+  }
+
+  return {
+    assignments, grades, profiles, settings,
+    addAssignment, updateAssignment, deleteAssignment,
+    saveGrade, saveProfile, setActiveProfile, deleteProfile,
+    saveSettings,
+  };
+}

@@ -14,6 +14,7 @@ import Requisition from "./components/Requisition.jsx";
 import FieldTrip from "./components/FieldTrip.jsx";
 import StudentRoster from "./components/StudentRoster.jsx";
 import Infractions from "./components/Infractions.jsx";
+import Gradebook from "./components/Gradebook.jsx";
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -22,6 +23,7 @@ const TABS = [
   { key: "gmen",        label: "G-Men Period"     },
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
+  { key: "gradebook",   label: "Gradebook"        },
   { key: "resources",   label: "Teacher Resources"},
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
@@ -266,6 +268,7 @@ export default function App() {
         {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
+        {tab === "gradebook"   && <Gradebook    students={students} user={user} />}
 
         {tab === "resources" && (
           <>
