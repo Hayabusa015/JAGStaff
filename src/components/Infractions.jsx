@@ -321,8 +321,8 @@ export default function Infractions({ students, user }) {
                   <th>Student</th>
                   <th>Grade</th>
                   <th>Type</th>
-                  <th>Notes</th>
-                  <th>Logged by</th>
+                  <th className="infraction-col-teacher">Notes</th>
+                  <th className="infraction-col-teacher">Logged by</th>
                   <th title="Parent notified">📧</th>
                 </tr>
               </thead>
@@ -341,8 +341,8 @@ export default function Infractions({ students, user }) {
                       </td>
                       <td>{s ? <span className="tag tag-amber">{s.grade}</span> : <span className="text-muted">—</span>}</td>
                       <td><span className={`tag ${typeColor(r.type)}`}>{r.type}</span></td>
-                      <td className="text-muted" style={{ fontSize: "0.8rem", maxWidth: 220 }}>{r.notes || "—"}</td>
-                      <td className="text-muted" style={{ fontSize: "0.78rem" }}>{r.teacher_name}</td>
+                      <td className="infraction-col-teacher text-muted" style={{ fontSize: "0.8rem", maxWidth: 220 }}>{r.notes || "—"}</td>
+                      <td className="infraction-col-teacher text-muted" style={{ fontSize: "0.78rem" }}>{r.teacher_name}</td>
                       <td style={{ textAlign: "center", fontSize: "1rem" }} title={r.parent_notified ? "Parent was notified" : "Parent not notified"}>
                         {r.parent_notified ? "📧" : <span style={{ color: "rgba(240,234,216,0.2)" }}>—</span>}
                       </td>

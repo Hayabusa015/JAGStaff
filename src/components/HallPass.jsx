@@ -491,7 +491,7 @@ export default function HallPass({ user, students }) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb2">
+      <div className="hallpass-header flex items-center justify-between mb2">
         <div>
           <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Hall Pass Manager</h2>
           <div className="text-muted">
@@ -504,13 +504,13 @@ export default function HallPass({ user, students }) {
         <button className="btn btn-primary" onClick={() => setKioskMode(true)}>🖥 Launch Kiosk Mode</button>
       </div>
 
-      {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.25rem", alignItems: "start" }}>
+      {/* Two-column layout — collapses to 1-col on mobile via CSS */}
+      <div className="hallpass-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.25rem", alignItems: "start" }}>
 
         {/* ── LEFT: main hall pass content ── */}
         <div>
           {/* Stats */}
-          <div className="grid3 mb2">
+          <div className="hallpass-stats grid3 mb2">
             <div className="card" style={{ textAlign: "center" }}>
               <div className="stat-num" style={{ color: activePasses.length > 0 ? "#dc2626" : GOLD }}>{activePasses.length}</div>
               <div className="stat-label">Currently Out</div>
