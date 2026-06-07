@@ -409,6 +409,160 @@ label {
 /* ── Divider ── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
 
+/* ═══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE  (≤ 640px)
+   Desktop styles above are never touched — all overrides here.
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Content area ── */
+  .content-area {
+    padding: 0.85rem 0.75rem;
+  }
+
+  /* ── Watermark logo on mobile ── */
+  .mascot-watermark {
+    width: 260px;
+    height: 260px;
+    font-size: 220px;
+    bottom: -20px;
+    right: -20px;
+    opacity: 0.05;
+  }
+
+  /* ── Top nav: collapse to one tight row ── */
+  .nav-row1 {
+    padding: 0.35rem 0.65rem;
+    gap: 0.5rem;
+  }
+
+  /* Hide school logo on mobile — saves space */
+  .nav-brand > *:first-child {
+    display: none;
+  }
+
+  .nav-school-name .name-line1 {
+    font-size: 0.72rem;
+  }
+  .nav-school-name .name-line2 {
+    display: none;
+  }
+
+  /* Shrink avatar, hide name */
+  .nav-user-name { display: none; }
+  .nav-avatar { width: 22px; height: 22px; }
+
+  /* Sign out button — smaller */
+  .nav-user .btn { padding: 0.25rem 0.55rem; font-size: 0.68rem; }
+
+  /* ── Tab bar — bigger tap targets, scroll indicator ── */
+  .nav-row2 {
+    padding: 0 0.25rem;
+    /* subtle right fade to hint at more tabs */
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+  .tab-btn {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.65rem;
+  }
+
+  /* ── Cards ── */
+  .card {
+    padding: 0.9rem;
+    border-radius: 10px;
+  }
+
+  /* ── Stat numbers — smaller on mobile ── */
+  .stat-num { font-size: 1.5rem; }
+
+  /* ── Tables — horizontal scroll container ── */
+  .mobile-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+    /* right fade to hint at horizontal scroll */
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  }
+
+  /* Infraction table — hide less critical columns */
+  .infraction-col-room   { display: none; }
+  .infraction-col-teacher { display: none; }
+
+  /* ── Hall Pass stat tiles — 2-up instead of stacked ── */
+  .hallpass-stats {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .hallpass-stats > * {
+    padding: 0.75rem !important;
+  }
+  .hallpass-stats .stat-num { font-size: 1.6rem; }
+
+  /* ── Section titles ── */
+  .section-title { font-size: 0.63rem; }
+
+  /* ── Buttons — full width in forms ── */
+  .btn-mobile-full { width: 100%; justify-content: center; }
+
+  /* ── Grid helpers — force 1-col on mobile ── */
+  .grid2, .grid3 { grid-template-columns: 1fr; }
+
+  /* ── Modal card ── */
+  .modal-card {
+    padding: 1rem;
+    border-radius: 10px;
+    max-height: 92vh;
+  }
+
+  /* ── Header row in components (title + action btn) ── */
+  .mobile-header-stack {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.6rem !important;
+  }
+  .mobile-header-stack > *:last-child {
+    align-self: flex-start;
+  }
+
+  /* ── G-Men header ── */
+  .gmen-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+  .gmen-header h2 { font-size: 1rem !important; }
+  .gmen-header > button, .gmen-header > a {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* ── Hall Pass manager header ── */
+  .hallpass-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+  .hallpass-header > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ── Hall Pass two-column → single column ── */
+  .hallpass-two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Wrap scrollable tables ── */
+  .stu-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* ── Utility ── */
 .text-muted   { color: var(--text-muted); font-size: 0.8rem; }
 .text-gold    { color: var(--gold); }
