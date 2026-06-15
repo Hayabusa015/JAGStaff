@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useRequisitions } from "../supabase.js";
+import { openGmailCompose } from "../email.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function blankItem() { return { id: uid(), url: "", budget: "", description: "", qty: 1, unitPrice: "" }; }
@@ -11,6 +12,34 @@ function vendorSubtotal(v) { return v.items.reduce((s, i) => s + lineTotal(i), 0
 function vendorTotal(v) { return vendorSubtotal(v) + (Number(v.shipping) || 0); }
 function grandTotal(cart) { return cart.reduce((s, v) => s + vendorTotal(v), 0); }
 function fmt$(n) { return n.toLocaleString("en-US", { style: "currency", currency: "USD" }); }
+
+function buildReqEmail(cart, user) {
+  const date = new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+  const subject = `[REQUISITION REQUEST] ${user?.name || "Staff"} · ${date}`;
+  const lines = [
+    `REQUISITION REQUEST — James A. Garfield High School`,
+    ``,
+    `Requested by: ${user?.name || "Staff"}${user?.email ? ` (${user.email})` : ""}`,
+    `Date: ${date}`,
+    ``,
+  ];
+  cart.forEach((v, vi) => {
+    lines.push(`VENDOR ${vi + 1}: ${v.vendor || "(unnamed)"} — ${fmt$(vendorTotal(v))}`);
+    v.items.forEach((item, ii) => {
+      lines.push(`  ${ii + 1}. ${item.description || "(no description)"}${item.url ? ` [${item.url}]` : ""}`);
+      lines.push(`     Qty ${item.qty} × ${item.unitPrice ? fmt$(Number(item.unitPrice)) : "$0.00"} = ${fmt$(lineTotal(item))}${item.budget ? ` · Budget ${item.budget}` : ""}`);
+    });
+    if (Number(v.shipping)) lines.push(`  Shipping: ${fmt$(Number(v.shipping))}`);
+    if (v.quotes?.length) lines.push(`  Quotes to attach: ${v.quotes.map(q => q.name).join(", ")}`);
+    lines.push(``);
+  });
+  lines.push(`GRAND TOTAL — ALL VENDORS: ${fmt$(grandTotal(cart))}`);
+  lines.push(``);
+  lines.push(`Note: if there are quote files, please attach them to this email before sending.`);
+  lines.push(``);
+  lines.push(`— Sent from the JAG Staff Portal`);
+  return { subject, body: lines.join("\n") };
+}
 
 function ReqPreview({ cart, user, onClose, onSubmit }) {
   const date = new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
@@ -121,8 +150,11 @@ export default function Requisition({ user }) {
   if (submitted) return (
     <div style={{ textAlign: "center", padding: "4rem 1rem" }}>
       <div style={{ fontSize: "3rem" }}>✅</div>
-      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>REQUISITION SUBMITTED</h2>
-      <p className="text-muted mt1">Your request has been emailed to the building secretary.</p>
+      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>REQUISITION SAVED</h2>
+      <p className="text-muted mt1">
+        A Gmail compose window opened with the request pre-filled.<br />
+        Add the recipient, attach any quote files, and hit send.
+      </p>
       <button className="btn btn-primary mt2" onClick={() => { setCart([blankVendor()]); setSubmitted(false); }}>New Request</button>
     </div>
   );
@@ -133,7 +165,13 @@ export default function Requisition({ user }) {
         <ReqPreview
           cart={cart} user={user}
           onClose={() => setShowPreview(false)}
-          onSubmit={() => { addRequisition({ cart, total }); setShowPreview(false); setSubmitted(true); }}
+          onSubmit={() => {
+            addRequisition({ cart, total });
+            // Recipient left blank — the teacher adds who it goes to in Gmail.
+            openGmailCompose(buildReqEmail(cart, user));
+            setShowPreview(false);
+            setSubmitted(true);
+          }}
         />
       )}
 
