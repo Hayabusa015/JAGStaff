@@ -88,9 +88,11 @@ SQL Editor:
 alter table public.hall_passes   enable row level security;
 alter table public.hall_pass_log enable row level security;
 
--- Helper: true only for verified school-domain users
+-- Helper: true only for verified school-domain users.
+-- `set search_path = ''` pins the resolution path so the function can't be
+-- hijacked by a role-local search_path (Supabase security linter 0011).
 create or replace function public.is_staff()
-returns boolean language sql stable as $$
+returns boolean language sql stable set search_path = '' as $$
   select coalesce(auth.jwt() ->> 'email', '') like '%@jagschools.org'
 $$;
 
@@ -364,20 +366,51 @@ alter table public.ceu_reimbursements  enable row level security;
 alter table public.field_trip_requests enable row level security;
 alter table public.requisitions        enable row level security;
 
--- Any signed-in staff member may read + write these tables. (Per-teacher
--- scoping for CEU / field trips / requisitions is done in the query layer;
--- tighten with auth.jwt()->>'email' = teacher_email here if you want the DB
--- to enforce it too.)
+-- weekly_events + trip_rosters are genuinely school-wide: any signed-in staff
+-- member may read + write them.
 do $$
 declare t text;
 begin
-  foreach t in array array[
-    'weekly_events','trip_rosters','ceu_entries','ceu_reimbursements',
-    'field_trip_requests','requisitions'
-  ] loop
+  foreach t in array array['weekly_events','trip_rosters'] loop
     execute format('create policy "staff read %1$s"   on public.%1$I for select using (public.is_staff());', t);
     execute format('create policy "staff insert %1$s" on public.%1$I for insert with check (public.is_staff());', t);
     execute format('create policy "staff delete %1$s" on public.%1$I for delete using (public.is_staff());', t);
+  end loop;
+end $$;
+
+-- Helpers used by the owner-scoped policies below (and by the gradebook_*
+-- policies in supabase/migrations/20260615_owner_scoped_rls.sql).
+create or replace function public.current_email()
+returns text language sql stable set search_path = '' as $$
+  select coalesce(auth.jwt() ->> 'email', '')
+$$;
+
+create or replace function public.is_admin()
+returns boolean language sql stable set search_path = '' as $$
+  select exists (
+    select 1 from public.staff_directory
+    where email = coalesce(auth.jwt() ->> 'email', '') and is_admin = true
+  )
+$$;
+
+-- ceu_entries / ceu_reimbursements / field_trip_requests / requisitions hold a
+-- single teacher's private records, so they are OWNER-SCOPED: a teacher only
+-- sees their own rows, and an admin (staff_directory.is_admin) sees all. The
+-- client already filters by teacher_email; this enforces it at the database.
+-- See supabase/migrations/20260615_owner_scoped_rls.sql for the gradebook_*
+-- policies, which use these same helpers.
+do $$
+declare
+  t text;
+  owner_or_admin constant text :=
+    'public.is_staff() and (teacher_email = public.current_email() or public.is_admin())';
+begin
+  foreach t in array array[
+    'ceu_entries','ceu_reimbursements','field_trip_requests','requisitions'
+  ] loop
+    execute format('create policy "owner read %1$s"   on public.%1$I for select using (%2$s);', t, owner_or_admin);
+    execute format('create policy "owner insert %1$s" on public.%1$I for insert with check (%2$s);', t, owner_or_admin);
+    execute format('create policy "owner delete %1$s" on public.%1$I for delete using (%2$s);', t, owner_or_admin);
   end loop;
 end $$;
 
