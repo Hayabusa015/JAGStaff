@@ -15,7 +15,9 @@ import FieldTrip from "./components/FieldTrip.jsx";
 import StudentRoster from "./components/StudentRoster.jsx";
 import Infractions from "./components/Infractions.jsx";
 import Gradebook from "./components/Gradebook.jsx";
-import AIGrader from "./components/AIGrader.jsx";
+// AI Grader is shelved pending a decision on the cost model (BYOK vs. school-owned
+// key). The component is kept in src/components/AIGrader.jsx — re-add the import,
+// the TABS entry, and the render branch below to switch it back on.
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -25,7 +27,6 @@ const TABS = [
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
   { key: "gradebook",   label: "Gradebook"        },
-  { key: "aigrader",   label: "AI Grader"        },
   { key: "resources",   label: "Teacher Resources"},
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
@@ -260,7 +261,6 @@ export default function App() {
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
         {tab === "gradebook"   && <Gradebook    students={students} user={user} />}
-        {tab === "aigrader"   && <AIGrader     user={user} />}
 
         {tab === "resources" && (
           <>
