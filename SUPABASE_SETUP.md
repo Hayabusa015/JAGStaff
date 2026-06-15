@@ -397,8 +397,10 @@ $$;
 -- single teacher's private records, so they are OWNER-SCOPED: a teacher only
 -- sees their own rows, and an admin (staff_directory.is_admin) sees all. The
 -- client already filters by teacher_email; this enforces it at the database.
--- See supabase/migrations/20260615_owner_scoped_rls.sql for the gradebook_*
--- policies, which use these same helpers.
+-- The gradebook_* tables use the same helpers but are OWNER-ONLY (no admin
+-- override) — a teacher's gradebook is private to their account. See
+-- supabase/migrations/20260615_owner_scoped_rls.sql and the follow-up
+-- 20260615_gradebook_owner_only.sql.
 do $$
 declare
   t text;
