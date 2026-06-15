@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { GOLD } from "../constants.js";
+import { useRequisitions } from "../supabase.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function blankItem() { return { id: uid(), url: "", budget: "", description: "", qty: 1, unitPrice: "" }; }
@@ -91,6 +92,7 @@ function ReqPreview({ cart, user, onClose, onSubmit }) {
 }
 
 export default function Requisition({ user }) {
+  const { requisitions, addRequisition } = useRequisitions(user?.email);
   const [cart, setCart] = useState([blankVendor()]);
   const [showPreview, setShowPreview] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -131,7 +133,7 @@ export default function Requisition({ user }) {
         <ReqPreview
           cart={cart} user={user}
           onClose={() => setShowPreview(false)}
-          onSubmit={() => { setShowPreview(false); setSubmitted(true); }}
+          onSubmit={() => { addRequisition({ cart, total }); setShowPreview(false); setSubmitted(true); }}
         />
       )}
 
@@ -221,6 +223,25 @@ export default function Requisition({ user }) {
         </div>
         <button className="btn btn-primary" onClick={() => setShowPreview(true)}>Preview &amp; Review →</button>
       </div>
+
+      {requisitions.length > 0 && (
+        <div className="card mt2">
+          <div className="section-title">My Recent Requisitions</div>
+          {requisitions.map(r => {
+            const d = r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+            const vendorCount = Array.isArray(r.cart) ? r.cart.length : 0;
+            return (
+              <div key={r.id} className="flex items-center justify-between" style={{ padding: "0.55rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
+                <div>
+                  <span style={{ fontWeight: 600 }}>{fmt$(Number(r.total) || 0)}</span>
+                  <span className="text-muted" style={{ marginLeft: "0.5rem" }}>{vendorCount} vendor{vendorCount !== 1 ? "s" : ""}</span>
+                </div>
+                <span className="text-muted">{d}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

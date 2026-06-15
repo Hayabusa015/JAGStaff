@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { SEED_CEU, GOLD } from "../constants.js";
+import { GOLD } from "../constants.js";
+import { useCeu } from "../supabase.js";
 
 const TOTAL_HOURS = 180;
 const TOTAL_CREDITS = 6;
 const REIMB_MAX = 1500;
 
-export default function CeuTracker() {
-  const [history, setHistory] = useState(SEED_CEU);
+export default function CeuTracker({ user }) {
+  const { entries: history, reimb, addEntry, removeEntry, addReimb: addReimbEntry, removeReimb } = useCeu(user?.email);
   const [newCeu, setNewCeu] = useState({ name: "", hours: "" });
   const [expiry] = useState("2026-06-30");
-  const [reimb, setReimb] = useState([]);
   const [reimbForm, setReimbForm] = useState({ name: "", cost: "" });
   const [reimbErr, setReimbErr] = useState("");
 
@@ -23,8 +23,7 @@ export default function CeuTracker() {
   function addHours(e) {
     e.preventDefault();
     if (!newCeu.name.trim() || !newCeu.hours || Number(newCeu.hours) <= 0) return;
-    const month = new Date().toISOString().slice(0, 7);
-    setHistory(h => [...h, { id: Date.now().toString(), name: newCeu.name.trim(), hours: Number(newCeu.hours), date: month }]);
+    addEntry({ name: newCeu.name.trim(), hours: Number(newCeu.hours) });
     setNewCeu({ name: "", hours: "" });
   }
 
@@ -33,7 +32,7 @@ export default function CeuTracker() {
     const cost = Number(reimbForm.cost);
     if (!reimbForm.name.trim() || cost <= 0) { setReimbErr("Course name and valid cost required."); return; }
     if (totalReimb + cost > REIMB_MAX) { setReimbErr(`Exceeds $${REIMB_MAX} limit.`); return; }
-    setReimb(r => [...r, { id: Date.now().toString(), name: reimbForm.name.trim(), cost }]);
+    addReimbEntry({ name: reimbForm.name.trim(), cost });
     setReimbForm({ name: "", cost: "" });
     setReimbErr("");
   }
@@ -123,7 +122,7 @@ export default function CeuTracker() {
         {history.length === 0 && <p className="text-muted">No entries yet.</p>}
         <table className="stu-table">
           <thead>
-            <tr><th>Course / Activity</th><th>Hours</th><th>Date</th></tr>
+            <tr><th>Course / Activity</th><th>Hours</th><th>Date</th><th></th></tr>
           </thead>
           <tbody>
             {history.map(c => (
@@ -131,11 +130,37 @@ export default function CeuTracker() {
                 <td>{c.name}</td>
                 <td><span className="tag tag-gold">{c.hours} hrs</span></td>
                 <td className="text-muted">{c.date}</td>
+                <td style={{ textAlign: "right" }}>
+                  <button className="btn btn-danger btn-sm" onClick={() => removeEntry(c.id)}>✕</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Reimbursement expenses */}
+      {reimb.length > 0 && (
+        <div className="card mb2">
+          <div className="section-title">Reimbursement Expenses</div>
+          <table className="stu-table">
+            <thead>
+              <tr><th>Course</th><th>Cost</th><th></th></tr>
+            </thead>
+            <tbody>
+              {reimb.map(r => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td><span className="tag tag-green">${Number(r.cost).toFixed(2)}</span></td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="btn btn-danger btn-sm" onClick={() => removeReimb(r.id)}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Ohio Resources */}
       <div className="card">

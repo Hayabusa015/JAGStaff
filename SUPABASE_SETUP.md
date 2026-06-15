@@ -5,9 +5,10 @@ pass state across every logged-in staff member in real time. When a student
 signs out on the kiosk Chromebook, every teacher with the portal open sees
 them in "Currently Out" within ~1 second.
 
-Right now only hall passes are wired to Supabase — the rest of the app (CEU,
-requisitions, field trips, weekly events, rosters) is still local-only. The
-same pattern extends to those easily when you're ready.
+Hall passes, infractions, gradebook, G-Men, the student roster, weekly events,
+trip rosters, the CEU tracker, and the field-trip / requisition archives are all
+wired to Supabase. Run the SQL blocks in this guide to create their tables; any
+table you skip simply falls back to seeded in-memory mode (lost on refresh).
 
 > **Why Supabase over Firebase?** It's the same batteries-included experience
 > (database + auth + realtime + free tier) but on top of real Postgres, so the
@@ -270,3 +271,121 @@ alter publication supabase_realtime add table public.infractions;
 
 The `public.is_staff()` function was created in the hall pass setup step — it
 already covers this table without any changes.
+
+---
+
+## Weekly Events, Trip Rosters, CEU & request archives
+
+These five tabs used to keep everything in browser memory only, so a refresh
+wiped them out. They now persist to Supabase. Run this in the SQL Editor (it
+reuses the same `public.is_staff()` helper, so no extra setup):
+
+```sql
+-- ── Weekly Events (shared, school-wide) ──────────────────────────
+create table public.weekly_events (
+  id         uuid primary key default gen_random_uuid(),
+  type       text not null,
+  title      text not null,
+  date       date,
+  time       text,
+  details    text,
+  created_at timestamptz not null default now()
+);
+
+-- ── Trip Rosters (shared, school-wide) ───────────────────────────
+create table public.trip_rosters (
+  id          uuid primary key default gen_random_uuid(),
+  type        text not null,
+  title       text not null,
+  teacher     text,
+  date        date,
+  depart      text,
+  return_time text,
+  notes       text,
+  students    jsonb not null default '[]',   -- [{ name, grade }]
+  created_at  timestamptz not null default now()
+);
+
+-- ── CEU entries (per teacher) ────────────────────────────────────
+create table public.ceu_entries (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name          text not null,
+  hours         numeric not null,
+  entry_date    text,                         -- 'YYYY-MM'
+  created_at    timestamptz not null default now()
+);
+create index on public.ceu_entries (teacher_email);
+
+-- ── Tuition reimbursement expenses (per teacher) ─────────────────
+create table public.ceu_reimbursements (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name          text not null,
+  cost          numeric not null,
+  created_at    timestamptz not null default now()
+);
+create index on public.ceu_reimbursements (teacher_email);
+
+-- ── Field trip request archive (per teacher) ─────────────────────
+create table public.field_trip_requests (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  destination   text not null,
+  trip_date     date,
+  depart        text,
+  return_time   text,
+  grade         text,
+  student_count integer,
+  buses         boolean default false,
+  needs_sub     boolean default false,
+  chaperones    text,
+  created_at    timestamptz not null default now()
+);
+create index on public.field_trip_requests (teacher_email);
+
+-- ── Requisition archive (per teacher) ────────────────────────────
+-- The full cart (vendors/items) is stored as JSONB. Quote files are kept by
+-- name only — uploading the binaries would need a Supabase Storage bucket.
+create table public.requisitions (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  cart          jsonb not null default '[]',
+  total         numeric default 0,
+  created_at    timestamptz not null default now()
+);
+create index on public.requisitions (teacher_email);
+
+-- ── Row Level Security ───────────────────────────────────────────
+alter table public.weekly_events       enable row level security;
+alter table public.trip_rosters        enable row level security;
+alter table public.ceu_entries         enable row level security;
+alter table public.ceu_reimbursements  enable row level security;
+alter table public.field_trip_requests enable row level security;
+alter table public.requisitions        enable row level security;
+
+-- Any signed-in staff member may read + write these tables. (Per-teacher
+-- scoping for CEU / field trips / requisitions is done in the query layer;
+-- tighten with auth.jwt()->>'email' = teacher_email here if you want the DB
+-- to enforce it too.)
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'weekly_events','trip_rosters','ceu_entries','ceu_reimbursements',
+    'field_trip_requests','requisitions'
+  ] loop
+    execute format('create policy "staff read %1$s"   on public.%1$I for select using (public.is_staff());', t);
+    execute format('create policy "staff insert %1$s" on public.%1$I for insert with check (public.is_staff());', t);
+    execute format('create policy "staff delete %1$s" on public.%1$I for delete using (public.is_staff());', t);
+  end loop;
+end $$;
+
+-- ── Realtime (only the shared, school-wide tables need it) ────────
+alter publication supabase_realtime add table public.weekly_events;
+alter publication supabase_realtime add table public.trip_rosters;
+```
+
+> **Heads-up:** until you run the SQL above, these tabs fall back to the same
+> in-memory behavior as before (seeded demo data, lost on refresh). Once the
+> tables exist, everything persists and the shared tabs sync live across staff.

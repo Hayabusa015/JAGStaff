@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useFieldTrips } from "../supabase.js";
 
 const blank = { destination: "", date: "", depart: "", returnTime: "", grade: "", students: "", buses: "No", sub: "No", chaperones: "" };
 
-export default function FieldTrip() {
+export default function FieldTrip({ user }) {
+  const { trips, addTrip } = useFieldTrips(user?.email);
   const [form, setForm] = useState(blank);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState("");
@@ -10,6 +12,7 @@ export default function FieldTrip() {
   function submit(e) {
     e.preventDefault();
     if (!form.destination.trim() || !form.date) { setErr("Destination and date are required."); return; }
+    addTrip(form);
     setSubmitted(true);
   }
 
@@ -93,6 +96,26 @@ export default function FieldTrip() {
           </button>
         </form>
       </div>
+
+      {trips.length > 0 && (
+        <div className="card mt2">
+          <div className="section-title">My Recent Submissions</div>
+          {trips.map(t => {
+            const d = t.trip_date ? new Date(t.trip_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+            return (
+              <div key={t.id} className="flex items-center justify-between" style={{ padding: "0.55rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
+                <div>
+                  <span style={{ fontWeight: 600 }}>{t.destination}</span>
+                  <div className="text-muted mt1">
+                    {d}{t.grade ? ` · ${t.grade}` : ""}{t.student_count ? ` · ${t.student_count} students` : ""}
+                    {t.buses ? " · 🚌 Buses" : ""}{t.needs_sub ? " · Sub needed" : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
