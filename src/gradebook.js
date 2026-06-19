@@ -72,6 +72,12 @@ export function letterToGpa(letter) {
   return map[letter] ?? null;
 }
 
+// GPA directly from a percentage, via the active grading scale.
+export function gpaFromPct(pct, scale = DEFAULT_SCALE) {
+  if (pct == null || isNaN(pct)) return null;
+  return letterToGpa(letterGrade(pct, scale));
+}
+
 // Grade tier: for cell color coding
 export function gradeTier(pct) {
   if (pct == null) return "ungraded";
@@ -108,8 +114,9 @@ export function rubricTotal(rubricScores, rubric) {
   return rubric.reduce((sum, c) => sum + (Number(rubricScores[c.id] ?? 0)), 0);
 }
 
-// Effective score for a grade row (handles retake, rubric, excused, missing)
-export function effectivePoints(grade, assignment) {
+// Effective score for a grade row (handles retake, rubric, excused, missing, late penalty)
+// opts.latePenaltyPct (0-100): when grade.late, points are reduced by that percentage.
+export function effectivePoints(grade, assignment, opts = {}) {
   if (!grade || grade.excused) return null; // excused = excluded from average
   if (grade.missing) return 0;
   let pts = grade.points_earned;
@@ -119,12 +126,15 @@ export function effectivePoints(grade, assignment) {
   if (grade.retake_score != null) {
     pts = resolveRetake(pts, grade.retake_score, grade.retake_policy || "higher");
   }
+  if (pts != null && grade.late && opts.latePenaltyPct) {
+    pts = Math.max(0, pts * (1 - Number(opts.latePenaltyPct) / 100));
+  }
   return pts;
 }
 
 // Percentage for one grade (0-100 scale)
-export function gradePct(grade, assignment) {
-  const pts = effectivePoints(grade, assignment);
+export function gradePct(grade, assignment, opts = {}) {
+  const pts = effectivePoints(grade, assignment, opts);
   if (pts == null || !assignment?.max_points) return null;
   return Math.min(100, (pts / assignment.max_points) * 100);
 }
@@ -148,8 +158,9 @@ export function isPastDue(assignment, today = new Date(), graceDays = 0) {
  * @param {Array} assignments - all assignments for the period
  * @param {Object} gradeMap - { assignment_id: grade_row }
  * @param {Array} categories - [{ name, weight, drop_lowest }] weights are 0-100 summing to 100
- * @param {Object} [opts] - { autoZeroMissing, graceDays, today } — when autoZeroMissing is
- *   true, a blank (ungraded, non-excused) assignment that is past due counts as 0%.
+ * @param {Object} [opts] - { autoZeroMissing, graceDays, today, latePenaltyPct } — when
+ *   autoZeroMissing is true, a blank (ungraded, non-excused) past-due assignment counts as 0%;
+ *   latePenaltyPct reduces points on grades flagged late.
  * @returns {{ pct: number|null, byCategory: { [name]: { pct, count, dropped } } }}
  */
 export function calcPeriodGrade(assignments, gradeMap, categories, opts = {}) {
@@ -162,7 +173,7 @@ export function calcPeriodGrade(assignments, gradeMap, categories, opts = {}) {
     for (const a of catAssignments) {
       const g = gradeMap[a.id];
       if (g?.excused) continue;
-      const pct = gradePct(g, a);
+      const pct = gradePct(g, a, opts);
       if (pct != null) { scored.push(pct); continue; }
       if (g?.missing) { scored.push(0); continue; }
       // Blank (no grade row, or a saved row with no score): auto-zero if past due.
@@ -185,7 +196,7 @@ export function calcPeriodGrade(assignments, gradeMap, categories, opts = {}) {
   let ecBonus = 0;
   for (const a of ecAssignments) {
     const g = gradeMap[a.id];
-    const pts = effectivePoints(g, a);
+    const pts = effectivePoints(g, a, opts);
     if (pts != null && a.max_points) ecBonus += (pts / a.max_points) * 100;
   }
 
@@ -237,12 +248,12 @@ function chronological(assignments) {
  * compares the mean percentage. Threshold ±3 pts.
  * @returns {{ direction: "up"|"down"|"flat", delta: number|null }}
  */
-export function gradeTrend(assignments, gradeMap) {
+export function gradeTrend(assignments, gradeMap, opts = {}) {
   const pcts = chronological(assignments)
     .map(a => {
       const g = gradeMap[a.id];
       if (g?.excused) return null;
-      return gradePct(g, a) ?? (g?.missing ? 0 : null);
+      return gradePct(g, a, opts) ?? (g?.missing ? 0 : null);
     })
     .filter(p => p != null);
   if (pcts.length < 2) return { direction: "flat", delta: null };
@@ -274,9 +285,9 @@ export function missingItemsFor(assignments, gradeMap, { today = new Date(), gra
 }
 
 // Class statistics for one assignment
-export function assignmentStats(assignment, grades) {
+export function assignmentStats(assignment, grades, opts = {}) {
   const pcts = grades
-    .map(g => gradePct(g, assignment))
+    .map(g => gradePct(g, assignment, opts))
     .filter(p => p != null);
   if (!pcts.length) return null;
   const avg = pcts.reduce((s, v) => s + v, 0) / pcts.length;

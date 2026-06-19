@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { GOLD } from "../constants.js";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, gradePct, assignmentStats,
-  gradeTrend, missingItemsFor, DEFAULT_SCALE, DEFAULT_PERIOD_WEIGHTS,
+  gradeTrend, missingItemsFor, gpaFromPct, DEFAULT_SCALE, DEFAULT_PERIOD_WEIGHTS,
 } from "../gradebook.js";
 import { mean, median, tierColor, Kpi, HBar, VBars, LineChart, Card, RankList, Empty } from "./charts.jsx";
 
@@ -12,7 +12,7 @@ const PERIOD_KEYS   = { 1: 1, 2: 2, 3: 3, 4: 4, 5: "midterm", 6: "final" };
 const DIST_COLORS   = { A: "#22c55e", B: "#84cc16", C: "#eab308", D: "#f97316", F: "#ef4444" };
 
 // ── Main analytics view ──────────────────────────────────────────────────────
-export default function GradebookAnalytics({ students, assignments, grades, profiles, settings }) {
+export default function GradebookAnalytics({ students, assignments, grades, profiles, settings, onOpenStudent }) {
   const [view, setView] = useState("semester"); // 1-6 (period) or "semester"
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
@@ -172,6 +172,7 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
   }, [students, scopeAssignments, gradeMaps, autoZeroOpts]);
 
   const topPerformers = studentScores.slice(0, 5);
+  const honorRoll = studentScores.filter(x => (gpaFromPct(x.pct, scale) ?? 0) >= 3.5);
 
   if (!categories.length) {
     return <div className="card" style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,0.4)" }}>Set up a grade profile first to see analytics.</div>;
@@ -260,19 +261,31 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
             )}
           </Card>
 
+          {/* Class rank & honor roll */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
+            <Card title={`Class Rank — ${scopeLabel}`}>
+              <RankList onItemClick={onOpenStudent} items={studentScores.slice(0, 12).map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: `${Math.round(x.pct)}% · ${(gpaFromPct(x.pct, scale) ?? 0).toFixed(1)}`, color: tierColor(x.pct) }))} />
+            </Card>
+            <Card title={`🏅 Honor Roll (GPA ≥ 3.5) — ${honorRoll.length}`}>
+              {honorRoll.length === 0 ? <Empty /> : (
+                <RankList onItemClick={onOpenStudent} items={honorRoll.map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: (gpaFromPct(x.pct, scale) ?? 0).toFixed(1), color: "#22c55e" }))} />
+              )}
+            </Card>
+          </div>
+
           {/* People lists */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
             <Card title="Top Performers">
-              <RankList items={topPerformers.map(x => ({ name: `${x.student.lastName}, ${x.student.firstName}`, value: `${Math.round(x.pct)}%`, color: tierColor(x.pct) }))} />
+              <RankList onItemClick={onOpenStudent} items={topPerformers.map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: `${Math.round(x.pct)}%`, color: tierColor(x.pct) }))} />
             </Card>
             <Card title="📈 Most Improved">
               {improving.length === 0 ? <Empty /> : (
-                <RankList items={improving.map(x => ({ name: `${x.student.lastName}, ${x.student.firstName}`, value: `▲ ${Math.round(x.trend.delta)}`, color: "#22c55e" }))} />
+                <RankList onItemClick={onOpenStudent} items={improving.map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: `▲ ${Math.round(x.trend.delta)}`, color: "#22c55e" }))} />
               )}
             </Card>
             <Card title="📉 Needs Attention">
               {declining.length === 0 ? <Empty /> : (
-                <RankList items={declining.map(x => ({ name: `${x.student.lastName}, ${x.student.firstName}`, value: `▼ ${Math.abs(Math.round(x.trend.delta))}`, color: "#ef4444" }))} />
+                <RankList onItemClick={onOpenStudent} items={declining.map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: `▼ ${Math.abs(Math.round(x.trend.delta))}`, color: "#ef4444" }))} />
               )}
             </Card>
           </div>
@@ -288,7 +301,7 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
                 })}
               </Card>
               <Card title="Students with Most Missing">
-                <RankList items={missing.byStudent.slice(0, 6).map(x => ({ name: `${x.student.lastName}, ${x.student.firstName}`, value: `${x.count}`, color: "#ef4444" }))} />
+                <RankList onItemClick={onOpenStudent} items={missing.byStudent.slice(0, 6).map(x => ({ student: x.student, name: `${x.student.lastName}, ${x.student.firstName}`, value: `${x.count}`, color: "#ef4444" }))} />
               </Card>
             </div>
           )}

@@ -56,47 +56,72 @@ export function VBars({ data, height = 130 }) {
 
 // Inline SVG line chart for trends (0-100 scale). Skips null points (gaps).
 // theme "light" uses dark gridlines/labels so it prints legibly on white paper.
-export function LineChart({ data, height = 170, color = GOLD, theme = "dark" }) {
+// Pass a single `data` array, or `series=[{ data, color, label }]` for overlays.
+export function LineChart({ data, series, height = 170, color = GOLD, theme = "dark" }) {
   const W = 640, H = height, padL = 34, padR = 12, padT = 12, padB = 26;
   const light = theme === "light";
   const gridStroke = light ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.08)";
   const axisFill = light ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.35)";
   const valFill = light ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.6)";
   const labelFill = light ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.45)";
-  const n = data.length;
-  const xFor = i => padL + (n <= 1 ? 0 : (i * (W - padL - padR)) / (n - 1));
+
+  const allSeries = series && series.length ? series : [{ data: data || [], color, label: null }];
+  const single = allSeries.length === 1;
+  const maxLen = Math.max(1, ...allSeries.map(s => s.data.length));
+  const xLabels = (allSeries.reduce((a, b) => b.data.length > a.data.length ? b : a, allSeries[0]).data) || [];
+  const xFor = i => padL + (maxLen <= 1 ? 0 : (i * (W - padL - padR)) / (maxLen - 1));
   const yFor = v => padT + (1 - v / 100) * (H - padT - padB);
-  const pts = data.map((d, i) => ({ ...d, x: xFor(i), y: d.value == null ? null : yFor(d.value) }));
-  const segments = [];
-  let cur = [];
-  pts.forEach(p => {
-    if (p.y == null) { if (cur.length) { segments.push(cur); cur = []; } }
-    else cur.push(p);
-  });
-  if (cur.length) segments.push(cur);
   const gridY = [0, 25, 50, 75, 100];
+  const hasLegend = allSeries.some(s => s.label);
+
+  const buildPts = sData => sData.map((d, i) => ({ ...d, x: xFor(i), y: d.value == null ? null : yFor(d.value) }));
+  const buildSegments = pts => {
+    const segs = []; let cur = [];
+    pts.forEach(p => { if (p.y == null) { if (cur.length) { segs.push(cur); cur = []; } } else cur.push(p); });
+    if (cur.length) segs.push(cur);
+    return segs;
+  };
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
-      {gridY.map(g => (
-        <g key={g}>
-          <line x1={padL} x2={W - padR} y1={yFor(g)} y2={yFor(g)} stroke={gridStroke} strokeWidth="1" />
-          <text x={padL - 6} y={yFor(g) + 3} fontSize="9" fill={axisFill} textAnchor="end">{g}</text>
-        </g>
-      ))}
-      {segments.map((seg, si) => (
-        <polyline key={si} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          points={seg.map(p => `${p.x},${p.y}`).join(" ")} />
-      ))}
-      {pts.map((p, i) => p.y == null ? null : (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r="3.2" fill={color} />
-          <text x={p.x} y={p.y - 7} fontSize="9" fill={valFill} textAnchor="middle">{Math.round(p.value)}</text>
-        </g>
-      ))}
-      {pts.map((p, i) => (
-        <text key={`l${i}`} x={p.x} y={H - 8} fontSize="9" fill={labelFill} textAnchor="middle">{p.label}</text>
-      ))}
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+        {gridY.map(g => (
+          <g key={g}>
+            <line x1={padL} x2={W - padR} y1={yFor(g)} y2={yFor(g)} stroke={gridStroke} strokeWidth="1" />
+            <text x={padL - 6} y={yFor(g) + 3} fontSize="9" fill={axisFill} textAnchor="end">{g}</text>
+          </g>
+        ))}
+        {allSeries.map((s, si) => {
+          const pts = buildPts(s.data);
+          return (
+            <g key={si}>
+              {buildSegments(pts).map((seg, gi) => (
+                <polyline key={gi} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  points={seg.map(p => `${p.x},${p.y}`).join(" ")} />
+              ))}
+              {pts.map((p, i) => p.y == null ? null : (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y} r="3.2" fill={s.color} />
+                  {single && <text x={p.x} y={p.y - 7} fontSize="9" fill={valFill} textAnchor="middle">{Math.round(p.value)}</text>}
+                </g>
+              ))}
+            </g>
+          );
+        })}
+        {xLabels.map((p, i) => (
+          <text key={`l${i}`} x={xFor(i)} y={H - 8} fontSize="9" fill={labelFill} textAnchor="middle">{p.label}</text>
+        ))}
+      </svg>
+      {hasLegend && (
+        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
+          {allSeries.map((s, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.72rem", color: light ? "#444" : "rgba(255,255,255,0.55)" }}>
+              <span style={{ width: 14, height: 3, background: s.color, borderRadius: 2, display: "inline-block" }} />{s.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -112,13 +137,18 @@ export function Card({ title, right, children, className }) {
   );
 }
 
-export function RankList({ items }) {
+export function RankList({ items, onItemClick }) {
   if (!items.length) return <Empty />;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
       {items.map((it, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.35rem 0.6rem", background: "rgba(255,255,255,0.03)", borderRadius: 6 }}>
-          <span style={{ fontSize: "0.82rem" }}><span style={{ color: "rgba(255,255,255,0.3)", marginRight: 6 }}>{i + 1}</span>{it.name}</span>
+        <div key={i} onClick={onItemClick && it.student ? () => onItemClick(it.student) : undefined}
+          title={onItemClick && it.student ? "Open full analytics" : undefined}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.35rem 0.6rem", background: "rgba(255,255,255,0.03)", borderRadius: 6, cursor: onItemClick && it.student ? "pointer" : "default" }}>
+          <span style={{ fontSize: "0.82rem" }}>
+            <span style={{ color: "rgba(255,255,255,0.3)", marginRight: 6 }}>{i + 1}</span>
+            <span style={onItemClick && it.student ? { borderBottom: "1px dotted rgba(245,192,37,0.5)" } : undefined}>{it.name}</span>
+          </span>
           <span style={{ fontSize: "0.82rem", fontWeight: 700, color: it.color || "#fff" }}>{it.value}</span>
         </div>
       ))}

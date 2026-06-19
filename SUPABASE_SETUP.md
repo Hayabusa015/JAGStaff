@@ -314,6 +314,7 @@ create table if not exists public.gradebook_grades (
   points_earned   numeric,
   excused         boolean not null default false,
   missing         boolean not null default false,
+  late            boolean not null default false,
   retake_score    numeric,
   retake_policy   text default 'higher',
   rubric_scores   jsonb,                       -- { criterion_id: score }
@@ -331,6 +332,7 @@ create table if not exists public.gradebook_settings (
   auto_email_drop     boolean not null default true,
   auto_zero_missing   boolean not null default false,
   auto_zero_grace_days integer not null default 0,
+  late_penalty_pct    integer not null default 0,
   updated_at          timestamptz,
   updated_by          text
 );
@@ -369,8 +371,10 @@ nullable/defaulted, so existing rows are unaffected:
 ```sql
 alter table public.gradebook_assignments add column if not exists sort_order integer;
 alter table public.gradebook_grades      add column if not exists rubric_comments jsonb;
+alter table public.gradebook_grades      add column if not exists late boolean not null default false;
 alter table public.gradebook_settings    add column if not exists auto_zero_missing boolean not null default false;
 alter table public.gradebook_settings    add column if not exists auto_zero_grace_days integer not null default 0;
+alter table public.gradebook_settings    add column if not exists late_penalty_pct integer not null default 0;
 ```
 
 These back the drag-drop column ordering, per-criterion rubric comments, and the

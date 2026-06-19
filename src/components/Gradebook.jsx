@@ -6,7 +6,9 @@ import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, gradePct, gradeTier,
   effectivePoints, assignmentStats, rubricTotal, DEFAULT_SCALE,
   DEFAULT_PERIOD_WEIGHTS, letterRank, gradeTrend, isPastDue, missingItemsFor,
+  gpaFromPct,
 } from "../gradebook.js";
+import { toCSV, parseCSV, downloadCSV } from "../csv.js";
 import GradebookSettings from "./GradebookSettings.jsx";
 import GradebookRubric from "./GradebookRubric.jsx";
 import GradebookMissingWork from "./GradebookMissingWork.jsx";
@@ -40,7 +42,9 @@ function cellColor(pct) {
 function pctText(pct) { return pct == null ? "—" : `${Math.round(pct)}%`; }
 
 // ── Assignment Form ──────────────────────────────────────────────────────────
-function AssignmentForm({ initial, categories, period, onSave, onClose }) {
+// `creating` forces create-mode labels even when `initial` is prefilled (duplicates).
+function AssignmentForm({ initial, categories, period, onSave, onClose, creating }) {
+  const isEdit = !!initial && !creating;
   const [form, setForm] = useState(initial || {
     name: "", category: categories[0]?.name || "Tests", grading_period: period,
     max_points: 100, due_date: "", description: "", extra_credit: false,
@@ -59,7 +63,7 @@ function AssignmentForm({ initial, categories, period, onSave, onClose }) {
   return (
     <div className="card" style={{ border: `1px solid ${GOLD}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-        <div className="section-title" style={{ marginBottom: 0 }}>{initial ? "Edit Assignment" : "New Assignment"}</div>
+        <div className="section-title" style={{ marginBottom: 0 }}>{isEdit ? "Edit Assignment" : creating ? "Duplicate Assignment" : "New Assignment"}</div>
         <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "1.1rem" }}>✕</button>
       </div>
 
@@ -131,7 +135,7 @@ function AssignmentForm({ initial, categories, period, onSave, onClose }) {
           if (rubricMode && final.rubric?.length) final.max_points = rubricTotal;
           onSave(final);
         }} style={{ background: form.name ? GOLD : "rgba(255,255,255,0.1)", border: "none", color: form.name ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, borderRadius: 6, padding: "0.4rem 1.25rem", cursor: form.name ? "pointer" : "not-allowed" }}>
-          {initial ? "Save Changes" : "Add Assignment"}
+          {isEdit ? "Save Changes" : "Add Assignment"}
         </button>
       </div>
     </div>
@@ -143,9 +147,10 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
 
-  const pts = effectivePoints(grade, assignment);
-  const pct = gradePct(grade, assignment);
+  const pts = effectivePoints(grade, assignment, autoZeroOpts);
+  const pct = gradePct(grade, assignment, autoZeroOpts);
   const hasRubric = !!(assignment?.rubric?.length);
+  const latePct = autoZeroOpts?.latePenaltyPct || 0;
   const autoZeroed = pts == null && !grade?.excused && !grade?.missing &&
     autoZeroOpts?.autoZeroMissing && isPastDue(assignment, autoZeroOpts.today, autoZeroOpts.graceDays);
 
@@ -154,6 +159,7 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
       points_earned: grade?.points_earned ?? "",
       excused: grade?.excused || false,
       missing: grade?.missing || false,
+      late: grade?.late || false,
       retake_score: grade?.retake_score ?? "",
       retake_policy: grade?.retake_policy || "higher",
       notes: grade?.notes || "",
@@ -176,14 +182,17 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
   // ── Quick-entry mode: a bare input with spreadsheet keyboard navigation ──
   if (quickEntry && !hasRubric) {
     const display = grade?.excused ? "EXC" : grade?.missing ? "MIS"
-      : grade?.points_earned != null ? String(grade.points_earned) : "";
+      : grade?.points_earned != null ? String(grade.points_earned) + (grade?.late ? " L" : "") : "";
     async function quickCommit(val) {
       const trimmed = (val ?? "").trim().toLowerCase();
       if (trimmed === "e") return onSave({ excused: true, missing: false, points_earned: null });
       if (trimmed === "m") return onSave({ missing: true, excused: false, points_earned: null });
-      if (trimmed === "x" || trimmed === "") return onSave({ points_earned: null, missing: false, excused: false });
-      const n = Number(trimmed);
-      if (!isNaN(n)) return onSave({ points_earned: n, missing: false, excused: false });
+      if (trimmed === "l") return onSave({ late: !grade?.late }); // toggle late, keep score
+      if (trimmed === "x" || trimmed === "") return onSave({ points_earned: null, missing: false, excused: false, late: false });
+      // Trailing "l" marks the entry late, e.g. "85l".
+      const late = /l$/.test(trimmed);
+      const n = Number(late ? trimmed.slice(0, -1) : trimmed);
+      if (!isNaN(n)) return onSave({ points_earned: n, missing: false, excused: false, late });
     }
     return (
       <td style={{ padding: 2, textAlign: "center", background: grade?.missing ? "rgba(249,115,22,0.1)" : grade?.excused ? "rgba(255,255,255,0.04)" : cellColor(autoZeroed ? 0 : pct), minWidth: 72 }}>
@@ -226,8 +235,13 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
         <div style={{ display: "flex", gap: "0.25rem", marginBottom: "0.4rem" }}>
           <button onClick={() => setDraft(d => ({ ...d, missing: true, excused: false, points_earned: "" }))} style={{ ...inp, flex: 1, cursor: "pointer", color: draft.missing ? "#000" : "#f97316", background: draft.missing ? "#f97316" : "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", fontSize: "0.68rem" }}>Missing</button>
           <button onClick={() => setDraft(d => ({ ...d, excused: true, missing: false, points_earned: "" }))} style={{ ...inp, flex: 1, cursor: "pointer", color: draft.excused ? "#000" : "rgba(255,255,255,0.7)", background: draft.excused ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.68rem" }}>Excused</button>
-          <button onClick={() => setDraft(d => ({ ...d, missing: false, excused: false }))} style={{ ...inp, flex: 1, cursor: "pointer", fontSize: "0.68rem" }}>Clear</button>
+          <button onClick={() => setDraft(d => ({ ...d, missing: false, excused: false, late: false }))} style={{ ...inp, flex: 1, cursor: "pointer", fontSize: "0.68rem" }}>Clear</button>
         </div>
+        {latePct > 0 && (
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.7rem", cursor: "pointer", marginBottom: "0.4rem", color: draft.late ? "#f97316" : "rgba(255,255,255,0.6)" }}>
+            <input type="checkbox" checked={!!draft.late} onChange={e => setDraft(d => ({ ...d, late: e.target.checked }))} /> Late (−{latePct}%)
+          </label>
+        )}
         <div style={{ marginBottom: "0.4rem" }}>
           <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Retake score</div>
           <input type="number" min={0} max={assignment.max_points} value={draft.retake_score} onChange={e => setDraft(d => ({ ...d, retake_score: e.target.value }))} placeholder="—" style={{ ...inp, width: "100%", boxSizing: "border-box", marginBottom: "0.25rem" }} />
@@ -256,8 +270,9 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
         <span style={{ fontSize: "0.7rem", color: "#f97316" }}>MIS</span>
       ) : pts != null ? (
         <>
-          <div style={{ fontWeight: 700, fontSize: "0.82rem" }}>{pts}</div>
+          <div style={{ fontWeight: 700, fontSize: "0.82rem" }}>{Math.round(pts)}</div>
           <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)" }}>{Math.round(pct)}%</div>
+          {grade?.late && latePct > 0 && <div style={{ fontSize: "0.6rem", color: "#f97316" }}>late −{latePct}%</div>}
           {grade?.retake_score != null && <div style={{ fontSize: "0.6rem", color: "#60a5fa" }}>↩ retake</div>}
           {hasRubric && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.35)" }}>📋</div>}
         </>
@@ -520,6 +535,8 @@ export default function Gradebook({ students, user }) {
   const [bulkMenu, setBulkMenu] = useState(null); // assignment id with open bulk menu
   const [dragId, setDragId] = useState(null);      // assignment being dragged
   const [detailStudent, setDetailStudent] = useState(null); // student analytics modal
+  const [importOpen, setImportOpen] = useState(false);      // CSV import modal
+  const [cloneDraft, setCloneDraft] = useState(null);       // duplicated assignment draft
   const cellRefs = useRef({});                     // { "si:ai": inputEl } for quick-entry nav
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
@@ -529,8 +546,9 @@ export default function Gradebook({ students, user }) {
   const autoZeroOpts = useMemo(() => ({
     autoZeroMissing: settings?.auto_zero_missing ?? false,
     graceDays: settings?.auto_zero_grace_days ?? 0,
+    latePenaltyPct: settings?.late_penalty_pct ?? 0,
     today: new Date(),
-  }), [settings?.auto_zero_missing, settings?.auto_zero_grace_days]);
+  }), [settings?.auto_zero_missing, settings?.auto_zero_grace_days, settings?.late_penalty_pct]);
 
   // Order: category index → sort_order → due_date → created_at.
   const periodAssignments = useMemo(() =>
@@ -624,6 +642,66 @@ export default function Gradebook({ students, user }) {
       } else if (action === "clear") {
         if (existing) await handleSaveGrade(assignment.id, s, { points_earned: null, missing: false, excused: false });
       }
+    }
+  }
+
+  // ── CSV export / import (current period grid) ──────────────────────────────
+  function exportGradesCSV() {
+    const header = ["Student", ...periodAssignments.map(a => a.name), "Period %", "Letter"];
+    const rows = [header];
+    for (const s of sortedStudents) {
+      const sg = gradeMap[s.id] || {};
+      const row = [`${s.lastName}, ${s.firstName}`];
+      for (const a of periodAssignments) {
+        const g = sg[a.id];
+        row.push(g?.excused ? "EXC" : g?.missing ? "MIS" : g?.points_earned != null ? g.points_earned : "");
+      }
+      const { pct } = calcPeriodGrade(periodAssignments, sg, categories, autoZeroOpts);
+      row.push(pct != null ? Math.round(pct) : "");
+      row.push(pct != null ? letterGrade(pct, scale) : "");
+      rows.push(row);
+    }
+    downloadCSV(`gradebook-${PERIOD_LABELS[period].replace(/\s+/g, "-")}.csv`, toCSV(rows));
+  }
+
+  async function applyImport(updates) {
+    for (const u of updates) await handleSaveGrade(u.assignmentId, u.student, u.data);
+    setImportOpen(false);
+  }
+
+  // Duplicate an assignment into a fresh "create" draft.
+  function duplicateAssignment(a) {
+    setEditingAssignment(null);
+    setShowForm(false);
+    setCloneDraft({
+      name: `${a.name} (copy)`,
+      category: a.category,
+      grading_period: a.grading_period,
+      max_points: a.max_points,
+      due_date: "",
+      description: a.description || "",
+      extra_credit: !!a.extra_credit,
+      rubric: (a.rubric || []).map((c, i) => ({ ...c, id: `r-${Date.now()}-${i}` })),
+    });
+  }
+
+  // ── Curve a single assignment column ───────────────────────────────────────
+  async function curveColumn(assignment, mode, value) {
+    setBulkMenu(null);
+    // Collect raw earned points for graded, non-excused/missing students.
+    const rows = sortedStudents.map(s => ({ s, g: gradeMap[s.id]?.[assignment.id] }))
+      .filter(({ g }) => g && !g.excused && !g.missing && g.points_earned != null);
+    if (!rows.length) return;
+    const max = assignment.max_points || 100;
+    const curMax = Math.max(...rows.map(({ g }) => g.points_earned));
+    const curAvg = rows.reduce((s, { g }) => s + g.points_earned, 0) / rows.length;
+    for (const { s, g } of rows) {
+      let np = g.points_earned;
+      if (mode === "add") np = g.points_earned + Number(value);
+      else if (mode === "scaleMax" && curMax > 0) np = g.points_earned * (max / curMax);
+      else if (mode === "setAvg") { const targetPts = (Number(value) / 100) * max; np = g.points_earned + (targetPts - curAvg); }
+      np = Math.max(0, Math.min(max, Math.round(np * 10) / 10));
+      await handleSaveGrade(assignment.id, s, { points_earned: np, missing: false, excused: false });
     }
   }
 
@@ -724,14 +802,16 @@ export default function Gradebook({ students, user }) {
                 {p <= 4 ? `P${p}` : p === 5 ? "Mid" : "Final"}
               </button>
             ))}
-            <button onClick={() => setQuickEntry(q => !q)} title="Type scores directly; use ↑ ↓ Tab to move, and e=Excused m=Missing x=clear"
+            <button onClick={() => setQuickEntry(q => !q)} title="Type scores directly; use ↑ ↓ Tab to move, and e=Excused m=Missing l=Late x=clear"
               style={{ marginLeft: "auto", background: quickEntry ? GOLD : "rgba(255,255,255,0.06)", border: quickEntry ? "none" : "1px solid rgba(255,255,255,0.12)", color: quickEntry ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
               ⚡ Quick Entry{quickEntry ? " On" : ""}
             </button>
+            <button onClick={exportGradesCSV} className="btn btn-ghost btn-sm" title="Export this period's grid to CSV">⬇ CSV</button>
+            <button onClick={() => setImportOpen(true)} className="btn btn-ghost btn-sm" title="Import scores from a CSV">⬆ Import</button>
           </div>
           {quickEntry && (
             <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.5rem" }}>
-              Type a score and press <strong>Enter</strong>/<strong>↓</strong> for the next student, <strong>Tab</strong>/<strong>→</strong> for the next assignment. Shortcuts: <strong>e</strong>=Excused, <strong>m</strong>=Missing, <strong>x</strong>=clear. Rubric columns still open the rubric editor.
+              Type a score and press <strong>Enter</strong>/<strong>↓</strong> for the next student, <strong>Tab</strong>/<strong>→</strong> for the next assignment. Shortcuts: <strong>e</strong>=Excused, <strong>m</strong>=Missing, <strong>l</strong>=Late (e.g. <strong>85l</strong>), <strong>x</strong>=clear. Rubric columns still open the rubric editor.
             </div>
           )}
 
@@ -753,6 +833,7 @@ export default function Gradebook({ students, user }) {
                     })}
                     <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 80, borderLeft: "1px solid rgba(255,255,255,0.1)" }}>Period %</th>
                     <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 56 }}>Grade</th>
+                    <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 48 }}>GPA</th>
                   </tr>
                   {/* Assignment names */}
                   <tr style={{ borderBottom: "2px solid rgba(255,255,255,0.1)" }}>
@@ -778,6 +859,13 @@ export default function Gradebook({ students, user }) {
                               )}
                               <button onClick={() => bulkColumn(a, "zeroBlanks")} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Mark blanks Missing (0)</button>
                               <button onClick={() => bulkColumn(a, "excuseBlanks")} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Mark blanks Excused</button>
+                              {!a.rubric?.length && <>
+                                <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", margin: "4px 0" }} />
+                                <button onClick={() => { const v = prompt("Add how many points to every graded score? (curve)"); if (v != null && v !== "" && !isNaN(Number(v))) curveColumn(a, "add", v); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Curve: add points…</button>
+                                <button onClick={() => { if (confirm(`Scale scores so the top score becomes ${a.max_points} (100%)?`)) curveColumn(a, "scaleMax"); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Curve: scale top to 100%</button>
+                                <button onClick={() => { const v = prompt("Set the class average for this assignment to what % ?"); if (v != null && v !== "" && !isNaN(Number(v))) curveColumn(a, "setAvg", v); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Curve: set average to…</button>
+                              </>}
+                              <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", margin: "4px 0" }} />
                               <button onClick={() => { if (confirm("Clear all scores in this column?")) bulkColumn(a, "clear"); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", fontSize: "0.74rem", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>Clear column</button>
                             </div>
                           )}
@@ -785,6 +873,7 @@ export default function Gradebook({ students, user }) {
                       );
                     })}
                     <th style={{ borderLeft: "1px solid rgba(255,255,255,0.1)" }} />
+                    <th />
                     <th />
                   </tr>
                 </thead>
@@ -825,6 +914,9 @@ export default function Gradebook({ students, user }) {
                         <td style={{ textAlign: "center", fontWeight: 800, fontSize: "1rem", color: TIER_COLORS[tier] }}>
                           {pct != null ? letter : "—"}
                         </td>
+                        <td style={{ textAlign: "center", fontWeight: 700, fontSize: "0.82rem", color: "rgba(255,255,255,0.55)" }}>
+                          {pct != null ? (gpaFromPct(pct, scale) ?? "—").toFixed?.(1) ?? "—" : "—"}
+                        </td>
                       </tr>
                     );
                   })}
@@ -839,7 +931,7 @@ export default function Gradebook({ students, user }) {
                         </td>
                       );
                     })}
-                    <td colSpan={2} style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
+                    <td colSpan={3} style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
                       {(() => {
                         const avgs = sortedStudents.map(s => calcPeriodGrade(periodAssignments, gradeMap[s.id] || {}, categories, autoZeroOpts).pct).filter(Boolean);
                         const avg = avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : null;
@@ -873,6 +965,7 @@ export default function Gradebook({ students, user }) {
 
           {showForm && !editingAssignment && <AssignmentForm categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} />}
           {editingAssignment && <AssignmentForm initial={editingAssignment} categories={categories} period={period} onSave={handleUpdateAssignment} onClose={() => setEditingAssignment(null)} />}
+          {cloneDraft && <AssignmentForm initial={cloneDraft} creating categories={categories} period={period} onSave={async d => { await handleAddAssignment(d); setCloneDraft(null); }} onClose={() => setCloneDraft(null)} />}
 
           {categories.map(cat => {
             const catAssignments = assignments.filter(a => a.grading_period === period && a.category === cat.name)
@@ -912,6 +1005,7 @@ export default function Gradebook({ students, user }) {
                         )}
                         <div style={{ display: "flex", gap: "0.4rem" }}>
                           <button onClick={() => { setEditingAssignment(a); setShowForm(false); }} style={{ ...inp, cursor: "pointer", fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}>Edit</button>
+                          <button onClick={() => duplicateAssignment(a)} style={{ ...inp, cursor: "pointer", fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}>Duplicate</button>
                           <button onClick={() => deleteAssignment(a.id)} style={{ ...inp, cursor: "pointer", fontSize: "0.75rem", padding: "0.25rem 0.6rem", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>Delete</button>
                         </div>
                       </div>
@@ -936,7 +1030,7 @@ export default function Gradebook({ students, user }) {
 
       {/* ── ANALYTICS tab ───────────────────────────────────────────────── */}
       {subTab === "analytics" && (
-        <GradebookAnalytics students={students} assignments={assignments} grades={grades} profiles={profiles} settings={settings} />
+        <GradebookAnalytics students={students} assignments={assignments} grades={grades} profiles={profiles} settings={settings} onOpenStudent={setDetailStudent} />
       )}
 
       {/* ── REPORTS tab ─────────────────────────────────────────────────── */}
@@ -967,10 +1061,22 @@ export default function Gradebook({ students, user }) {
         />
       )}
 
+      {/* ── CSV import modal ──────────────────────────────────────────────── */}
+      {importOpen && (
+        <ImportGradesModal
+          periodAssignments={periodAssignments}
+          students={sortedStudents}
+          periodLabel={PERIOD_LABELS[period]}
+          onApply={applyImport}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+
       {/* ── Student analytics & history modal ─────────────────────────────── */}
       {detailStudent && (
         <GradebookStudentDetail
           student={detailStudent}
+          students={students}
           assignments={assignments}
           grades={grades}
           profiles={profiles}
@@ -979,6 +1085,100 @@ export default function Gradebook({ students, user }) {
           onClose={() => setDetailStudent(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── CSV grade import modal ────────────────────────────────────────────────────
+function ImportGradesModal({ periodAssignments, students, periodLabel, onApply, onClose }) {
+  const [text, setText] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [applying, setApplying] = useState(false);
+
+  function onFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setText(String(r.result || ""));
+    r.readAsText(f);
+  }
+
+  function buildPreview() {
+    const { headers, rows } = parseCSV(text);
+    if (!headers.length) { setPreview({ error: "Couldn't parse any columns." }); return; }
+    const skip = new Set(["period %", "period%", "letter"]);
+    const byName = new Map(periodAssignments.map(a => [a.name.trim().toLowerCase(), a]));
+    const colMap = headers.map((h, i) => (i === 0 || skip.has(h.trim().toLowerCase())) ? null : (byName.get(h.trim().toLowerCase()) || null));
+    const unmatchedCols = headers.filter((h, i) => i > 0 && !skip.has(h.trim().toLowerCase()) && !colMap[i]);
+
+    const norm = s => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const lookup = new Map();
+    students.forEach(s => {
+      lookup.set(norm(`${s.lastName}, ${s.firstName}`), s);
+      lookup.set(norm(`${s.firstName} ${s.lastName}`), s);
+      lookup.set(norm(`${s.lastName} ${s.firstName}`), s);
+      if (s.id) lookup.set(norm(s.id), s);
+    });
+
+    const updates = [];
+    let matchedStudents = 0;
+    const unmatchedRows = [];
+    rows.forEach(r => {
+      const st = lookup.get(norm(r[0]));
+      if (!st) { if ((r[0] || "").trim()) unmatchedRows.push(r[0]); return; }
+      matchedStudents++;
+      colMap.forEach((a, i) => {
+        if (!a) return;
+        const raw = (r[i] ?? "").trim();
+        if (raw === "") return;
+        const low = raw.toLowerCase();
+        if (low === "exc" || low === "excused") updates.push({ assignmentId: a.id, student: st, data: { excused: true, missing: false, points_earned: null } });
+        else if (low === "mis" || low === "missing") updates.push({ assignmentId: a.id, student: st, data: { missing: true, excused: false, points_earned: null } });
+        else if (!isNaN(Number(raw))) updates.push({ assignmentId: a.id, student: st, data: { points_earned: Number(raw), missing: false, excused: false } });
+      });
+    });
+    setPreview({ updates, matchedCols: colMap.filter(Boolean).length, unmatchedCols, matchedStudents, unmatchedRows });
+  }
+
+  async function apply() {
+    if (!preview?.updates?.length) return;
+    setApplying(true);
+    await onApply(preview.updates);
+  }
+
+  const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0.4rem 0.6rem", color: "#fff", fontSize: "0.82rem", outline: "none" };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-card" style={{ width: "min(640px, 95vw)", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>Import Grades — {periodLabel}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "1.1rem" }}>✕</button>
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.75rem", lineHeight: 1.5 }}>
+          Columns are matched to assignments <strong>by name</strong>; rows are matched to students by
+          “Last, First”. Cell values can be a number, <strong>EXC</strong>, or <strong>MIS</strong>; blanks are skipped.
+          Tip: use <strong>⬇ CSV</strong> to export a template first.
+        </div>
+        <input type="file" accept=".csv,text/csv" onChange={onFile} style={{ ...inp, width: "100%", boxSizing: "border-box", marginBottom: "0.5rem" }} />
+        <textarea value={text} onChange={e => { setText(e.target.value); setPreview(null); }} placeholder="…or paste CSV here" style={{ ...inp, width: "100%", boxSizing: "border-box", minHeight: 110, resize: "vertical", fontFamily: "monospace", marginBottom: "0.5rem" }} />
+
+        {preview?.error && <div style={{ color: "#ef4444", fontSize: "0.8rem", marginBottom: "0.5rem" }}>{preview.error}</div>}
+        {preview && !preview.error && (
+          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "0.6rem 0.85rem", marginBottom: "0.6rem", fontSize: "0.8rem" }}>
+            <div>✓ {preview.matchedStudents} students matched · {preview.matchedCols} assignment columns matched · <strong style={{ color: GOLD }}>{preview.updates.length}</strong> scores to import</div>
+            {preview.unmatchedCols.length > 0 && <div style={{ color: "#f97316", marginTop: 4 }}>Unmatched columns (skipped): {preview.unmatchedCols.join(", ")}</div>}
+            {preview.unmatchedRows.length > 0 && <div style={{ color: "#f97316", marginTop: 4 }}>Unmatched students (skipped): {preview.unmatchedRows.slice(0, 6).join(", ")}{preview.unmatchedRows.length > 6 ? "…" : ""}</div>}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ ...inp, cursor: "pointer" }}>Cancel</button>
+          {!preview || preview.error
+            ? <button onClick={buildPreview} disabled={!text.trim()} style={{ background: text.trim() ? GOLD : "rgba(255,255,255,0.1)", border: "none", color: text.trim() ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, borderRadius: 6, padding: "0.4rem 1.25rem", cursor: text.trim() ? "pointer" : "not-allowed" }}>Preview</button>
+            : <button onClick={apply} disabled={applying || !preview.updates.length} style={{ background: preview.updates.length ? GOLD : "rgba(255,255,255,0.1)", border: "none", color: "#000", fontWeight: 700, borderRadius: 6, padding: "0.4rem 1.25rem", cursor: "pointer" }}>{applying ? "Importing…" : `Import ${preview.updates.length} scores`}</button>}
+        </div>
+      </div>
     </div>
   );
 }

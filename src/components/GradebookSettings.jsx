@@ -277,6 +277,14 @@ export default function GradebookSettings({ profiles, settings, saveProfile, set
             <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)" }}>days after the due date</span>
           </div>
         )}
+
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "0.85rem", paddingTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.85rem" }}>Late-work penalty</span>
+          <input type="number" min={0} max={100} value={settings?.late_penalty_pct ?? 0}
+            onChange={e => saveSettings({ late_penalty_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+            style={{ ...inp, width: 64 }} />
+          <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)" }}>% deducted when a grade is marked “Late”</span>
+        </div>
       </div>
 
       {/* ── Auto-email toggles ───────────────────────────────────────────── */}
