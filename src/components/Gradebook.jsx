@@ -11,6 +11,7 @@ import GradebookSettings from "./GradebookSettings.jsx";
 import GradebookRubric from "./GradebookRubric.jsx";
 import GradebookMissingWork from "./GradebookMissingWork.jsx";
 import GradebookAnalytics from "./GradebookAnalytics.jsx";
+import GradebookStudentDetail from "./GradebookStudentDetail.jsx";
 
 // Small inline trend indicator (↑ / ↓ / →) used in tables and report cards.
 function TrendArrow({ trend, belowPassing }) {
@@ -518,6 +519,7 @@ export default function Gradebook({ students, user }) {
   const [quickEntry, setQuickEntry] = useState(false);
   const [bulkMenu, setBulkMenu] = useState(null); // assignment id with open bulk menu
   const [dragId, setDragId] = useState(null);      // assignment being dragged
+  const [detailStudent, setDetailStudent] = useState(null); // student analytics modal
   const cellRefs = useRef({});                     // { "si:ai": inputEl } for quick-entry nav
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
@@ -796,7 +798,10 @@ export default function Gradebook({ students, user }) {
                     return (
                       <tr key={student.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                         <td style={{ padding: "0.4rem 0.75rem", fontWeight: 600, position: "sticky", left: 0, background: "#0d0d0d", zIndex: 1, whiteSpace: "nowrap" }}>
-                          {student.lastName}, {student.firstName}
+                          <span onClick={() => setDetailStudent(student)} title="Open full analytics & history" style={{ cursor: "pointer", borderBottom: "1px dotted rgba(245,192,37,0.5)" }}
+                            onMouseEnter={e => e.currentTarget.style.color = GOLD} onMouseLeave={e => e.currentTarget.style.color = ""}>
+                            {student.lastName}, {student.firstName}
+                          </span>
                           <span className="tag tag-amber" style={{ marginLeft: "0.4rem", fontSize: "0.62rem" }}>{student.grade}</span>
                         </td>
                         {periodAssignments.map((a, ai) => (
@@ -925,6 +930,7 @@ export default function Gradebook({ students, user }) {
           students={sortedStudents} assignments={assignments} gradeMap={gradeMap}
           period={period} setPeriod={setPeriod} autoZeroOpts={autoZeroOpts} user={user}
           onMark={(assignmentId, student, data) => handleSaveGrade(assignmentId, student, data)}
+          onOpenStudent={setDetailStudent}
         />
       )}
 
@@ -958,6 +964,19 @@ export default function Gradebook({ students, user }) {
             setRubricState(null);
           }}
           onClose={() => setRubricState(null)}
+        />
+      )}
+
+      {/* ── Student analytics & history modal ─────────────────────────────── */}
+      {detailStudent && (
+        <GradebookStudentDetail
+          student={detailStudent}
+          assignments={assignments}
+          grades={grades}
+          profiles={profiles}
+          settings={settings}
+          user={user}
+          onClose={() => setDetailStudent(null)}
         />
       )}
     </div>

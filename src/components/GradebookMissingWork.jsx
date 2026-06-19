@@ -8,7 +8,8 @@ const PERIOD_LABELS = { 1: "Period 1", 2: "Period 2", 3: "Period 3", 4: "Period 
 // Consolidated missing / past-due-blank work across the whole roster, with one-click
 // outreach to parents and students. Reuses the calc-engine `missingItemsFor` helper and
 // the Gmail-send + mailto fallback pattern from the Reports tab.
-export default function GradebookMissingWork({ students, assignments, gradeMap, period, setPeriod, autoZeroOpts, user, onMark }) {
+export default function GradebookMissingWork({ students, assignments, gradeMap, period, setPeriod, autoZeroOpts, user, onMark, onOpenStudent }) {
+  const nameLink = { cursor: "pointer", borderBottom: "1px dotted rgba(245,192,37,0.5)" };
   const [groupBy, setGroupBy] = useState("student"); // "student" | "assignment"
   const [allPeriods, setAllPeriods] = useState(false);
   const [pastDueOnly, setPastDueOnly] = useState(false);
@@ -124,7 +125,7 @@ export default function GradebookMissingWork({ students, assignments, gradeMap, 
             <div key={s.id} className="card">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem", flexWrap: "wrap", gap: "0.5rem" }}>
                 <div style={{ fontWeight: 700 }}>
-                  {s.lastName}, {s.firstName} <span className="tag tag-amber" style={{ fontSize: "0.62rem" }}>{s.grade}</span>
+                  <span onClick={() => onOpenStudent?.(s)} title="Open full analytics" style={nameLink}>{s.lastName}, {s.firstName}</span> <span className="tag tag-amber" style={{ fontSize: "0.62rem" }}>{s.grade}</span>
                   <span style={{ marginLeft: "0.5rem", fontSize: "0.78rem", color: "#ef4444" }}>{items.length} missing</span>
                 </div>
                 <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -157,7 +158,7 @@ export default function GradebookMissingWork({ students, assignments, gradeMap, 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
                 {items.map(it => (
                   <div key={it.student.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.4rem 0.6rem", background: "rgba(255,255,255,0.03)", borderRadius: 6, gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "0.82rem" }}>{it.student.lastName}, {it.student.firstName}</span>
+                    <span onClick={() => onOpenStudent?.(it.student)} title="Open full analytics" style={{ fontSize: "0.82rem", ...nameLink }}>{it.student.lastName}, {it.student.firstName}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>{statusTag(it.status)}<RowActions student={it.student} assignment={a} /></div>
                   </div>
                 ))}

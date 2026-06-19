@@ -651,3 +651,21 @@ label {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(245,192,37,0.25); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(245,192,37,0.45); }
+
+/* ── Student report print ─────────────────────────────────────────────── */
+/* The light-themed one-page handout is hidden on screen and revealed only
+   when printing; everything else on the page is hidden during print. */
+#student-print { display: none; }
+
+@media print {
+  body * { visibility: hidden !important; }
+  #student-print, #student-print * { visibility: visible !important; }
+  #student-print {
+    display: block !important;
+    position: absolute; left: 0; top: 0; width: 100%;
+    margin: 0; padding: 0; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .gb-screen-only { display: none !important; }
+  @page { size: portrait; margin: 1.2cm; }
+}
