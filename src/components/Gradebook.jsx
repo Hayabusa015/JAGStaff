@@ -10,6 +10,7 @@ import {
 import GradebookSettings from "./GradebookSettings.jsx";
 import GradebookRubric from "./GradebookRubric.jsx";
 import GradebookMissingWork from "./GradebookMissingWork.jsx";
+import GradebookAnalytics from "./GradebookAnalytics.jsx";
 
 // Small inline trend indicator (↑ / ↓ / →) used in tables and report cards.
 function TrendArrow({ trend, belowPassing }) {
@@ -704,7 +705,7 @@ export default function Gradebook({ students, user }) {
 
       {/* Sub-tabs */}
       <div className="flex gap1 mb2" style={{ flexWrap: "wrap" }}>
-        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "missing", label: "Missing Work" }, { key: "reports", label: "Reports" }, { key: "settings", label: "⚙ Settings" }].map(t => (
+        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "missing", label: "Missing Work" }, { key: "analytics", label: "📊 Analytics" }, { key: "reports", label: "Reports" }, { key: "settings", label: "⚙ Settings" }].map(t => (
           <button key={t.key} className={`btn btn-sm ${subTab === t.key ? "btn-primary" : "btn-ghost"}`} onClick={() => setSubTab(t.key)}>{t.label}</button>
         ))}
       </div>
@@ -925,6 +926,11 @@ export default function Gradebook({ students, user }) {
           period={period} setPeriod={setPeriod} autoZeroOpts={autoZeroOpts} user={user}
           onMark={(assignmentId, student, data) => handleSaveGrade(assignmentId, student, data)}
         />
+      )}
+
+      {/* ── ANALYTICS tab ───────────────────────────────────────────────── */}
+      {subTab === "analytics" && (
+        <GradebookAnalytics students={students} assignments={assignments} grades={grades} profiles={profiles} settings={settings} />
       )}
 
       {/* ── REPORTS tab ─────────────────────────────────────────────────── */}
