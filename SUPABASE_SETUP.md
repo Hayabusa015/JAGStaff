@@ -270,3 +270,108 @@ alter publication supabase_realtime add table public.infractions;
 
 The `public.is_staff()` function was created in the hall pass setup step — it
 already covers this table without any changes.
+
+---
+
+## Gradebook tables
+
+The gradebook (`useGradebook` in `src/supabase.js`) syncs four tables per teacher,
+scoped by `teacher_email`. If Supabase is not configured the gradebook still works
+fully in local React state; these tables are only needed for cross-device sync.
+
+```sql
+-- Weighted-category / scale configuration -----------------------------------
+create table if not exists public.gradebook_profiles (
+  id           uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name         text not null,
+  categories   jsonb not null default '[]',   -- [{ name, weight, color, drop_lowest }]
+  is_active    boolean not null default false,
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.gradebook_assignments (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name          text not null,
+  category      text not null,
+  grading_period int not null,                -- 1-4 = periods, 5 = midterm, 6 = final
+  max_points    numeric not null default 100,
+  due_date      date,
+  description   text,
+  extra_credit  boolean not null default false,
+  rubric        jsonb,                         -- [{ id, criterion, description, max_points }]
+  sort_order    integer,                       -- manual column ordering (drag-drop)
+  created_at    timestamptz not null default now()
+);
+
+create table if not exists public.gradebook_grades (
+  id              uuid primary key default gen_random_uuid(),
+  teacher_email   text not null,
+  assignment_id   uuid not null references public.gradebook_assignments(id) on delete cascade,
+  student_id      text not null,
+  student_name    text,
+  points_earned   numeric,
+  excused         boolean not null default false,
+  missing         boolean not null default false,
+  retake_score    numeric,
+  retake_policy   text default 'higher',
+  rubric_scores   jsonb,                       -- { criterion_id: score }
+  rubric_comments jsonb,                       -- { criterion_id: comment text }
+  notes           text,
+  graded_at       timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create table if not exists public.gradebook_settings (
+  teacher_email       text primary key,
+  grading_scale       jsonb,                   -- [{ letter, min }]
+  period_weights      jsonb,                   -- { 1:20, 2:20, 3:20, 4:20, midterm:10, final:10 }
+  auto_email_fail     boolean not null default true,
+  auto_email_drop     boolean not null default true,
+  auto_zero_missing   boolean not null default false,
+  auto_zero_grace_days integer not null default 0,
+  updated_at          timestamptz,
+  updated_by          text
+);
+
+create index if not exists gradebook_assignments_teacher on public.gradebook_assignments (teacher_email);
+create index if not exists gradebook_grades_teacher on public.gradebook_grades (teacher_email);
+create index if not exists gradebook_grades_assignment on public.gradebook_grades (assignment_id);
+create index if not exists gradebook_profiles_teacher on public.gradebook_profiles (teacher_email);
+
+alter table public.gradebook_profiles    enable row level security;
+alter table public.gradebook_assignments enable row level security;
+alter table public.gradebook_grades      enable row level security;
+alter table public.gradebook_settings    enable row level security;
+
+-- Staff may read/write only their own gradebook rows.
+do $$
+declare t text;
+begin
+  foreach t in array array['gradebook_profiles','gradebook_assignments','gradebook_grades','gradebook_settings']
+  loop
+    execute format('create policy "staff manage %1$s" on public.%1$s for all using (public.is_staff() and teacher_email = auth.jwt()->>''email'') with check (public.is_staff() and teacher_email = auth.jwt()->>''email'');', t);
+  end loop;
+end $$;
+
+alter publication supabase_realtime add table public.gradebook_profiles;
+alter publication supabase_realtime add table public.gradebook_assignments;
+alter publication supabase_realtime add table public.gradebook_grades;
+alter publication supabase_realtime add table public.gradebook_settings;
+```
+
+### Migration — gradebook revamp columns
+
+If your gradebook tables predate the revamp, add the new columns. All are additive and
+nullable/defaulted, so existing rows are unaffected:
+
+```sql
+alter table public.gradebook_assignments add column if not exists sort_order integer;
+alter table public.gradebook_grades      add column if not exists rubric_comments jsonb;
+alter table public.gradebook_settings    add column if not exists auto_zero_missing boolean not null default false;
+alter table public.gradebook_settings    add column if not exists auto_zero_grace_days integer not null default 0;
+```
+
+These back the drag-drop column ordering, per-criterion rubric comments, and the
+auto-zero-missing-work policy respectively.

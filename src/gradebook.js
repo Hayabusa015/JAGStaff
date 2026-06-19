@@ -129,14 +129,31 @@ export function gradePct(grade, assignment) {
   return Math.min(100, (pts / assignment.max_points) * 100);
 }
 
+// Is an assignment past its due date (optionally with a grace window in days)?
+// Returns false when there is no due date.
+export function isPastDue(assignment, today = new Date(), graceDays = 0) {
+  if (!assignment?.due_date) return false;
+  const due = new Date(assignment.due_date);
+  if (isNaN(due)) return false;
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - (Number(graceDays) || 0));
+  // Compare date-only (ignore time of day).
+  cutoff.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return due <= cutoff;
+}
+
 /**
  * Calculate weighted category average for one student in one period.
  * @param {Array} assignments - all assignments for the period
  * @param {Object} gradeMap - { assignment_id: grade_row }
  * @param {Array} categories - [{ name, weight, drop_lowest }] weights are 0-100 summing to 100
+ * @param {Object} [opts] - { autoZeroMissing, graceDays, today } — when autoZeroMissing is
+ *   true, a blank (ungraded, non-excused) assignment that is past due counts as 0%.
  * @returns {{ pct: number|null, byCategory: { [name]: { pct, count, dropped } } }}
  */
-export function calcPeriodGrade(assignments, gradeMap, categories) {
+export function calcPeriodGrade(assignments, gradeMap, categories, opts = {}) {
+  const { autoZeroMissing = false, graceDays = 0, today = new Date() } = opts;
   const byCategory = {};
 
   for (const cat of categories) {
@@ -146,7 +163,11 @@ export function calcPeriodGrade(assignments, gradeMap, categories) {
       const g = gradeMap[a.id];
       if (g?.excused) continue;
       const pct = gradePct(g, a);
-      scored.push(pct ?? (g?.missing ? 0 : null));
+      if (pct != null) { scored.push(pct); continue; }
+      if (g?.missing) { scored.push(0); continue; }
+      // Blank (no grade row, or a saved row with no score): auto-zero if past due.
+      if (autoZeroMissing && isPastDue(a, today, graceDays)) { scored.push(0); continue; }
+      scored.push(null);
     }
     const gradeable = scored.filter(s => s != null);
     if (gradeable.length === 0) {
@@ -195,6 +216,61 @@ export function calcSemesterGrade(periodGrades, periodWeights) {
     }
   }
   return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+// Chronological order for an assignment list (due_date, then sort_order, then created_at).
+function chronological(assignments) {
+  return [...assignments].sort((a, b) => {
+    const ad = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+    const bd = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+    if (ad !== bd) return ad - bd;
+    const ao = a.sort_order ?? Infinity;
+    const bo = b.sort_order ?? Infinity;
+    if (ao !== bo) return ao - bo;
+    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+  });
+}
+
+/**
+ * Trend of a student's recent performance within a set of assignments.
+ * Splits graded (non-excused) work chronologically into earlier vs recent halves and
+ * compares the mean percentage. Threshold ±3 pts.
+ * @returns {{ direction: "up"|"down"|"flat", delta: number|null }}
+ */
+export function gradeTrend(assignments, gradeMap) {
+  const pcts = chronological(assignments)
+    .map(a => {
+      const g = gradeMap[a.id];
+      if (g?.excused) return null;
+      return gradePct(g, a) ?? (g?.missing ? 0 : null);
+    })
+    .filter(p => p != null);
+  if (pcts.length < 2) return { direction: "flat", delta: null };
+  const mid = Math.floor(pcts.length / 2);
+  const earlier = pcts.slice(0, mid);
+  const recent = pcts.slice(mid);
+  const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const delta = mean(recent) - mean(earlier);
+  const direction = delta > 3 ? "up" : delta < -3 ? "down" : "flat";
+  return { direction, delta };
+}
+
+/**
+ * List a student's missing / past-due-blank assignments within a set.
+ * @returns {Array<{ assignment, status: "missing"|"pastdue-blank" }>}
+ */
+export function missingItemsFor(assignments, gradeMap, { today = new Date(), graceDays = 0 } = {}) {
+  const out = [];
+  for (const a of assignments) {
+    const g = gradeMap[a.id];
+    if (g?.excused) continue;
+    if (g?.missing) { out.push({ assignment: a, status: "missing" }); continue; }
+    const pts = effectivePoints(g, a);
+    if (pts == null && isPastDue(a, today, graceDays)) {
+      out.push({ assignment: a, status: "pastdue-blank" });
+    }
+  }
+  return out;
 }
 
 // Class statistics for one assignment

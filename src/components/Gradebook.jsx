@@ -1,14 +1,27 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useGradebook } from "../supabase.js";
 import { useGmailSend } from "../supabase.js";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, gradePct, gradeTier,
   effectivePoints, assignmentStats, rubricTotal, DEFAULT_SCALE,
-  DEFAULT_PERIOD_WEIGHTS, letterRank,
+  DEFAULT_PERIOD_WEIGHTS, letterRank, gradeTrend, isPastDue, missingItemsFor,
 } from "../gradebook.js";
 import GradebookSettings from "./GradebookSettings.jsx";
 import GradebookRubric from "./GradebookRubric.jsx";
+import GradebookMissingWork from "./GradebookMissingWork.jsx";
+
+// Small inline trend indicator (↑ / ↓ / →) used in tables and report cards.
+function TrendArrow({ trend, belowPassing }) {
+  if (!trend || trend.delta == null || trend.direction === "flat") return null;
+  const up = trend.direction === "up";
+  return (
+    <span title={`${up ? "Trending up" : "Trending down"} ${Math.abs(Math.round(trend.delta))} pts`}
+      style={{ fontSize: "0.72rem", fontWeight: 700, color: up ? "#22c55e" : "#ef4444", marginLeft: 4 }}>
+      {up ? "▲" : "▼"}{!up && belowPassing ? " 🚩" : ""}
+    </span>
+  );
+}
 
 const PERIOD_LABELS = { 1: "Period 1", 2: "Period 2", 3: "Period 3", 4: "Period 4", 5: "Midterm", 6: "Final" };
 const PERIOD_KEYS   = { 5: "midterm", 6: "final" };
@@ -124,13 +137,15 @@ function AssignmentForm({ initial, categories, period, onSave, onClose }) {
 }
 
 // ── Grade Cell ───────────────────────────────────────────────────────────────
-function GradeCell({ assignment, grade, student, onSave, onOpenRubric }) {
+function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntry, autoZeroOpts, gridPos, registerRef, onGridNav }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
 
   const pts = effectivePoints(grade, assignment);
   const pct = gradePct(grade, assignment);
   const hasRubric = !!(assignment?.rubric?.length);
+  const autoZeroed = pts == null && !grade?.excused && !grade?.missing &&
+    autoZeroOpts?.autoZeroMissing && isPastDue(assignment, autoZeroOpts.today, autoZeroOpts.graceDays);
 
   function open() {
     setDraft({
@@ -156,6 +171,47 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric }) {
 
   const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, padding: "0.25rem 0.45rem", color: "#fff", fontSize: "0.78rem", outline: "none" };
 
+  // ── Quick-entry mode: a bare input with spreadsheet keyboard navigation ──
+  if (quickEntry && !hasRubric) {
+    const display = grade?.excused ? "EXC" : grade?.missing ? "MIS"
+      : grade?.points_earned != null ? String(grade.points_earned) : "";
+    async function quickCommit(val) {
+      const trimmed = (val ?? "").trim().toLowerCase();
+      if (trimmed === "e") return onSave({ excused: true, missing: false, points_earned: null });
+      if (trimmed === "m") return onSave({ missing: true, excused: false, points_earned: null });
+      if (trimmed === "x" || trimmed === "") return onSave({ points_earned: null, missing: false, excused: false });
+      const n = Number(trimmed);
+      if (!isNaN(n)) return onSave({ points_earned: n, missing: false, excused: false });
+    }
+    return (
+      <td style={{ padding: 2, textAlign: "center", background: grade?.missing ? "rgba(249,115,22,0.1)" : grade?.excused ? "rgba(255,255,255,0.04)" : cellColor(autoZeroed ? 0 : pct), minWidth: 72 }}>
+        <input
+          ref={el => registerRef?.(gridPos, el)}
+          defaultValue={display}
+          key={display}
+          placeholder={autoZeroed ? "0" : "—"}
+          onKeyDown={e => {
+            if (["Enter", "ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Tab"].includes(e.key)) {
+              e.preventDefault();
+              quickCommit(e.currentTarget.value);
+              const dir = e.key === "Enter" || e.key === "ArrowDown" ? "down"
+                : e.key === "ArrowUp" ? "up"
+                : e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey) ? "left" : "right";
+              onGridNav?.(gridPos, dir);
+            }
+          }}
+          onBlur={e => quickCommit(e.currentTarget.value)}
+          style={{
+            width: "100%", boxSizing: "border-box", textAlign: "center", background: "transparent",
+            border: "1px solid transparent", borderRadius: 4, padding: "0.35rem 0.2rem", color: "#fff",
+            fontSize: "0.8rem", fontWeight: 600, outline: "none",
+          }}
+          onFocus={e => { e.currentTarget.style.border = `1px solid ${GOLD}`; e.currentTarget.style.background = "rgba(245,192,37,0.08)"; e.currentTarget.select(); }}
+        />
+      </td>
+    );
+  }
+
   if (editing) return (
     <td style={{ padding: "0.3rem", minWidth: 110, verticalAlign: "top" }}>
       <div style={{ background: "#1a1400", border: `1px solid ${GOLD}`, borderRadius: 7, padding: "0.5rem", zIndex: 20, position: "relative" }}>
@@ -164,9 +220,11 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric }) {
         ) : (
           <input type="number" min={0} max={assignment.max_points} value={draft.points_earned} onChange={e => setDraft(d => ({ ...d, points_earned: e.target.value }))} placeholder={`/ ${assignment.max_points}`} style={{ ...inp, width: "100%", boxSizing: "border-box", marginBottom: "0.4rem" }} autoFocus />
         )}
-        <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem", flexWrap: "wrap" }}>
-          <label style={{ fontSize: "0.68rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 2 }}><input type="checkbox" checked={draft.excused} onChange={e => setDraft(d => ({ ...d, excused: e.target.checked }))} /> Excused</label>
-          <label style={{ fontSize: "0.68rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 2 }}><input type="checkbox" checked={draft.missing} onChange={e => setDraft(d => ({ ...d, missing: e.target.checked }))} /> Missing</label>
+        {/* Quick special-mark buttons */}
+        <div style={{ display: "flex", gap: "0.25rem", marginBottom: "0.4rem" }}>
+          <button onClick={() => setDraft(d => ({ ...d, missing: true, excused: false, points_earned: "" }))} style={{ ...inp, flex: 1, cursor: "pointer", color: draft.missing ? "#000" : "#f97316", background: draft.missing ? "#f97316" : "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", fontSize: "0.68rem" }}>Missing</button>
+          <button onClick={() => setDraft(d => ({ ...d, excused: true, missing: false, points_earned: "" }))} style={{ ...inp, flex: 1, cursor: "pointer", color: draft.excused ? "#000" : "rgba(255,255,255,0.7)", background: draft.excused ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.68rem" }}>Excused</button>
+          <button onClick={() => setDraft(d => ({ ...d, missing: false, excused: false }))} style={{ ...inp, flex: 1, cursor: "pointer", fontSize: "0.68rem" }}>Clear</button>
         </div>
         <div style={{ marginBottom: "0.4rem" }}>
           <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Retake score</div>
@@ -188,7 +246,7 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric }) {
   return (
     <td onClick={open} style={{
       padding: "0.4rem 0.5rem", cursor: "pointer", textAlign: "center",
-      background: cellColor(pct), minWidth: 72, transition: "background 0.15s",
+      background: cellColor(autoZeroed ? 0 : pct), minWidth: 72, transition: "background 0.15s",
     }}>
       {grade?.excused ? (
         <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>EXC</span>
@@ -200,6 +258,11 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric }) {
           <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.45)" }}>{Math.round(pct)}%</div>
           {grade?.retake_score != null && <div style={{ fontSize: "0.6rem", color: "#60a5fa" }}>↩ retake</div>}
           {hasRubric && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.35)" }}>📋</div>}
+        </>
+      ) : autoZeroed ? (
+        <>
+          <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "#ef4444" }}>0</div>
+          <div style={{ fontSize: "0.58rem", color: "rgba(239,68,68,0.7)" }}>past due</div>
         </>
       ) : (
         <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.2)" }}>—</span>
@@ -220,6 +283,11 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
   const categories = activeProfile?.categories || [];
   const scale = settings?.grading_scale || DEFAULT_SCALE;
   const periodWeights = settings?.period_weights || DEFAULT_PERIOD_WEIGHTS;
+  const autoZeroOpts = {
+    autoZeroMissing: settings?.auto_zero_missing ?? false,
+    graceDays: settings?.auto_zero_grace_days ?? 0,
+    today: new Date(),
+  };
 
   useMemo(() => {
     if (!search.trim()) { setResults([]); return; }
@@ -229,7 +297,7 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
   function studentGradeForPeriod(student, period) {
     const periodAssignments = assignments.filter(a => a.grading_period === period);
     const gradeMap = Object.fromEntries(grades.filter(g => g.student_id === student.id).map(g => [g.assignment_id, g]));
-    return calcPeriodGrade(periodAssignments, gradeMap, categories);
+    return calcPeriodGrade(periodAssignments, gradeMap, categories, autoZeroOpts);
   }
 
   async function emailReport(student) {
@@ -268,7 +336,7 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
   const distribution = { A: 0, B: 0, C: 0, D: 0, F: 0 };
   students.forEach(s => {
     const gradeMap = Object.fromEntries(grades.filter(g => g.student_id === s.id).map(g => [g.assignment_id, g]));
-    const { pct } = calcPeriodGrade(periodAssignments, gradeMap, categories);
+    const { pct } = calcPeriodGrade(periodAssignments, gradeMap, categories, autoZeroOpts);
     if (pct == null) return;
     const l = letterGrade(pct, scale);
     const top = l[0];
@@ -318,10 +386,13 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
                 const { pct, byCategory } = studentGradeForPeriod(selectedStudent, p);
                 const letter = letterGrade(pct, scale);
                 const tier = pct == null ? "ungraded" : pct >= 90 ? "a" : pct >= 80 ? "b" : pct >= 70 ? "c" : pct >= 60 ? "d" : "f";
+                const pAssignments = assignments.filter(a => a.grading_period === p);
+                const pGradeMap = Object.fromEntries(grades.filter(g => g.student_id === selectedStudent.id).map(g => [g.assignment_id, g]));
+                const trend = gradeTrend(pAssignments, pGradeMap);
                 return (
                   <div key={p} style={{ background: cellColor(pct), border: `1px solid rgba(255,255,255,0.08)`, borderRadius: 8, padding: "0.7rem 0.75rem", textAlign: "center" }}>
                     <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{PERIOD_LABELS[p]}</div>
-                    <div style={{ fontSize: "1.4rem", fontWeight: 800, color: TIER_COLORS[tier] || "#fff", lineHeight: 1 }}>{pct != null ? letter : "—"}</div>
+                    <div style={{ fontSize: "1.4rem", fontWeight: 800, color: TIER_COLORS[tier] || "#fff", lineHeight: 1 }}>{pct != null ? letter : "—"}<TrendArrow trend={trend} belowPassing={pct != null && pct < 70} /></div>
                     <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{pct != null ? `${Math.round(pct)}%` : "No data"}</div>
                   </div>
                 );
@@ -342,6 +413,38 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
                   <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
                     <span style={{ fontSize: "1.25rem", fontWeight: 800, color: GOLD }}>{letterGrade(sem, scale)}</span>
                     <span style={{ color: "rgba(255,255,255,0.5)" }}>{Math.round(sem)}%</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Feedback & comments (notes + per-criterion rubric comments) */}
+            {(() => {
+              const sGrades = grades.filter(g => g.student_id === selectedStudent.id);
+              const fb = sGrades.map(g => {
+                const a = assignments.find(x => x.id === g.assignment_id);
+                if (!a) return null;
+                const critComments = g.rubric_comments
+                  ? (a.rubric || []).filter(c => g.rubric_comments[c.id]?.trim())
+                      .map(c => `${c.criterion}: ${g.rubric_comments[c.id].trim()}`)
+                  : [];
+                if (!g.notes?.trim() && critComments.length === 0) return null;
+                return { assignment: a, notes: g.notes?.trim(), critComments };
+              }).filter(Boolean);
+              if (!fb.length) return null;
+              return (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <div className="section-title" style={{ marginBottom: "0.5rem" }}>Feedback</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                    {fb.map(f => (
+                      <div key={f.assignment.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 7, padding: "0.5rem 0.75rem" }}>
+                        <div style={{ fontWeight: 600, fontSize: "0.82rem", marginBottom: 2 }}>{f.assignment.name}</div>
+                        {f.notes && <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.6)" }}>{f.notes}</div>}
+                        {f.critComments.map((c, i) => (
+                          <div key={i} style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.55)", marginTop: 1 }}>• {c}</div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -375,7 +478,7 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
       {(() => {
         const failing = students.map(s => {
           const gradeMap = Object.fromEntries(grades.filter(g => g.student_id === s.id).map(g => [g.assignment_id, g]));
-          const { pct } = calcPeriodGrade(periodAssignments, gradeMap, categories);
+          const { pct } = calcPeriodGrade(periodAssignments, gradeMap, categories, autoZeroOpts);
           return { ...s, pct };
         }).filter(s => s.pct != null && s.pct < 70).sort((a, b) => a.pct - b.pct);
         if (!failing.length) return null;
@@ -411,18 +514,31 @@ export default function Gradebook({ students, user }) {
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [rubricState, setRubricState] = useState(null); // { assignment, student, grade }
   const [expandedAssignment, setExpandedAssignment] = useState(null);
+  const [quickEntry, setQuickEntry] = useState(false);
+  const [bulkMenu, setBulkMenu] = useState(null); // assignment id with open bulk menu
+  const [dragId, setDragId] = useState(null);      // assignment being dragged
+  const cellRefs = useRef({});                     // { "si:ai": inputEl } for quick-entry nav
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
   const categories = activeProfile?.categories || [];
   const scale = settings?.grading_scale || DEFAULT_SCALE;
   const periodWeights = settings?.period_weights || DEFAULT_PERIOD_WEIGHTS;
+  const autoZeroOpts = useMemo(() => ({
+    autoZeroMissing: settings?.auto_zero_missing ?? false,
+    graceDays: settings?.auto_zero_grace_days ?? 0,
+    today: new Date(),
+  }), [settings?.auto_zero_missing, settings?.auto_zero_grace_days]);
 
+  // Order: category index → sort_order → due_date → created_at.
   const periodAssignments = useMemo(() =>
     assignments.filter(a => a.grading_period === period)
       .sort((a, b) => {
         const ci = categories.findIndex(c => c.name === a.category);
         const cj = categories.findIndex(c => c.name === b.category);
         if (ci !== cj) return ci - cj;
+        const ao = a.sort_order ?? Infinity;
+        const bo = b.sort_order ?? Infinity;
+        if (ao !== bo) return ao - bo;
         return new Date(a.created_at) - new Date(b.created_at);
       }),
     [assignments, period, categories]
@@ -471,6 +587,87 @@ export default function Gradebook({ students, user }) {
     setEditingAssignment(null);
   }
 
+  // ── Quick-entry grid navigation ────────────────────────────────────────────
+  const registerRef = useCallback((pos, el) => {
+    if (el) cellRefs.current[`${pos.si}:${pos.ai}`] = el;
+  }, []);
+  const focusCell = useCallback((si, ai) => {
+    const el = cellRefs.current[`${si}:${ai}`];
+    if (el) { el.focus(); el.select?.(); }
+  }, []);
+  const onGridNav = useCallback((pos, dir) => {
+    const maxS = sortedStudents.length - 1;
+    const maxA = periodAssignments.length - 1;
+    let { si, ai } = pos;
+    if (dir === "down") si = Math.min(maxS, si + 1);
+    else if (dir === "up") si = Math.max(0, si - 1);
+    else if (dir === "right") ai = Math.min(maxA, ai + 1);
+    else if (dir === "left") ai = Math.max(0, ai - 1);
+    focusCell(si, ai);
+  }, [sortedStudents.length, periodAssignments.length, focusCell]);
+
+  // ── Bulk column editing ────────────────────────────────────────────────────
+  async function bulkColumn(assignment, action, value) {
+    setBulkMenu(null);
+    for (const s of sortedStudents) {
+      const existing = gradeMap[s.id]?.[assignment.id];
+      const hasScore = existing && (existing.points_earned != null || existing.missing || existing.excused || existing.rubric_scores);
+      if (action === "fill" && !hasScore) {
+        await handleSaveGrade(assignment.id, s, { points_earned: Number(value), missing: false, excused: false });
+      } else if (action === "zeroBlanks" && !hasScore) {
+        await handleSaveGrade(assignment.id, s, { missing: true, excused: false, points_earned: null });
+      } else if (action === "excuseBlanks" && !hasScore) {
+        await handleSaveGrade(assignment.id, s, { excused: true, missing: false, points_earned: null });
+      } else if (action === "clear") {
+        if (existing) await handleSaveGrade(assignment.id, s, { points_earned: null, missing: false, excused: false });
+      }
+    }
+  }
+
+  // ── Drag-drop reorder & regroup (Assignments tab) ──────────────────────────
+  async function handleDropOnAssignment(target) {
+    if (!dragId || dragId === target.id) { setDragId(null); return; }
+    const dragged = assignments.find(a => a.id === dragId);
+    if (!dragged) { setDragId(null); return; }
+    // Reorder within the target's category; reassign category if different.
+    const catName = target.category;
+    const inCat = assignments
+      .filter(a => a.grading_period === period && a.category === catName && a.id !== dragId)
+      .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || new Date(a.created_at) - new Date(b.created_at));
+    const idx = inCat.findIndex(a => a.id === target.id);
+    const ordered = [...inCat.slice(0, idx), dragged, ...inCat.slice(idx)];
+    for (let i = 0; i < ordered.length; i++) {
+      const patch = { sort_order: i };
+      if (ordered[i].id === dragId && dragged.category !== catName) patch.category = catName;
+      await updateAssignment(ordered[i].id, patch);
+    }
+    setDragId(null);
+  }
+  async function handleDropOnCategory(catName) {
+    if (!dragId) return;
+    const dragged = assignments.find(a => a.id === dragId);
+    if (!dragged) { setDragId(null); return; }
+    const inCat = assignments
+      .filter(a => a.grading_period === period && a.category === catName && a.id !== dragId)
+      .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity));
+    await updateAssignment(dragId, { category: catName, sort_order: inCat.length });
+    setDragId(null);
+  }
+  async function sortByDueDate() {
+    const byCat = {};
+    assignments.filter(a => a.grading_period === period).forEach(a => {
+      (byCat[a.category] ||= []).push(a);
+    });
+    for (const list of Object.values(byCat)) {
+      list.sort((a, b) => {
+        const ad = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const bd = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        return ad - bd;
+      });
+      for (let i = 0; i < list.length; i++) await updateAssignment(list[i].id, { sort_order: i });
+    }
+  }
+
   const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0.35rem 0.6rem", color: "#fff", fontSize: "0.82rem", outline: "none" };
 
   if (!activeProfile) {
@@ -506,8 +703,8 @@ export default function Gradebook({ students, user }) {
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap1 mb2">
-        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "reports", label: "Reports" }, { key: "settings", label: "⚙ Settings" }].map(t => (
+      <div className="flex gap1 mb2" style={{ flexWrap: "wrap" }}>
+        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "missing", label: "Missing Work" }, { key: "reports", label: "Reports" }, { key: "settings", label: "⚙ Settings" }].map(t => (
           <button key={t.key} className={`btn btn-sm ${subTab === t.key ? "btn-primary" : "btn-ghost"}`} onClick={() => setSubTab(t.key)}>{t.label}</button>
         ))}
       </div>
@@ -517,14 +714,23 @@ export default function Gradebook({ students, user }) {
         <div>
           {showForm && <div style={{ marginBottom: "1rem" }}><AssignmentForm categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} /></div>}
 
-          {/* Period selector */}
-          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          {/* Period selector + quick-entry toggle */}
+          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
             {[1,2,3,4,5,6].map(p => (
               <button key={p} onClick={() => setPeriod(p)} style={{ background: period === p ? GOLD : "rgba(255,255,255,0.06)", border: period === p ? "none" : "1px solid rgba(255,255,255,0.12)", color: period === p ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
                 {p <= 4 ? `P${p}` : p === 5 ? "Mid" : "Final"}
               </button>
             ))}
+            <button onClick={() => setQuickEntry(q => !q)} title="Type scores directly; use ↑ ↓ Tab to move, and e=Excused m=Missing x=clear"
+              style={{ marginLeft: "auto", background: quickEntry ? GOLD : "rgba(255,255,255,0.06)", border: quickEntry ? "none" : "1px solid rgba(255,255,255,0.12)", color: quickEntry ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
+              ⚡ Quick Entry{quickEntry ? " On" : ""}
+            </button>
           </div>
+          {quickEntry && (
+            <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.5rem" }}>
+              Type a score and press <strong>Enter</strong>/<strong>↓</strong> for the next student, <strong>Tab</strong>/<strong>→</strong> for the next assignment. Shortcuts: <strong>e</strong>=Excused, <strong>m</strong>=Missing, <strong>x</strong>=clear. Rubric columns still open the rubric editor.
+            </div>
+          )}
 
           {periodAssignments.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,0.4)" }}>
@@ -554,13 +760,24 @@ export default function Gradebook({ students, user }) {
                       const cat = categories.find(c => c.name === a.category);
                       const stats = assignmentStats(a, grades.filter(g => g.assignment_id === a.id));
                       return (
-                        <th key={a.id} style={{ padding: "0.4rem 0.5rem", textAlign: "center", borderLeft: `1px solid rgba(255,255,255,0.05)`, maxWidth: 100, minWidth: 72 }}>
+                        <th key={a.id} style={{ padding: "0.4rem 0.5rem", textAlign: "center", borderLeft: `1px solid rgba(255,255,255,0.05)`, maxWidth: 100, minWidth: 72, position: "relative" }}>
+                          <button onClick={() => setBulkMenu(bulkMenu === a.id ? null : a.id)} title="Bulk edit column" style={{ position: "absolute", top: 2, right: 2, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "0.8rem", lineHeight: 1, padding: "0 2px" }}>⋯</button>
                           <div style={{ fontWeight: 600, fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90, margin: "0 auto" }} title={a.name}>{a.name}</div>
                           <div style={{ fontSize: "0.63rem", color: "rgba(255,255,255,0.35)" }}>/ {a.max_points}</div>
                           {stats && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>avg {Math.round(stats.avg)}%</div>}
                           {a.extra_credit && <div style={{ fontSize: "0.6rem", color: "#22c55e" }}>EC</div>}
                           {a.rubric?.length > 0 && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>📋</div>}
                           {a.due_date && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.25)" }}>{a.due_date}</div>}
+                          {bulkMenu === a.id && (
+                            <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "100%", right: 0, zIndex: 30, background: "#1a1400", border: `1px solid ${GOLD}`, borderRadius: 7, padding: "0.4rem", minWidth: 150, textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+                              {!a.rubric?.length && (
+                                <button onClick={() => { const v = prompt(`Fill blank cells with how many points (out of ${a.max_points})?`); if (v != null && v !== "") bulkColumn(a, "fill", v); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Fill blanks with…</button>
+                              )}
+                              <button onClick={() => bulkColumn(a, "zeroBlanks")} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Mark blanks Missing (0)</button>
+                              <button onClick={() => bulkColumn(a, "excuseBlanks")} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 3, fontSize: "0.74rem" }}>Mark blanks Excused</button>
+                              <button onClick={() => { if (confirm("Clear all scores in this column?")) bulkColumn(a, "clear"); }} style={{ ...inp, display: "block", width: "100%", textAlign: "left", cursor: "pointer", fontSize: "0.74rem", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>Clear column</button>
+                            </div>
+                          )}
                         </th>
                       );
                     })}
@@ -569,29 +786,35 @@ export default function Gradebook({ students, user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedStudents.map(student => {
+                  {sortedStudents.map((student, si) => {
                     const sg = gradeMap[student.id] || {};
-                    const { pct } = calcPeriodGrade(periodAssignments, sg, categories);
+                    const { pct } = calcPeriodGrade(periodAssignments, sg, categories, autoZeroOpts);
                     const letter = letterGrade(pct, scale);
                     const tier = pct == null ? "ungraded" : pct >= 90 ? "a" : pct >= 80 ? "b" : pct >= 70 ? "c" : pct >= 60 ? "d" : "f";
+                    const trend = gradeTrend(periodAssignments, sg);
                     return (
                       <tr key={student.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                         <td style={{ padding: "0.4rem 0.75rem", fontWeight: 600, position: "sticky", left: 0, background: "#0d0d0d", zIndex: 1, whiteSpace: "nowrap" }}>
                           {student.lastName}, {student.firstName}
                           <span className="tag tag-amber" style={{ marginLeft: "0.4rem", fontSize: "0.62rem" }}>{student.grade}</span>
                         </td>
-                        {periodAssignments.map(a => (
+                        {periodAssignments.map((a, ai) => (
                           <GradeCell
                             key={a.id}
                             assignment={a}
                             grade={sg[a.id] || null}
                             student={student}
+                            quickEntry={quickEntry}
+                            autoZeroOpts={autoZeroOpts}
+                            gridPos={{ si, ai }}
+                            registerRef={registerRef}
+                            onGridNav={onGridNav}
                             onSave={data => handleSaveGrade(a.id, student, data)}
                             onOpenRubric={() => setRubricState({ assignment: a, student, grade: sg[a.id] || null })}
                           />
                         ))}
                         <td style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)", fontWeight: 700, color: TIER_COLORS[tier] }}>
-                          {pct != null ? `${Math.round(pct)}%` : "—"}
+                          {pct != null ? `${Math.round(pct)}%` : "—"}<TrendArrow trend={trend} belowPassing={pct != null && pct < 70} />
                         </td>
                         <td style={{ textAlign: "center", fontWeight: 800, fontSize: "1rem", color: TIER_COLORS[tier] }}>
                           {pct != null ? letter : "—"}
@@ -612,7 +835,7 @@ export default function Gradebook({ students, user }) {
                     })}
                     <td colSpan={2} style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
                       {(() => {
-                        const avgs = sortedStudents.map(s => calcPeriodGrade(periodAssignments, gradeMap[s.id] || {}, categories).pct).filter(Boolean);
+                        const avgs = sortedStudents.map(s => calcPeriodGrade(periodAssignments, gradeMap[s.id] || {}, categories, autoZeroOpts).pct).filter(Boolean);
                         const avg = avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : null;
                         return avg ? <span style={{ fontWeight: 700, color: GOLD }}>{Math.round(avg)}%</span> : "—";
                       })()}
@@ -634,17 +857,26 @@ export default function Gradebook({ students, user }) {
                 {p <= 4 ? `P${p}` : p === 5 ? "Midterm" : "Final"}
               </button>
             ))}
-            <button onClick={() => { setEditingAssignment(null); setShowForm(true); }} className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }}>+ Add</button>
+            <button onClick={sortByDueDate} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} title="Reorder assignments within each category by due date">↕ Sort by due date</button>
+            <button onClick={() => { setEditingAssignment(null); setShowForm(true); }} className="btn btn-primary btn-sm">+ Add</button>
+          </div>
+
+          <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.25rem" }}>
+            Drag an assignment by its <strong>⠿</strong> handle to reorder it, or drop it on another category heading to move it there.
           </div>
 
           {showForm && !editingAssignment && <AssignmentForm categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} />}
           {editingAssignment && <AssignmentForm initial={editingAssignment} categories={categories} period={period} onSave={handleUpdateAssignment} onClose={() => setEditingAssignment(null)} />}
 
           {categories.map(cat => {
-            const catAssignments = assignments.filter(a => a.grading_period === period && a.category === cat.name);
+            const catAssignments = assignments.filter(a => a.grading_period === period && a.category === cat.name)
+              .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || new Date(a.created_at) - new Date(b.created_at));
             return (
               <div key={cat.name}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem", marginTop: "0.5rem" }}>
+                <div
+                  onDragOver={e => { if (dragId) e.preventDefault(); }}
+                  onDrop={() => handleDropOnCategory(cat.name)}
+                  style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem", marginTop: "0.5rem", padding: "0.2rem 0.3rem", borderRadius: 6, border: dragId ? "1px dashed rgba(245,192,37,0.4)" : "1px dashed transparent" }}>
                   <span style={{ color: cat.color, fontWeight: 800, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>■ {cat.name}</span>
                   <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)" }}>{cat.weight}%{cat.drop_lowest ? ` · drop lowest ${cat.drop_lowest}` : ""}</span>
                 </div>
@@ -654,7 +886,11 @@ export default function Gradebook({ students, user }) {
                   catAssignments.map(a => {
                     const stats = assignmentStats(a, grades.filter(g => g.assignment_id === a.id));
                     return (
-                      <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.55rem 0.85rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, marginBottom: "0.35rem", flexWrap: "wrap" }}>
+                      <div key={a.id}
+                        onDragOver={e => { if (dragId && dragId !== a.id) e.preventDefault(); }}
+                        onDrop={() => handleDropOnAssignment(a)}
+                        style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.55rem 0.85rem", background: dragId === a.id ? "rgba(245,192,37,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${dragId === a.id ? "rgba(245,192,37,0.4)" : "rgba(255,255,255,0.07)"}`, borderRadius: 8, marginBottom: "0.35rem", flexWrap: "wrap" }}>
+                        <span draggable onDragStart={() => setDragId(a.id)} onDragEnd={() => setDragId(null)} title="Drag to reorder" style={{ cursor: "grab", color: "rgba(255,255,255,0.3)", fontSize: "1rem", userSelect: "none" }}>⠿</span>
                         <div style={{ flex: 1, minWidth: 140 }}>
                           <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{a.name} {a.extra_credit && <span className="tag tag-green" style={{ fontSize: "0.62rem" }}>EC</span>} {a.rubric?.length > 0 && <span style={{ fontSize: "0.72rem" }}>📋</span>}</div>
                           <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)" }}>
@@ -682,6 +918,15 @@ export default function Gradebook({ students, user }) {
         </div>
       )}
 
+      {/* ── MISSING WORK tab ────────────────────────────────────────────── */}
+      {subTab === "missing" && (
+        <GradebookMissingWork
+          students={sortedStudents} assignments={assignments} gradeMap={gradeMap}
+          period={period} setPeriod={setPeriod} autoZeroOpts={autoZeroOpts} user={user}
+          onMark={(assignmentId, student, data) => handleSaveGrade(assignmentId, student, data)}
+        />
+      )}
+
       {/* ── REPORTS tab ─────────────────────────────────────────────────── */}
       {subTab === "reports" && (
         <GradebookReports students={students} assignments={assignments} grades={grades} profiles={profiles} settings={settings} user={user} />
@@ -698,9 +943,10 @@ export default function Gradebook({ students, user }) {
           assignment={rubricState.assignment}
           student={rubricState.student}
           existingGrade={rubricState.grade}
-          onSave={async (rubric_scores, total) => {
+          onSave={async (rubric_scores, total, rubric_comments) => {
             await handleSaveGrade(rubricState.assignment.id, rubricState.student, {
               rubric_scores,
+              rubric_comments: rubric_comments || {},
               points_earned: total,
             });
             setRubricState(null);

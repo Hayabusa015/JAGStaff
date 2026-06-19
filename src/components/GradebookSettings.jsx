@@ -251,6 +251,34 @@ export default function GradebookSettings({ profiles, settings, saveProfile, set
         </div>
       </div>
 
+      {/* ── Missing Work Policy ──────────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Missing Work Policy</div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          When enabled, any blank assignment past its due date counts as a zero in averages —
+          so students and parents are never surprised. This is calculated automatically and
+          changes nothing in your saved grades; turn it off to revert.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.85rem" }}>
+          <button onClick={() => saveSettings({ auto_zero_missing: !(settings?.auto_zero_missing ?? false) })} style={{
+            width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer", position: "relative",
+            background: (settings?.auto_zero_missing ?? false) ? GOLD : "rgba(255,255,255,0.15)", flexShrink: 0,
+          }}>
+            <span style={{ position: "absolute", top: 2, left: (settings?.auto_zero_missing ?? false) ? "calc(100% - 20px)" : 2, width: 18, height: 18, borderRadius: "50%", background: (settings?.auto_zero_missing ?? false) ? "#000" : "rgba(255,255,255,0.6)", transition: "left 0.2s" }} />
+          </button>
+          <span style={{ fontSize: "0.85rem" }}>Auto-zero past-due missing work</span>
+        </div>
+        {(settings?.auto_zero_missing ?? false) && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.55)" }}>Grace period</span>
+            <input type="number" min={0} max={30} value={settings?.auto_zero_grace_days ?? 0}
+              onChange={e => saveSettings({ auto_zero_grace_days: Math.max(0, Number(e.target.value) || 0) })}
+              style={{ ...inp, width: 64 }} />
+            <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)" }}>days after the due date</span>
+          </div>
+        )}
+      </div>
+
       {/* ── Auto-email toggles ───────────────────────────────────────────── */}
       <div className="card">
         <div className="section-title">Auto Parent Notifications</div>

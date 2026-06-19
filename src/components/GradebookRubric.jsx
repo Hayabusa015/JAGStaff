@@ -5,10 +5,14 @@ import { GOLD } from "../constants.js";
 export default function GradebookRubric({ assignment, student, existingGrade, onSave, onClose }) {
   const rubric = assignment?.rubric || [];
   const [scores, setScores] = useState({});
+  const [comments, setComments] = useState({});
 
   useEffect(() => {
     if (existingGrade?.rubric_scores) {
       setScores(existingGrade.rubric_scores);
+    }
+    if (existingGrade?.rubric_comments) {
+      setComments(existingGrade.rubric_comments);
     }
   }, [existingGrade]);
 
@@ -68,6 +72,16 @@ export default function GradebookRubric({ assignment, student, existingGrade, on
                       <div style={{ height: "100%", width: `${Math.min(100, cPct)}%`, background: cPct >= 80 ? "#22c55e" : cPct >= 60 ? "#f59e0b" : "#ef4444", borderRadius: 2, transition: "width 0.2s" }} />
                     </div>
                   )}
+                  <textarea
+                    value={comments[c.id] ?? ""}
+                    onChange={e => setComments(m => ({ ...m, [c.id]: e.target.value }))}
+                    placeholder="Comment (optional)…"
+                    style={{
+                      marginTop: "0.6rem", width: "100%", boxSizing: "border-box", minHeight: 38, resize: "vertical",
+                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 6, padding: "0.35rem 0.6rem", color: "#fff", fontSize: "0.8rem", outline: "none",
+                    }}
+                  />
                 </div>
               );
             })}
@@ -91,7 +105,7 @@ export default function GradebookRubric({ assignment, student, existingGrade, on
         {/* Actions */}
         <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", borderRadius: 6, padding: "0.45rem 1rem", cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => onSave(scores, total)} style={{ background: GOLD, border: "none", color: "#000", fontWeight: 800, borderRadius: 6, padding: "0.45rem 1.5rem", cursor: "pointer" }}>
+          <button onClick={() => onSave(scores, total, comments)} style={{ background: GOLD, border: "none", color: "#000", fontWeight: 800, borderRadius: 6, padding: "0.45rem 1.5rem", cursor: "pointer" }}>
             Save Rubric Score
           </button>
         </div>
