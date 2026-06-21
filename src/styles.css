@@ -21,10 +21,11 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg-main);
   color: var(--text);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ── Layout ── */
@@ -37,24 +38,6 @@ body {
   margin: 0 auto;
   width: 100%;
   position: relative;
-}
-
-/* Mascot watermark — drop a <div class="mascot-watermark"> inside content-area */
-.mascot-watermark {
-  position: fixed;
-  bottom: -40px;
-  right: -40px;
-  width: 420px;
-  height: 420px;
-  pointer-events: none;
-  opacity: 0.04;
-  z-index: 0;
-  font-size: 360px;
-  font-weight: 900;
-  line-height: 1;
-  color: var(--gold);
-  letter-spacing: -0.05em;
-  user-select: none;
 }
 
 /* ── Top Nav — two-row layout ── */
@@ -418,16 +401,6 @@ label {
   /* ── Content area ── */
   .content-area {
     padding: 0.85rem 0.75rem;
-  }
-
-  /* ── Watermark logo on mobile ── */
-  .mascot-watermark {
-    width: 260px;
-    height: 260px;
-    font-size: 220px;
-    bottom: -20px;
-    right: -20px;
-    opacity: 0.05;
   }
 
   /* ── Top nav: collapse to one tight row ── */
