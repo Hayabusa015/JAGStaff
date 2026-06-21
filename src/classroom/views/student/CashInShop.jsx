@@ -7,7 +7,7 @@ import Badge, { StatusBadge as SB } from '../../components/Badge.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function CashInShop() {
-  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme } = useApp();
+  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme, teacherProfile } = useApp();
   const theme = getTheme(activeStudent.classId);
   const [selected, setSelected] = useState(() => shopItems[0]?.id ?? null);
   const [flash, setFlash] = useState(null);
@@ -21,7 +21,7 @@ export default function CashInShop() {
   const submit = () => {
     const ok = submitMoleRequest(activeStudent.id, item);
     if (ok) {
-      setFlash({ tone: 'success', text: `Locked ${item.cost} MD for "${item.label}". Sent to Mr. Shull for approval!` });
+      setFlash({ tone: 'success', text: `Locked ${item.cost} MD for "${item.label}". Sent to ${teacherProfile.name} for approval!` });
     } else {
       setFlash({ tone: 'error', text: `Not enough Mole Dollars for "${item.label}".` });
     }
@@ -110,8 +110,8 @@ export default function CashInShop() {
               {affordable ? `Submit Request · ${item.cost} MD` : 'Insufficient Balance'}
             </button>
             <p className="text-center text-[11px] text-zinc-500">
-              Submitting instantly locks the tokens out of your spendable balance until Mr. Shull
-              approves or denies.
+              Submitting instantly locks the tokens out of your spendable balance until {teacherProfile.name}
+              {' '}approves or denies.
             </p>
           </div>
         </Card>

@@ -30,7 +30,7 @@ const SPAN_CLASS = {
 };
 
 export default function TeacherDashboard() {
-  const { dashboardLayout, toggleWidget, moveWidget, cycleWidgetSpan, resetLayout } = useApp();
+  const { dashboardLayout, toggleWidget, moveWidget, cycleWidgetSpan, resetLayout, teacherProfile } = useApp();
   const [showConfig, setShowConfig] = useState(false);
 
   const ordered = [...dashboardLayout].sort((a, b) => a.order - b.order);
@@ -49,10 +49,10 @@ export default function TeacherDashboard() {
           />
           <div className="relative">
             <p className="font-display text-xs font-bold uppercase tracking-[0.25em] text-gold-500">
-              G-MEN · Command Center
+              {teacherProfile.tagline}
             </p>
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-50">
-              Welcome back, Mr. Shull
+              Welcome back, {teacherProfile.name}
             </h2>
             <p className="text-xs text-zinc-400">Here's your room at a glance.</p>
           </div>

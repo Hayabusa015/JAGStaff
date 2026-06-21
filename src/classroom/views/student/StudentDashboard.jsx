@@ -19,7 +19,7 @@ import { formatDateTime, timeAgo } from '../../utils/format.js';
 import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 export default function StudentDashboard() {
-  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView } =
+  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile } =
     useApp();
   const cls = getClass(activeStudent.classId);
   const theme = getTheme(activeStudent.classId);
@@ -136,7 +136,7 @@ export default function StudentDashboard() {
 
         {/* Pending requests */}
         <Card className="lg:col-span-1" hover>
-          <CardHeader title="Pending Redemptions" subtitle="Awaiting Mr. Shull" icon={Coins} />
+          <CardHeader title="Pending Redemptions" subtitle={`Awaiting ${teacherProfile.name}`} icon={Coins} />
           <div className="p-5">
             <p className="font-display text-4xl font-bold text-zinc-50">{pendingMole.length}</p>
             <p className="text-xs text-zinc-500">
@@ -164,7 +164,7 @@ export default function StudentDashboard() {
       {/* Recent notifications */}
       {recentNotes.length > 0 && (
         <Card>
-          <CardHeader title="Recent Activity" subtitle="Flags from Mr. Shull" icon={Bell} />
+          <CardHeader title="Recent Activity" subtitle={`Flags from ${teacherProfile.name}`} icon={Bell} />
           <div className="divide-y divide-white/5">
             {recentNotes.map((n) => (
               <div key={n.id} className="flex items-center justify-between gap-3 px-5 py-3">

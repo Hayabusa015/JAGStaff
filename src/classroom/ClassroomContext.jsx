@@ -27,6 +27,23 @@ const clone = (data) => JSON.parse(JSON.stringify(data));
 
 const UNITS_STORAGE_KEY = 'gmen-units-v1';
 const MOLE_EC_KEY = 'gmen-mole-ec-v1';
+const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
+
+const DEFAULT_TEACHER_PROFILE = {
+  name: 'Mr. Shull',
+  classroom: 'Shull Science',
+  tagline: 'G-MEN Command',
+};
+
+function loadTeacherProfile() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(TEACHER_PROFILE_KEY);
+      if (saved) return { ...DEFAULT_TEACHER_PROFILE, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+  }
+  return { ...DEFAULT_TEACHER_PROFILE };
+}
 
 function loadMoleEconomy() {
   if (typeof window !== 'undefined') {
@@ -89,6 +106,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [dashboardLayout, setDashboardLayout] = useState(() => clone(DEFAULT_DASHBOARD_LAYOUT));
   const [units, setUnits] = useState(loadUnits);
   const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
+  const [teacherProfile, setTeacherProfile] = useState(loadTeacherProfile);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
@@ -105,6 +123,14 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       window.localStorage.setItem(MOLE_EC_KEY, JSON.stringify(moleEconomy));
     } catch { /* ignore */ }
   }, [moleEconomy]);
+
+  // Persist teacher profile.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(TEACHER_PROFILE_KEY, JSON.stringify(teacherProfile));
+    } catch { /* ignore */ }
+  }, [teacherProfile]);
 
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
@@ -392,10 +418,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       pushNotification(t.studentId, {
         kind: 'ticket',
         tone: 'success',
-        text: `Your "${t.category}" request was marked complete by Mr. Shull. ✅`,
+        text: `Your "${t.category}" request was marked complete by ${teacherProfile.name}. ✅`,
       });
     },
-    [tickets, liveMode, isStaff, teacherActions]
+    [tickets, liveMode, isStaff, teacherActions, teacherProfile]
   );
 
   // ===========================================================================
@@ -463,10 +489,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
         to: student.guardian.email || '(no guardian email on file)',
         guardianName,
         subject,
-        body: `Dear ${guardianName},\n\n${opener}\n\n${body}${notesBlock}\n\n${closing}\n\nWarm regards,\nMr. Shull\nScience Department · Jag Schools`,
+        body: `Dear ${guardianName},\n\n${opener}\n\n${body}${notesBlock}\n\n${closing}\n\nWarm regards,\n${teacherProfile.name}\n${teacherProfile.classroom} · Jag Schools`,
       };
     },
-    [students]
+    [students, teacherProfile]
   );
 
   const sendParentEmail = useCallback((draft, meta) => {
@@ -582,6 +608,13 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const resetMaterials = useCallback(() => setUnits(clone(SEED_UNITS)), []);
 
   // ===========================================================================
+  //  TEACHER PROFILE  (teacher-configurable, localStorage-persisted)
+  // ===========================================================================
+  const updateTeacherProfile = useCallback((patch) => {
+    setTeacherProfile((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  // ===========================================================================
   //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
   // ===========================================================================
   const updateMoleMilestone = useCallback((val) => {
@@ -658,6 +691,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: moleEconomy.milestone,
     shopItems: moleEconomy.shopItems,
+
+    teacherProfile,
+    updateTeacherProfile,
 
     role,
     setRole,

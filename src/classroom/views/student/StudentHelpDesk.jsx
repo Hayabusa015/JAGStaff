@@ -9,7 +9,7 @@ import EmptyState from '../../components/EmptyState.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function StudentHelpDesk() {
-  const { activeStudent, tickets, submitTicket } = useApp();
+  const { activeStudent, tickets, submitTicket, teacherProfile } = useApp();
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
   const [details, setDetails] = useState('');
   const [flash, setFlash] = useState(false);
@@ -55,7 +55,7 @@ export default function StudentHelpDesk() {
                 onChange={(e) => setDetails(e.target.value)}
                 required
                 rows={4}
-                placeholder="Tell Mr. Shull what you need — e.g. which assignment, which test, when you completed it…"
+                placeholder={`Tell ${teacherProfile.name} what you need — e.g. which assignment, which test, when you completed it…`}
                 className="w-full resize-none rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-gold-500 focus:outline-none"
               />
             </div>

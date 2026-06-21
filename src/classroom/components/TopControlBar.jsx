@@ -10,10 +10,11 @@ const VIEW_TITLES = {
   helpdesk: { teacher: 'Help Desk Queue', student: 'Student Help Desk' },
   mailer: { teacher: 'Parent Communication', student: '' },
   lessons: { teacher: 'Lesson Plans', student: 'Lesson Plans' },
+  settings: { teacher: 'Classroom Settings', student: '' },
 };
 
 export default function TopControlBar({ onMenu }) {
-  const { role, activeView, MOCK_MODE, metrics, activeStudent, getClass } = useApp();
+  const { role, activeView, MOCK_MODE, metrics, activeStudent, getClass, teacherProfile } = useApp();
   const title = VIEW_TITLES[activeView]?.[role] || 'Command Center';
 
   return (
@@ -45,7 +46,7 @@ export default function TopControlBar({ onMenu }) {
           )}
         </div>
         <p className="text-xs text-zinc-500">
-          {role === 'teacher' ? 'Mr. Shull · Admin' : studentSub(activeStudent, getClass)}
+          {role === 'teacher' ? `${teacherProfile.name} · Admin` : studentSub(activeStudent, getClass)}
         </p>
       </div>
 

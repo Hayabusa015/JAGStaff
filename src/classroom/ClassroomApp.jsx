@@ -12,6 +12,7 @@ import MoleApprovalQueue from './views/teacher/MoleApprovalQueue.jsx';
 import HelpDeskKanban from './views/teacher/HelpDeskKanban.jsx';
 import ParentMailer from './views/teacher/ParentMailer.jsx';
 import LessonPlans from './views/teacher/LessonPlans.jsx';
+import ClassroomSettings from './views/teacher/ClassroomSettings.jsx';
 
 // Student views
 import StudentDashboard from './views/student/StudentDashboard.jsx';
@@ -83,6 +84,8 @@ function ViewRouter({ role, view, user, students }) {
         return <Gradebook students={students} user={user} />;
       case 'aigrader':
         return <AIGrader user={user} />;
+      case 'settings':
+        return <ClassroomSettings />;
       default:
         return <TeacherDashboard />;
     }
