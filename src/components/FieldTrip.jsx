@@ -1,8 +1,32 @@
 import { useState } from "react";
+import { useFieldTrips } from "../supabase.js";
+import { openGmailCompose } from "../email.js";
 
 const blank = { destination: "", date: "", depart: "", returnTime: "", grade: "", students: "", buses: "No", sub: "No", chaperones: "" };
 
-export default function FieldTrip() {
+function buildBriefing(form, user) {
+  const subject = `[FIELD TRIP REQUEST] ${form.destination.trim()} — ${form.date}`;
+  const body = [
+    `FIELD TRIP REQUEST — James A. Garfield High School`,
+    ``,
+    `Submitted by: ${user?.name || "Staff"}${user?.email ? ` (${user.email})` : ""}`,
+    `Destination:  ${form.destination.trim()}`,
+    `Date:         ${form.date}`,
+    `Departure:    ${form.depart || "—"}`,
+    `Return:       ${form.returnTime || "—"}`,
+    `Grade/Class:  ${form.grade || "—"}`,
+    `Est. students: ${form.students || "—"}`,
+    `Buses needed: ${form.buses}`,
+    `Sub required: ${form.sub}`,
+    `Chaperones:   ${form.chaperones || "—"}`,
+    ``,
+    `— Sent from the JAG Staff Portal`,
+  ].join("\n");
+  return { subject, body };
+}
+
+export default function FieldTrip({ user }) {
+  const { trips, addTrip } = useFieldTrips(user?.email);
   const [form, setForm] = useState(blank);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState("");
@@ -10,20 +34,27 @@ export default function FieldTrip() {
   function submit(e) {
     e.preventDefault();
     if (!form.destination.trim() || !form.date) { setErr("Destination and date are required."); return; }
+    addTrip(form);
+    const { subject, body } = buildBriefing(form, user);
+    // Recipient left blank — the teacher adds who it goes to in Gmail.
+    openGmailCompose({ subject, body });
     setSubmitted(true);
   }
 
   if (submitted) return (
     <div style={{ textAlign: "center", padding: "4rem 1rem" }}>
       <div style={{ fontSize: "3rem" }}>✅</div>
-      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>FIELD TRIP SUBMITTED</h2>
-      <p className="text-muted mt1">Briefing email sent simultaneously to:</p>
-      <div className="flex gap1 mt1" style={{ justifyContent: "center", flexWrap: "wrap" }}>
-        {["Principal", "Head Custodian", "Building Secretary"].map(r => (
-          <span key={r} className="tag tag-gold">{r}</span>
-        ))}
+      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>FIELD TRIP SAVED</h2>
+      <p className="text-muted mt1">
+        A Gmail compose window opened with the briefing pre-filled.<br />
+        Add the recipient(s) and hit send to notify them.
+      </p>
+      <div className="flex gap1 mt2" style={{ justifyContent: "center", flexWrap: "wrap" }}>
+        <button className="btn btn-ghost" onClick={() => openGmailCompose(buildBriefing(form, user))}>
+          ↻ Reopen Email
+        </button>
+        <button className="btn btn-primary" onClick={() => { setForm(blank); setSubmitted(false); }}>New Submission</button>
       </div>
-      <button className="btn btn-primary mt2" onClick={() => { setForm(blank); setSubmitted(false); }}>New Submission</button>
     </div>
   );
 
@@ -34,7 +65,7 @@ export default function FieldTrip() {
       </div>
 
       <div className="card" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", marginBottom: "1.25rem" }}>
-        <span style={{ fontWeight: 600, color: "#92700a" }}>ℹ Submitting will send an HTML briefing email to Principal, Head Custodian, and Building Secretary simultaneously.</span>
+        <span style={{ fontWeight: 600, color: "#92700a" }}>ℹ Submitting saves the request and opens a Gmail compose window with the briefing pre-filled — add the recipient(s) and send.</span>
       </div>
 
       <div className="card">
@@ -93,6 +124,26 @@ export default function FieldTrip() {
           </button>
         </form>
       </div>
+
+      {trips.length > 0 && (
+        <div className="card mt2">
+          <div className="section-title">My Recent Submissions</div>
+          {trips.map(t => {
+            const d = t.trip_date ? new Date(t.trip_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+            return (
+              <div key={t.id} className="flex items-center justify-between" style={{ padding: "0.55rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
+                <div>
+                  <span style={{ fontWeight: 600 }}>{t.destination}</span>
+                  <div className="text-muted mt1">
+                    {d}{t.grade ? ` · ${t.grade}` : ""}{t.student_count ? ` · ${t.student_count} students` : ""}
+                    {t.buses ? " · 🚌 Buses" : ""}{t.needs_sub ? " · Sub needed" : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

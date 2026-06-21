@@ -5,9 +5,10 @@ pass state across every logged-in staff member in real time. When a student
 signs out on the kiosk Chromebook, every teacher with the portal open sees
 them in "Currently Out" within ~1 second.
 
-Right now only hall passes are wired to Supabase — the rest of the app (CEU,
-requisitions, field trips, weekly events, rosters) is still local-only. The
-same pattern extends to those easily when you're ready.
+Hall passes, infractions, gradebook, G-Men, the student roster, weekly events,
+trip rosters, the CEU tracker, and the field-trip / requisition archives are all
+wired to Supabase. Run the SQL blocks in this guide to create their tables; any
+table you skip simply falls back to seeded in-memory mode (lost on refresh).
 
 > **Why Supabase over Firebase?** It's the same batteries-included experience
 > (database + auth + realtime + free tier) but on top of real Postgres, so the
@@ -87,9 +88,11 @@ SQL Editor:
 alter table public.hall_passes   enable row level security;
 alter table public.hall_pass_log enable row level security;
 
--- Helper: true only for verified school-domain users
+-- Helper: true only for verified school-domain users.
+-- `set search_path = ''` pins the resolution path so the function can't be
+-- hijacked by a role-local search_path (Supabase security linter 0011).
 create or replace function public.is_staff()
-returns boolean language sql stable as $$
+returns boolean language sql stable set search_path = '' as $$
   select coalesce(auth.jwt() ->> 'email', '') like '%@jagschools.org'
 $$;
 
@@ -379,3 +382,154 @@ alter table public.gradebook_settings    add column if not exists late_penalty_p
 
 These back the drag-drop column ordering, per-criterion rubric comments, and the
 auto-zero-missing-work policy respectively.
+
+---
+
+## Weekly Events, Trip Rosters, CEU & request archives
+
+These five tabs used to keep everything in browser memory only, so a refresh
+wiped them out. They now persist to Supabase. Run this in the SQL Editor (it
+reuses the same `public.is_staff()` helper, so no extra setup):
+
+```sql
+-- ── Weekly Events (shared, school-wide) ──────────────────────────
+create table public.weekly_events (
+  id         uuid primary key default gen_random_uuid(),
+  type       text not null,
+  title      text not null,
+  date       date,
+  time       text,
+  details    text,
+  created_at timestamptz not null default now()
+);
+
+-- ── Trip Rosters (shared, school-wide) ───────────────────────────
+create table public.trip_rosters (
+  id          uuid primary key default gen_random_uuid(),
+  type        text not null,
+  title       text not null,
+  teacher     text,
+  date        date,
+  depart      text,
+  return_time text,
+  notes       text,
+  students    jsonb not null default '[]',   -- [{ name, grade }]
+  created_at  timestamptz not null default now()
+);
+
+-- ── CEU entries (per teacher) ────────────────────────────────────
+create table public.ceu_entries (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name          text not null,
+  hours         numeric not null,
+  entry_date    text,                         -- 'YYYY-MM'
+  created_at    timestamptz not null default now()
+);
+create index on public.ceu_entries (teacher_email);
+
+-- ── Tuition reimbursement expenses (per teacher) ─────────────────
+create table public.ceu_reimbursements (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  name          text not null,
+  cost          numeric not null,
+  created_at    timestamptz not null default now()
+);
+create index on public.ceu_reimbursements (teacher_email);
+
+-- ── Field trip request archive (per teacher) ─────────────────────
+create table public.field_trip_requests (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  destination   text not null,
+  trip_date     date,
+  depart        text,
+  return_time   text,
+  grade         text,
+  student_count integer,
+  buses         boolean default false,
+  needs_sub     boolean default false,
+  chaperones    text,
+  created_at    timestamptz not null default now()
+);
+create index on public.field_trip_requests (teacher_email);
+
+-- ── Requisition archive (per teacher) ────────────────────────────
+-- The full cart (vendors/items) is stored as JSONB. Quote files are kept by
+-- name only — uploading the binaries would need a Supabase Storage bucket.
+create table public.requisitions (
+  id            uuid primary key default gen_random_uuid(),
+  teacher_email text not null,
+  cart          jsonb not null default '[]',
+  total         numeric default 0,
+  created_at    timestamptz not null default now()
+);
+create index on public.requisitions (teacher_email);
+
+-- ── Row Level Security ───────────────────────────────────────────
+alter table public.weekly_events       enable row level security;
+alter table public.trip_rosters        enable row level security;
+alter table public.ceu_entries         enable row level security;
+alter table public.ceu_reimbursements  enable row level security;
+alter table public.field_trip_requests enable row level security;
+alter table public.requisitions        enable row level security;
+
+-- weekly_events + trip_rosters are genuinely school-wide: any signed-in staff
+-- member may read + write them.
+do $$
+declare t text;
+begin
+  foreach t in array array['weekly_events','trip_rosters'] loop
+    execute format('create policy "staff read %1$s"   on public.%1$I for select using (public.is_staff());', t);
+    execute format('create policy "staff insert %1$s" on public.%1$I for insert with check (public.is_staff());', t);
+    execute format('create policy "staff delete %1$s" on public.%1$I for delete using (public.is_staff());', t);
+  end loop;
+end $$;
+
+-- Helpers used by the owner-scoped policies below (and by the gradebook_*
+-- policies in supabase/migrations/20260615_owner_scoped_rls.sql).
+create or replace function public.current_email()
+returns text language sql stable set search_path = '' as $$
+  select coalesce(auth.jwt() ->> 'email', '')
+$$;
+
+create or replace function public.is_admin()
+returns boolean language sql stable set search_path = '' as $$
+  select exists (
+    select 1 from public.staff_directory
+    where email = coalesce(auth.jwt() ->> 'email', '') and is_admin = true
+  )
+$$;
+
+-- ceu_entries / ceu_reimbursements / field_trip_requests / requisitions hold a
+-- single teacher's private records, so they are OWNER-SCOPED: a teacher only
+-- sees their own rows, and an admin (staff_directory.is_admin) sees all. The
+-- client already filters by teacher_email; this enforces it at the database.
+-- The gradebook_* tables use the same helpers but are OWNER-ONLY (no admin
+-- override) — a teacher's gradebook is private to their account. See
+-- supabase/migrations/20260615_owner_scoped_rls.sql and the follow-up
+-- 20260615_gradebook_owner_only.sql.
+do $$
+declare
+  t text;
+  owner_or_admin constant text :=
+    'public.is_staff() and (teacher_email = public.current_email() or public.is_admin())';
+begin
+  foreach t in array array[
+    'ceu_entries','ceu_reimbursements','field_trip_requests','requisitions'
+  ] loop
+    execute format('create policy "owner read %1$s"   on public.%1$I for select using (%2$s);', t, owner_or_admin);
+    execute format('create policy "owner insert %1$s" on public.%1$I for insert with check (%2$s);', t, owner_or_admin);
+    execute format('create policy "owner delete %1$s" on public.%1$I for delete using (%2$s);', t, owner_or_admin);
+  end loop;
+end $$;
+
+-- ── Realtime (only the shared, school-wide tables need it) ────────
+alter publication supabase_realtime add table public.weekly_events;
+alter publication supabase_realtime add table public.trip_rosters;
+```
+
+> **Heads-up:** until you run the SQL above, these tabs fall back to the same
+> in-memory behavior as before (seeded demo data, lost on refresh). Once the
+> tables exist, everything persists and the shared tabs sync live across staff.

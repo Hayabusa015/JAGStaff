@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { SEED_EVENTS, SEED_TRIPS, SEED_CEU } from "./constants.js";
 
 // Supabase project URL + anon key. The anon key is safe to ship in the
 // client — row-level security (RLS) is what actually protects the data.
@@ -1200,4 +1201,250 @@ export function useGradebook(teacherEmail) {
     saveGrade, saveProfile, setActiveProfile, deleteProfile,
     saveSettings,
   };
+}
+
+// ─── Weekly Events (shared, Supabase-backed) ─────────────────────
+// Table: weekly_events — school-wide list of drills, tests, trips, etc.
+// Shown on the Dashboard ticker and managed on the Weekly Events tab.
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useWeeklyEvents() {
+  const [events, setEvents] = useState(SUPABASE_READY ? [] : SEED_EVENTS);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("weekly_events")
+        .select("*")
+        .order("date", { ascending: true });
+      if (!active) return;
+      setEvents((data || []).map(r => ({
+        id: r.id, type: r.type, title: r.title,
+        date: r.date || "", time: r.time || "", details: r.details || "",
+      })));
+    }
+    load();
+
+    const ch = supabase.channel("weekly_events_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_events" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  async function addEvent(ev) {
+    if (!SUPABASE_READY || !supabase) {
+      setEvents(prev => [...prev, { id: Date.now().toString(), ...ev }]);
+      return;
+    }
+    await supabase.from("weekly_events").insert({
+      type: ev.type, title: ev.title,
+      date: ev.date || null, time: ev.time || null, details: ev.details || null,
+    });
+    // Realtime INSERT triggers load() above.
+  }
+
+  async function removeEvent(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setEvents(prev => prev.filter(e => e.id !== id));
+      return;
+    }
+    await supabase.from("weekly_events").delete().eq("id", id);
+  }
+
+  return { events, addEvent, removeEvent };
+}
+
+// ─── Trip Rosters (shared, Supabase-backed) ──────────────────────
+// Table: trip_rosters — field trips / early releases / athletic events with
+// their student lists (stored as JSONB). Shown on the Dashboard ticker.
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useTripRosters() {
+  const [rosters, setRosters] = useState(SUPABASE_READY ? [] : SEED_TRIPS);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("trip_rosters")
+        .select("*")
+        .order("date", { ascending: true });
+      if (!active) return;
+      setRosters((data || []).map(r => ({
+        id: r.id, type: r.type, title: r.title, teacher: r.teacher || "",
+        date: r.date || "", depart: r.depart || "", returnTime: r.return_time || "",
+        notes: r.notes || "", students: r.students || [],
+      })));
+    }
+    load();
+
+    const ch = supabase.channel("trip_rosters_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_rosters" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  async function addRoster(r) {
+    if (!SUPABASE_READY || !supabase) {
+      setRosters(prev => [...prev, { id: Date.now().toString(), ...r }]);
+      return;
+    }
+    await supabase.from("trip_rosters").insert({
+      type: r.type, title: r.title, teacher: r.teacher || null,
+      date: r.date || null, depart: r.depart || null, return_time: r.returnTime || null,
+      notes: r.notes || null, students: r.students || [],
+    });
+  }
+
+  async function removeRoster(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setRosters(prev => prev.filter(t => t.id !== id));
+      return;
+    }
+    await supabase.from("trip_rosters").delete().eq("id", id);
+  }
+
+  return { rosters, addRoster, removeRoster };
+}
+
+// ─── CEU Tracker (per-teacher, Supabase-backed) ──────────────────
+// Two tables, both scoped to the signed-in teacher's email:
+//   ceu_entries        — logged CEU hours toward license renewal
+//   ceu_reimbursements — tuition reimbursement expenses
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useCeu(teacherEmail) {
+  const [entries, setEntries] = useState(SUPABASE_READY ? [] : SEED_CEU);
+  const [reimb, setReimb] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+
+    async function load() {
+      const [e, r] = await Promise.all([
+        supabase.from("ceu_entries").select("*").eq("teacher_email", teacherEmail).order("entry_date"),
+        supabase.from("ceu_reimbursements").select("*").eq("teacher_email", teacherEmail).order("created_at"),
+      ]);
+      if (!active) return;
+      setEntries((e.data || []).map(row => ({
+        id: row.id, name: row.name, hours: Number(row.hours), date: row.entry_date || "",
+      })));
+      setReimb((r.data || []).map(row => ({
+        id: row.id, name: row.name, cost: Number(row.cost),
+      })));
+    }
+    load();
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addEntry({ name, hours }) {
+    const entry_date = new Date().toISOString().slice(0, 7);
+    if (!SUPABASE_READY || !supabase) {
+      setEntries(prev => [...prev, { id: Date.now().toString(), name, hours: Number(hours), date: entry_date }]);
+      return;
+    }
+    const { data } = await supabase.from("ceu_entries")
+      .insert({ teacher_email: teacherEmail, name, hours: Number(hours), entry_date })
+      .select("*").single();
+    if (data) setEntries(prev => [...prev, { id: data.id, name: data.name, hours: Number(data.hours), date: data.entry_date || "" }]);
+  }
+
+  async function removeEntry(id) {
+    setEntries(prev => prev.filter(e => e.id !== id));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("ceu_entries").delete().eq("id", id);
+  }
+
+  async function addReimb({ name, cost }) {
+    if (!SUPABASE_READY || !supabase) {
+      setReimb(prev => [...prev, { id: Date.now().toString(), name, cost: Number(cost) }]);
+      return;
+    }
+    const { data } = await supabase.from("ceu_reimbursements")
+      .insert({ teacher_email: teacherEmail, name, cost: Number(cost) })
+      .select("*").single();
+    if (data) setReimb(prev => [...prev, { id: data.id, name: data.name, cost: Number(data.cost) }]);
+  }
+
+  async function removeReimb(id) {
+    setReimb(prev => prev.filter(r => r.id !== id));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("ceu_reimbursements").delete().eq("id", id);
+  }
+
+  return { entries, reimb, addEntry, removeEntry, addReimb, removeReimb };
+}
+
+// ─── Field Trip Requests (per-teacher archive, Supabase-backed) ──
+// Table: field_trip_requests — keeps a record of every submitted request so
+// it survives a refresh and the teacher can see what they've sent.
+export function useFieldTrips(teacherEmail) {
+  const [trips, setTrips] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+    supabase.from("field_trip_requests")
+      .select("*").eq("teacher_email", teacherEmail)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (active) setTrips(data || []); });
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addTrip(form) {
+    const row = {
+      teacher_email: teacherEmail,
+      destination: form.destination, trip_date: form.date || null,
+      depart: form.depart || null, return_time: form.returnTime || null,
+      grade: form.grade || null, student_count: form.students ? Number(form.students) : null,
+      buses: form.buses === "Yes", needs_sub: form.sub === "Yes",
+      chaperones: form.chaperones || null,
+    };
+    if (!SUPABASE_READY || !supabase) {
+      setTrips(prev => [{ id: Date.now().toString(), ...row, created_at: new Date().toISOString() }, ...prev]);
+      return;
+    }
+    const { data } = await supabase.from("field_trip_requests").insert(row).select("*").single();
+    if (data) setTrips(prev => [data, ...prev]);
+  }
+
+  return { trips, addTrip };
+}
+
+// ─── Requisitions (per-teacher archive, Supabase-backed) ─────────
+// Table: requisitions — stores the submitted cart (vendors/items) as JSONB so
+// the request survives a refresh. Quote files are recorded by name only;
+// uploading the binaries would require Supabase Storage (see SUPABASE_SETUP.md).
+export function useRequisitions(teacherEmail) {
+  const [requisitions, setRequisitions] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+    supabase.from("requisitions")
+      .select("*").eq("teacher_email", teacherEmail)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (active) setRequisitions(data || []); });
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addRequisition({ cart, total }) {
+    // Strip the non-serializable File objects — keep only the quote metadata.
+    const safeCart = cart.map(v => ({
+      ...v,
+      quotes: (v.quotes || []).map(q => ({ id: q.id, name: q.name, size: q.size, type: q.type })),
+    }));
+    const row = { teacher_email: teacherEmail, cart: safeCart, total: Number(total) || 0 };
+    if (!SUPABASE_READY || !supabase) {
+      setRequisitions(prev => [{ id: Date.now().toString(), ...row, created_at: new Date().toISOString() }, ...prev]);
+      return;
+    }
+    const { data } = await supabase.from("requisitions").insert(row).select("*").single();
+    if (data) setRequisitions(prev => [data, ...prev]);
+  }
+
+  return { requisitions, addRequisition };
 }

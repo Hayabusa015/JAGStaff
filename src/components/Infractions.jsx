@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { GOLD } from "../constants.js";
 import { useInfractions } from "../supabase.js";
+import { openGmailCompose } from "../email.js";
 
 const INFRACTION_TYPES = [
   { group: "Phone",   label: "Phone: Visible" },
@@ -151,7 +152,9 @@ export default function Infractions({ students, user }) {
         ``,
         `James A. Garfield High School Staff Portal`,
       ].join("\n");
-      window.open(`mailto:${form.studentParentEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+      // Opens Gmail compose pre-filled. Parent email is prefilled from the
+      // roster but stays editable in Gmail before the teacher sends.
+      openGmailCompose({ to: form.studentParentEmail, subject, body });
     }
     setForm({ studentSearch: "", studentId: "", studentName: "", studentGrade: "", studentParentEmail: "", type: INFRACTION_TYPES[0].label, notes: "", notifyParent: false });
     setShowForm(false);

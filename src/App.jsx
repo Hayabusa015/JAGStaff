@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
-import { useAuth, useStudents, SUPABASE_READY, isStaffEmail } from "./supabase.js";
+import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail } from "./supabase.js";
 import AdminSettings from "./components/AdminSettings.jsx";
 import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
 import Dashboard from "./components/Dashboard.jsx";
@@ -210,19 +210,8 @@ export default function App() {
     try { localStorage.setItem("jag-zone", z); } catch { /* ignore */ }
   }, []);
   const { students } = useStudents();
-  const [weeklyEvents, setWeeklyEvents] = useState([
-    { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
-    { id: "ev2", type: "State Test", title: "ELA State Assessment", date: "2026-06-04", time: "08:00", details: "Grades 10 & 11 — quiet corridors after 7:55 AM." },
-    { id: "ev3", type: "Field Trip", title: "Varsity Golf @ Pine Hills", date: "2026-06-05", time: "13:30", details: "Coach Davis. Students leave 1:30 PM." },
-  ]);
-  const [tripRosters, setTripRosters] = useState([
-    {
-      id: "tr1", type: "Athletic Event", title: "Varsity Golf @ Pine Hills",
-      teacher: "Coach Davis", date: "2026-06-05", depart: "13:30", returnTime: "17:30",
-      notes: "Transportation provided.",
-      students: [{ name: "Marcus Thompson", grade: "10" }, { name: "Jordan Garcia", grade: "10" }],
-    },
-  ]);
+  const { events: weeklyEvents, addEvent, removeEvent } = useWeeklyEvents();
+  const { rosters: tripRosters, addRoster, removeRoster } = useTripRosters();
   const [alerts, setAlerts] = useState([]);
 
   const resetTimer = useCallback(() => {
@@ -267,7 +256,7 @@ export default function App() {
   // Non-staff @jagschools.org account → student enrollment view
   if (isStaff === false) return <GmenEnrollmentView user={user} signOut={signOut} />;
 
-  const sharedProps = { user, students, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, alerts, setAlerts };
+  const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
   return (
     <div className="app-shell app-backdrop">
@@ -331,8 +320,8 @@ export default function App() {
 
         <div key={tab} className="page-enter">
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
-        {tab === "events"      && <WeeklyEvents {...sharedProps} />}
-        {tab === "trips"       && <TripRoster   {...sharedProps} />}
+        {tab === "events"      && <WeeklyEvents weeklyEvents={weeklyEvents} addEvent={addEvent} removeEvent={removeEvent} />}
+        {tab === "trips"       && <TripRoster   tripRosters={tripRosters} addRoster={addRoster} removeRoster={removeRoster} students={students} />}
         {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} isAdmin={isAdmin} />}
         {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
