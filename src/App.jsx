@@ -4,6 +4,7 @@ import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail } from "./supabase.js";
 import AdminSettings from "./components/AdminSettings.jsx";
 import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
+import StudentClassroomPortal from "./components/StudentClassroomPortal.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
 import TripRoster from "./components/TripRoster.jsx";
@@ -253,8 +254,8 @@ export default function App() {
     </div>
   );
 
-  // Non-staff @jagschools.org account → student enrollment view
-  if (isStaff === false) return <GmenEnrollmentView user={user} signOut={signOut} />;
+  // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
+  if (isStaff === false) return <StudentClassroomPortal user={user} signOut={signOut} />;
 
   const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
@@ -300,7 +301,7 @@ export default function App() {
       </nav>
 
       {zone === "classroom" ? (
-        <ClassroomProvider>
+        <ClassroomProvider user={user} isStaff={true}>
           <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
         </ClassroomProvider>
       ) : (
