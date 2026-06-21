@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Coins, Check, X, Bell, Trophy, History } from 'lucide-react';
+import { Coins, Check, X, Bell, Trophy, History, Settings2 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import Badge, { StatusBadge } from '../../components/Badge.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
 import { timeAgo } from '../../utils/format.js';
+import MoleEconSettings from './MoleEconSettings.jsx';
 
 export default function MoleApprovalQueue({ embedded = false }) {
   const { moleRequests, approveMoleRequest, denyMoleRequest, getStudent, getClass, getTheme, metrics } =
     useApp();
   const [denyingId, setDenyingId] = useState(null);
   const [denyNote, setDenyNote] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   const pending = moleRequests
     .filter((r) => r.status === 'pending')
@@ -146,9 +148,21 @@ export default function MoleApprovalQueue({ embedded = false }) {
               <p className="font-display text-xl font-bold text-gold-300">{pending.length}</p>
               <p className="text-[10px] uppercase tracking-wider text-zinc-500">Pending</p>
             </div>
+            <button
+              onClick={() => setShowSettings((s) => !s)}
+              className={`font-display flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-wide transition-all ${
+                showSettings
+                  ? 'border-gold-500/40 bg-gold-500/15 text-gold-300'
+                  : 'border-white/10 text-zinc-300 hover:border-white/20'
+              }`}
+            >
+              <Settings2 className="h-4 w-4" /> Economy Settings
+            </button>
           </div>
         </div>
       </Card>
+
+      {showSettings && <MoleEconSettings />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {queue}

@@ -6,6 +6,7 @@ import {
   MOLE_REQUESTS,
   HELP_TICKETS,
   MOLE_MILESTONE,
+  CASH_IN_SHOP,
   DEFAULT_DASHBOARD_LAYOUT,
   BEHAVIOR_SCENARIOS,
   SUBJECT_THEME,
@@ -25,6 +26,17 @@ const nextId = (prefix) => `${prefix}-${++idCounter}`;
 const clone = (data) => JSON.parse(JSON.stringify(data));
 
 const UNITS_STORAGE_KEY = 'gmen-units-v1';
+const MOLE_EC_KEY = 'gmen-mole-ec-v1';
+
+function loadMoleEconomy() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(MOLE_EC_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return { milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) };
+}
 
 // Units + materials persist locally (file blobs live in IndexedDB). Browser-only;
 // falls back to the seed during SSR / first run.
@@ -76,16 +88,23 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [metrics, setMetrics] = useState({ approvedMoleDollars: 30, completedTasks: 1 });
   const [dashboardLayout, setDashboardLayout] = useState(() => clone(DEFAULT_DASHBOARD_LAYOUT));
   const [units, setUnits] = useState(loadUnits);
+  const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(UNITS_STORAGE_KEY, JSON.stringify(units));
-    } catch {
-      /* storage full / unavailable — non-fatal */
-    }
+    } catch { /* storage full / unavailable — non-fatal */ }
   }, [units]);
+
+  // Persist mole economy config.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(MOLE_EC_KEY, JSON.stringify(moleEconomy));
+    } catch { /* ignore */ }
+  }, [moleEconomy]);
 
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
@@ -563,6 +582,39 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const resetMaterials = useCallback(() => setUnits(clone(SEED_UNITS)), []);
 
   // ===========================================================================
+  //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
+  // ===========================================================================
+  const updateMoleMilestone = useCallback((val) => {
+    const n = Math.max(1, Math.round(Number(val) || 1));
+    setMoleEconomy((prev) => ({ ...prev, milestone: n }));
+  }, []);
+
+  const addShopItem = useCallback((item) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: [...prev.shopItems, { id: nextId('shop'), icon: 'sparkles', ...item }],
+    }));
+  }, []);
+
+  const updateShopItem = useCallback((id, patch) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: prev.shopItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+    }));
+  }, []);
+
+  const removeShopItem = useCallback((id) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: prev.shopItems.filter((i) => i.id !== id),
+    }));
+  }, []);
+
+  const resetMoleEconomy = useCallback(() => {
+    setMoleEconomy({ milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) });
+  }, []);
+
+  // ===========================================================================
   //  DASHBOARD LAYOUT SCHEMA (req #6 — dynamic widget configuration)
   // ===========================================================================
   const toggleWidget = useCallback((widgetId) => {
@@ -604,7 +656,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     studentLoading,
     classes: allClasses,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
-    moleMilestone: MOLE_MILESTONE,
+    moleMilestone: moleEconomy.milestone,
+    shopItems: moleEconomy.shopItems,
 
     role,
     setRole,
@@ -646,6 +699,12 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     markNotificationsRead,
     generateEmailDraft,
     sendParentEmail,
+
+    updateMoleMilestone,
+    addShopItem,
+    updateShopItem,
+    removeShopItem,
+    resetMoleEconomy,
 
     toggleWidget,
     moveWidget,

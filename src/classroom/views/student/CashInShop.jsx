@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { Coins, Lock, ShoppingCart, Send, AlertCircle, CheckCircle2, Hourglass } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
-import { CASH_IN_SHOP } from '../../data/mockData.js';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import ProgressBar from '../../components/ProgressBar.jsx';
 import Badge, { StatusBadge as SB } from '../../components/Badge.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function CashInShop() {
-  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, getTheme } = useApp();
+  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme } = useApp();
   const theme = getTheme(activeStudent.classId);
-  const [selected, setSelected] = useState(CASH_IN_SHOP[0].id);
+  const [selected, setSelected] = useState(() => shopItems[0]?.id ?? null);
   const [flash, setFlash] = useState(null);
 
-  const item = CASH_IN_SHOP.find((i) => i.id === selected);
-  const affordable = activeStudent.balance >= item.cost;
+  const item = shopItems.find((i) => i.id === selected) ?? shopItems[0];
+  const affordable = item ? activeStudent.balance >= item.cost : false;
   const myRequests = moleRequests
     .filter((r) => r.studentId === activeStudent.id)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -69,7 +68,7 @@ export default function CashInShop() {
           <CardHeader title="Cash-In Shop" subtitle="Spend back to the Teacher Vault" icon={ShoppingCart} />
           <div className="space-y-4 p-5">
             <div className="grid gap-2 sm:grid-cols-2">
-              {CASH_IN_SHOP.map((opt) => {
+              {shopItems.map((opt) => {
                 const active = opt.id === selected;
                 return (
                   <button
