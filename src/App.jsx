@@ -14,8 +14,9 @@ import Requisition from "./components/Requisition.jsx";
 import FieldTrip from "./components/FieldTrip.jsx";
 import StudentRoster from "./components/StudentRoster.jsx";
 import Infractions from "./components/Infractions.jsx";
-import Gradebook from "./components/Gradebook.jsx";
-import AIGrader from "./components/AIGrader.jsx";
+// Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
+import { AppProvider as ClassroomProvider } from "./classroom/ClassroomContext.jsx";
+import ClassroomApp from "./classroom/ClassroomApp.jsx";
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -24,8 +25,6 @@ const TABS = [
   { key: "gmen",        label: "G-Men Period"     },
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
-  { key: "gradebook",   label: "Gradebook"        },
-  { key: "aigrader",   label: "AI Grader"        },
   { key: "resources",   label: "Teacher Resources"},
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
@@ -48,6 +47,56 @@ function SchoolLogo({ size = 42 }) {
       boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.3)`,
     }}>
       <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    </div>
+  );
+}
+
+function ZoneToggle({ zone, setZone }) {
+  const opts = [
+    { key: "school",    label: "School" },
+    { key: "classroom", label: "My Classroom" },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Switch zone"
+      style={{
+        display: "inline-flex",
+        gap: 2,
+        padding: 3,
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.05)",
+        border: `1px solid ${GOLD}33`,
+      }}
+    >
+      {opts.map(o => {
+        const active = zone === o.key;
+        return (
+          <button
+            key={o.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => setZone(o.key)}
+            style={{
+              padding: "0.3rem 0.85rem",
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              fontSize: "0.68rem",
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+              transition: "all 0.15s",
+              background: active ? GOLD : "transparent",
+              color: active ? "#0a0700" : "rgba(255,255,255,0.6)",
+              boxShadow: active ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -152,6 +201,14 @@ export default function App() {
 
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
+  // Top-level zone: building-wide "school" vs the teacher's own "classroom".
+  const [zone, setZoneState] = useState(() => {
+    try { return localStorage.getItem("jag-zone") || "school"; } catch { return "school"; }
+  });
+  const setZone = useCallback((z) => {
+    setZoneState(z);
+    try { localStorage.setItem("jag-zone", z); } catch { /* ignore */ }
+  }, []);
   const { students } = useStudents();
   const [weeklyEvents, setWeeklyEvents] = useState([
     { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
@@ -213,17 +270,20 @@ export default function App() {
   const sharedProps = { user, students, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, alerts, setAlerts };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-backdrop">
       {/* Top nav — two rows */}
       <nav className="top-nav">
-        {/* Row 1: brand + user */}
+        {/* Row 1: brand + zone toggle + user */}
         <div className="nav-row1">
           <div className="nav-brand">
             <SchoolLogo size={36} />
             <div className="nav-school-name">
               <span className="name-line1">James A. Garfield</span>
-              <span className="name-line2">Staff Portal · G-Men</span>
+              <span className="name-line2">G-Men Portal</span>
             </div>
+          </div>
+          <div style={{ marginLeft: "1rem" }}>
+            <ZoneToggle zone={zone} setZone={setZone} />
           </div>
           <div className="nav-user">
             {user.avatarUrl && (
@@ -234,21 +294,28 @@ export default function App() {
           </div>
         </div>
 
-        {/* Row 2: tabs */}
-        <div className="nav-row2">
-          {TABS.filter(t => !t.adminOnly || isAdmin).map(t => (
-            <button
-              key={t.key}
-              className={`tab-btn${tab === t.key ? " active" : ""}`}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Row 2: school tabs (the Classroom zone has its own SideNav) */}
+        {zone === "school" && (
+          <div className="nav-row2">
+            {TABS.filter(t => !t.adminOnly || isAdmin).map(t => (
+              <button
+                key={t.key}
+                className={`tab-btn${tab === t.key ? " active" : ""}`}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
-      {/* Page content */}
+      {zone === "classroom" ? (
+        <ClassroomProvider>
+          <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
+        </ClassroomProvider>
+      ) : (
+      /* Page content */
       <div className="content-area">
         {/* Mascot watermark */}
         <img
@@ -270,8 +337,6 @@ export default function App() {
         {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
-        {tab === "gradebook"   && <Gradebook    students={students} user={user} />}
-        {tab === "aigrader"   && <AIGrader     user={user} />}
 
         {tab === "resources" && (
           <>
@@ -306,6 +371,7 @@ export default function App() {
         )}
         </div>
       </div>
+      )}
     </div>
   );
 }
