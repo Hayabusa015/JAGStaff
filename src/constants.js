@@ -27,13 +27,41 @@ export const DESTINATIONS = [
   { key: "Locker",   icon: "🔐" },
 ];
 
+// Demo roster — 3 class sections matching the ClassOS classroom periods.
+// Used as the in-memory fallback when Supabase is not configured.
 export const SEED_STUDENTS = [
-  { id: "s1", firstName: "Marcus",  lastName: "Thompson", grade: "10" },
-  { id: "s2", firstName: "Aaliyah", lastName: "Johnson",  grade: "11" },
-  { id: "s3", firstName: "Devon",   lastName: "Williams", grade: "9"  },
-  { id: "s4", firstName: "Priya",   lastName: "Patel",    grade: "12" },
-  { id: "s5", firstName: "Jordan",  lastName: "Garcia",   grade: "10" },
-  { id: "s6", firstName: "Taylor",  lastName: "Brown",    grade: "11" },
+  // ── Period 2 · Honors Chemistry ──
+  { id: "s-c01", firstName: "Brianna",  lastName: "Adams",    grade: "11", section: "P2 · Honors Chemistry",    parentEmail: "b.adams.parent@demo.com",    studentEmail: "badams@demo.com" },
+  { id: "s-c02", firstName: "James",    lastName: "Carter",   grade: "10", section: "P2 · Honors Chemistry",    parentEmail: "j.carter.parent@demo.com",   studentEmail: "jcarter@demo.com" },
+  { id: "s-c03", firstName: "Emily",    lastName: "Chen",     grade: "11", section: "P2 · Honors Chemistry",    parentEmail: "e.chen.parent@demo.com",     studentEmail: "echen@demo.com" },
+  { id: "s-c04", firstName: "Marcus",   lastName: "Davis",    grade: "10", section: "P2 · Honors Chemistry",    parentEmail: "m.davis.parent@demo.com",    studentEmail: "mdavis@demo.com" },
+  { id: "s-c05", firstName: "Sophia",   lastName: "Foster",   grade: "11", section: "P2 · Honors Chemistry",    parentEmail: "s.foster.parent@demo.com",   studentEmail: "sfoster@demo.com" },
+  { id: "s-c06", firstName: "Luis",     lastName: "Garcia",   grade: "10", section: "P2 · Honors Chemistry",    parentEmail: "l.garcia.parent@demo.com",   studentEmail: "lgarcia@demo.com" },
+  { id: "s-c07", firstName: "Rachel",   lastName: "Kim",      grade: "11", section: "P2 · Honors Chemistry",    parentEmail: "r.kim.parent@demo.com",      studentEmail: "rkim@demo.com" },
+  { id: "s-c08", firstName: "Tyler",    lastName: "Morgan",   grade: "10", section: "P2 · Honors Chemistry",    parentEmail: "t.morgan.parent@demo.com",   studentEmail: "tmorgan@demo.com" },
+  { id: "s-c09", firstName: "Aaliyah",  lastName: "Nelson",   grade: "11", section: "P2 · Honors Chemistry",    parentEmail: "a.nelson.parent@demo.com",   studentEmail: "anelson@demo.com" },
+  { id: "s-c10", firstName: "Nikhil",   lastName: "Patel",    grade: "10", section: "P2 · Honors Chemistry",    parentEmail: "n.patel.parent@demo.com",    studentEmail: "npatel@demo.com" },
+  // ── Period 4 · Conceptual Physics ──
+  { id: "s-p01", firstName: "Destiny",  lastName: "Barnes",   grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "d.barnes.parent@demo.com",   studentEmail: "dbarnes@demo.com" },
+  { id: "s-p02", firstName: "Nathan",   lastName: "Cooper",   grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "n.cooper.parent@demo.com",   studentEmail: "ncooper@demo.com" },
+  { id: "s-p03", firstName: "Sofia",    lastName: "Diaz",     grade: "10", section: "P4 · Conceptual Physics",  parentEmail: "s.diaz.parent@demo.com",     studentEmail: "sdiaz@demo.com" },
+  { id: "s-p04", firstName: "Marcus",   lastName: "Evans",    grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "m.evans.parent@demo.com",    studentEmail: "mevans@demo.com" },
+  { id: "s-p05", firstName: "Emma",     lastName: "Flynn",    grade: "10", section: "P4 · Conceptual Physics",  parentEmail: "e.flynn.parent@demo.com",    studentEmail: "eflynn@demo.com" },
+  { id: "s-p06", firstName: "Jordan",   lastName: "Hayes",    grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "j.hayes.parent@demo.com",    studentEmail: "jhayes@demo.com" },
+  { id: "s-p07", firstName: "Amara",    lastName: "Jackson",  grade: "10", section: "P4 · Conceptual Physics",  parentEmail: "a.jackson.parent@demo.com",  studentEmail: "ajackson@demo.com" },
+  { id: "s-p08", firstName: "Ethan",    lastName: "Lewis",    grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "e.lewis.parent@demo.com",    studentEmail: "elewis@demo.com" },
+  { id: "s-p09", firstName: "Chloe",    lastName: "Mitchell", grade: "10", section: "P4 · Conceptual Physics",  parentEmail: "c.mitchell.parent@demo.com", studentEmail: "cmitchell@demo.com" },
+  { id: "s-p10", firstName: "Carlos",   lastName: "Rivera",   grade: "9",  section: "P4 · Conceptual Physics",  parentEmail: "c.rivera.parent@demo.com",   studentEmail: "crivera@demo.com" },
+  // ── Period 6 · Geology ──
+  { id: "s-g01", firstName: "Derek",    lastName: "Allen",    grade: "11", section: "P6 · Geology",             parentEmail: "d.allen.parent@demo.com",    studentEmail: "dallen@demo.com" },
+  { id: "s-g02", firstName: "Maya",     lastName: "Brooks",   grade: "12", section: "P6 · Geology",             parentEmail: "m.brooks.parent@demo.com",   studentEmail: "mbrooks@demo.com" },
+  { id: "s-g03", firstName: "Ryan",     lastName: "Coleman",  grade: "11", section: "P6 · Geology",             parentEmail: "r.coleman.parent@demo.com",  studentEmail: "rcoleman@demo.com" },
+  { id: "s-g04", firstName: "Zoe",      lastName: "Edwards",  grade: "12", section: "P6 · Geology",             parentEmail: "z.edwards.parent@demo.com",  studentEmail: "zedwards@demo.com" },
+  { id: "s-g05", firstName: "Isaiah",   lastName: "Freeman",  grade: "11", section: "P6 · Geology",             parentEmail: "i.freeman.parent@demo.com",  studentEmail: "ifreeman@demo.com" },
+  { id: "s-g06", firstName: "Jasmine",  lastName: "Grant",    grade: "12", section: "P6 · Geology",             parentEmail: "j.grant.parent@demo.com",    studentEmail: "jgrant@demo.com" },
+  { id: "s-g07", firstName: "Owen",     lastName: "Harris",   grade: "11", section: "P6 · Geology",             parentEmail: "o.harris.parent@demo.com",   studentEmail: "oharris@demo.com" },
+  { id: "s-g08", firstName: "Layla",    lastName: "Ingram",   grade: "12", section: "P6 · Geology",             parentEmail: "l.ingram.parent@demo.com",   studentEmail: "lingram@demo.com" },
+  { id: "s-g09", firstName: "Noah",     lastName: "Jenkins",  grade: "11", section: "P6 · Geology",             parentEmail: "n.jenkins.parent@demo.com",  studentEmail: "njenkins@demo.com" },
 ];
 
 // Used only as the in-memory fallback when Supabase is not configured, so the

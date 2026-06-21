@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
-import { useGradebook } from "../supabase.js";
+import { useGradebook, useClassroomSync } from "../supabase.js";
 import { useGmailSend } from "../supabase.js";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, gradePct, gradeTier,
@@ -195,7 +195,7 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
       if (!isNaN(n)) return onSave({ points_earned: n, missing: false, excused: false, late });
     }
     return (
-      <td style={{ padding: 2, textAlign: "center", background: grade?.missing ? "rgba(249,115,22,0.1)" : grade?.excused ? "rgba(255,255,255,0.04)" : cellColor(autoZeroed ? 0 : pct), minWidth: 72 }}>
+      <td style={{ padding: 1, textAlign: "center", background: grade?.missing ? "rgba(249,115,22,0.1)" : grade?.excused ? "rgba(255,255,255,0.04)" : cellColor(autoZeroed ? 0 : pct), minWidth: 54 }}>
         <input
           ref={el => registerRef?.(gridPos, el)}
           defaultValue={display}
@@ -214,8 +214,8 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
           onBlur={e => quickCommit(e.currentTarget.value)}
           style={{
             width: "100%", boxSizing: "border-box", textAlign: "center", background: "transparent",
-            border: "1px solid transparent", borderRadius: 4, padding: "0.35rem 0.2rem", color: "#fff",
-            fontSize: "0.8rem", fontWeight: 600, outline: "none",
+            border: "1px solid transparent", borderRadius: 4, padding: "0.28rem 0.1rem", color: "#fff",
+            fontSize: "0.76rem", fontWeight: 600, outline: "none",
           }}
           onFocus={e => { e.currentTarget.style.border = `1px solid ${GOLD}`; e.currentTarget.style.background = "rgba(245,192,37,0.08)"; e.currentTarget.select(); }}
         />
@@ -262,7 +262,7 @@ function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntr
   return (
     <td onClick={open} style={{
       padding: "0.4rem 0.5rem", cursor: "pointer", textAlign: "center",
-      background: cellColor(autoZeroed ? 0 : pct), minWidth: 72, transition: "background 0.15s",
+      background: cellColor(autoZeroed ? 0 : pct), minWidth: 54, transition: "background 0.15s",
     }}>
       {grade?.excused ? (
         <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>EXC</span>
@@ -524,20 +524,64 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
 export default function Gradebook({ students, user }) {
   const { assignments, grades, profiles, settings, addAssignment, updateAssignment, deleteAssignment, saveGrade, saveProfile, setActiveProfile, deleteProfile, saveSettings } = useGradebook(user?.email);
   const { requestGmailToken, sendEmail } = useGmailSend();
+  const { requestToken: requestGCToken, listCourses, syncGradesToCourse } = useClassroomSync();
 
   const [subTab, setSubTab] = useState("grades");
   const [period, setPeriod] = useState(1);
+  const [activeSection, setActiveSection] = useState(null); // null = all, string = section name
   const [showForm, setShowForm] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
-  const [rubricState, setRubricState] = useState(null); // { assignment, student, grade }
+  const [rubricState, setRubricState] = useState(null);
   const [expandedAssignment, setExpandedAssignment] = useState(null);
   const [quickEntry, setQuickEntry] = useState(false);
-  const [bulkMenu, setBulkMenu] = useState(null); // assignment id with open bulk menu
-  const [dragId, setDragId] = useState(null);      // assignment being dragged
-  const [detailStudent, setDetailStudent] = useState(null); // student analytics modal
-  const [importOpen, setImportOpen] = useState(false);      // CSV import modal
-  const [cloneDraft, setCloneDraft] = useState(null);       // duplicated assignment draft
-  const cellRefs = useRef({});                     // { "si:ai": inputEl } for quick-entry nav
+  const [bulkMenu, setBulkMenu] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [detailStudent, setDetailStudent] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [cloneDraft, setCloneDraft] = useState(null);
+  const cellRefs = useRef({});
+
+  // Google Classroom grade-sync state
+  const [gcSync, setGcSync] = useState(null); // null | 'auth' | 'picking' | 'syncing' | { synced, skipped, errors }
+  const [gcCourses, setGcCourses] = useState([]);
+  const gcTokenRef = useRef(null);
+
+  async function startGCSync() {
+    setGcSync("auth");
+    try {
+      const token = await requestGCToken();
+      gcTokenRef.current = token;
+      const courses = await listCourses(token);
+      setGcCourses(courses);
+      setGcSync("picking");
+    } catch (e) {
+      setGcSync({ synced: 0, skipped: 0, errors: [e.message] });
+    }
+  }
+
+  async function runGCSync(courseId) {
+    setGcSync("syncing");
+    try {
+      const result = await syncGradesToCourse(gcTokenRef.current, courseId, {
+        assignments: periodAssignments,
+        grades,
+        students: sectionStudents,
+      });
+      setGcSync(result);
+    } catch (e) {
+      setGcSync({ synced: 0, skipped: 0, errors: [e.message] });
+    }
+  }
+
+  // Unique sections for the class selector tabs
+  const sections = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const s of students) {
+      if (s.section && !seen.has(s.section)) { seen.add(s.section); out.push(s.section); }
+    }
+    return out.sort();
+  }, [students]);
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
   const categories = activeProfile?.categories || [];
@@ -574,10 +618,13 @@ export default function Gradebook({ students, user }) {
     return m;
   }, [grades]);
 
-  const sortedStudents = useMemo(() =>
-    [...students].sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)),
-    [students]
-  );
+  const sectionStudents = useMemo(() => {
+    const filtered = activeSection ? students.filter(s => s.section === activeSection) : students;
+    return [...filtered].sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+  }, [students, activeSection]);
+
+  // Keep alias for components that reference sortedStudents
+  const sortedStudents = sectionStudents;
 
   async function handleSaveGrade(assignmentId, student, data) {
     const assignment = assignments.find(a => a.id === assignmentId);
@@ -771,17 +818,74 @@ export default function Gradebook({ students, user }) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb2">
+      <div className="flex items-center justify-between mb2" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
         <div>
           <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Gradebook</h2>
-          <div className="text-muted" style={{ fontSize: "0.82rem" }}>
+          <div className="text-muted" style={{ fontSize: "0.78rem" }}>
             {activeProfile.name} weights · {categories.map(c => `${c.name} ${c.weight}%`).join(" · ")}
           </div>
         </div>
-        {subTab === "grades" && (
-          <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">+ Assignment</button>
-        )}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {subTab === "grades" && (
+            <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">+ Assignment</button>
+          )}
+        </div>
       </div>
+
+      {/* Class section tabs */}
+      {sections.length > 0 && (
+        <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            onClick={() => setActiveSection(null)}
+            style={{ background: !activeSection ? GOLD : "rgba(255,255,255,0.06)", border: !activeSection ? "none" : "1px solid rgba(255,255,255,0.12)", color: !activeSection ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.28rem 0.7rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem" }}
+          >
+            All Classes
+          </button>
+          {sections.map(sec => (
+            <button key={sec}
+              onClick={() => setActiveSection(sec)}
+              style={{ background: activeSection === sec ? GOLD : "rgba(255,255,255,0.06)", border: activeSection === sec ? "none" : "1px solid rgba(255,255,255,0.12)", color: activeSection === sec ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.28rem 0.7rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem" }}
+            >
+              {sec}
+            </button>
+          ))}
+          {/* Google Classroom grade sync */}
+          {gcSync === null && (
+            <button onClick={startGCSync}
+              style={{ marginLeft: "auto", background: "rgba(66,133,244,0.12)", border: "1px solid rgba(66,133,244,0.35)", color: "#7aacf8", borderRadius: 6, padding: "0.28rem 0.7rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
+              title="Push grades from the current period/section back to Google Classroom"
+            >
+              <svg width="13" height="13" viewBox="0 0 48 48" style={{ flexShrink: 0 }}><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/><path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/></svg>
+              Sync → Classroom
+            </button>
+          )}
+          {gcSync === "auth" && <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>Requesting access…</span>}
+          {gcSync === "syncing" && <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>Syncing grades…</span>}
+          {gcSync === "picking" && (
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.55)" }}>Pick class:</span>
+              {gcCourses.map(c => (
+                <button key={c.id} onClick={() => runGCSync(c.id)}
+                  style={{ background: "rgba(66,133,244,0.15)", border: "1px solid rgba(66,133,244,0.4)", color: "#7aacf8", borderRadius: 6, padding: "0.22rem 0.6rem", cursor: "pointer", fontWeight: 600, fontSize: "0.73rem" }}
+                >
+                  {c.name}{c.section ? ` · ${c.section}` : ""}
+                </button>
+              ))}
+              <button onClick={() => setGcSync(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
+            </div>
+          )}
+          {gcSync && typeof gcSync === "object" && (
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <span style={{ fontSize: "0.75rem", color: gcSync.errors?.length ? "#f97316" : "#22c55e" }}>
+                {gcSync.errors?.length
+                  ? `⚠ ${gcSync.synced} synced · ${gcSync.errors.length} errors`
+                  : `✓ ${gcSync.synced} grades synced · ${gcSync.skipped} skipped`}
+              </span>
+              <button onClick={() => setGcSync(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sub-tabs */}
       <div className="flex gap1 mb2" style={{ flexWrap: "wrap" }}>
@@ -821,37 +925,37 @@ export default function Gradebook({ students, user }) {
             </div>
           ) : (
             <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.82rem" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.79rem" }}>
                 <thead>
                   {/* Category band */}
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                    <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", minWidth: 140, position: "sticky", left: 0, background: "#111", zIndex: 2 }}>Student</th>
+                    <th style={{ padding: "0.4rem 0.6rem", textAlign: "left", minWidth: 118, position: "sticky", left: 0, background: "#111", zIndex: 2 }}>Student</th>
                     {categories.map(cat => {
                       const catCols = periodAssignments.filter(a => a.category === cat.name);
                       if (!catCols.length) return null;
-                      return <th key={cat.name} colSpan={catCols.length} style={{ padding: "0.4rem 0.5rem", background: cat.color + "22", color: cat.color, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", borderLeft: `2px solid ${cat.color}44` }}>{cat.name} · {cat.weight}%</th>;
+                      return <th key={cat.name} colSpan={catCols.length} style={{ padding: "0.3rem 0.4rem", background: cat.color + "22", color: cat.color, fontWeight: 800, fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center", borderLeft: `2px solid ${cat.color}44` }}>{cat.name} · {cat.weight}%</th>;
                     })}
-                    <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 80, borderLeft: "1px solid rgba(255,255,255,0.1)" }}>Period %</th>
-                    <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 56 }}>Grade</th>
-                    <th style={{ padding: "0.4rem 0.5rem", color: GOLD, fontWeight: 800, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", minWidth: 48 }}>GPA</th>
+                    <th style={{ padding: "0.3rem 0.4rem", color: GOLD, fontWeight: 800, fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center", minWidth: 64, borderLeft: "1px solid rgba(255,255,255,0.1)" }}>Prd %</th>
+                    <th style={{ padding: "0.3rem 0.4rem", color: GOLD, fontWeight: 800, fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center", minWidth: 44 }}>Ltr</th>
+                    <th style={{ padding: "0.3rem 0.4rem", color: GOLD, fontWeight: 800, fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center", minWidth: 40 }}>GPA</th>
                   </tr>
                   {/* Assignment names */}
                   <tr style={{ borderBottom: "2px solid rgba(255,255,255,0.1)" }}>
-                    <th style={{ padding: "0.4rem 0.75rem", textAlign: "left", position: "sticky", left: 0, background: "#111", zIndex: 2, fontSize: "0.7rem", color: "rgba(255,255,255,0.35)" }}>
+                    <th style={{ padding: "0.3rem 0.6rem", textAlign: "left", position: "sticky", left: 0, background: "#111", zIndex: 2, fontSize: "0.67rem", color: "rgba(255,255,255,0.35)" }}>
                       {sortedStudents.length} students
                     </th>
                     {periodAssignments.map(a => {
                       const cat = categories.find(c => c.name === a.category);
                       const stats = assignmentStats(a, grades.filter(g => g.assignment_id === a.id));
                       return (
-                        <th key={a.id} style={{ padding: "0.4rem 0.5rem", textAlign: "center", borderLeft: `1px solid rgba(255,255,255,0.05)`, maxWidth: 100, minWidth: 72, position: "relative" }}>
-                          <button onClick={() => setBulkMenu(bulkMenu === a.id ? null : a.id)} title="Bulk edit column" style={{ position: "absolute", top: 2, right: 2, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "0.8rem", lineHeight: 1, padding: "0 2px" }}>⋯</button>
-                          <div style={{ fontWeight: 600, fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90, margin: "0 auto" }} title={a.name}>{a.name}</div>
-                          <div style={{ fontSize: "0.63rem", color: "rgba(255,255,255,0.35)" }}>/ {a.max_points}</div>
-                          {stats && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>avg {Math.round(stats.avg)}%</div>}
-                          {a.extra_credit && <div style={{ fontSize: "0.6rem", color: "#22c55e" }}>EC</div>}
-                          {a.rubric?.length > 0 && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>📋</div>}
-                          {a.due_date && <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.25)" }}>{a.due_date}</div>}
+                        <th key={a.id} style={{ padding: "0.3rem 0.3rem", textAlign: "center", borderLeft: `1px solid rgba(255,255,255,0.05)`, maxWidth: 76, minWidth: 54, position: "relative" }}>
+                          <button onClick={() => setBulkMenu(bulkMenu === a.id ? null : a.id)} title="Bulk edit column" style={{ position: "absolute", top: 1, right: 1, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "0.75rem", lineHeight: 1, padding: "0 1px" }}>⋯</button>
+                          <div style={{ fontWeight: 600, fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 68, margin: "0 auto" }} title={a.name}>{a.name}</div>
+                          <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.35)" }}>/{a.max_points}</div>
+                          {stats && <div style={{ fontSize: "0.57rem", color: "rgba(255,255,255,0.3)" }}>{Math.round(stats.avg)}%</div>}
+                          {a.extra_credit && <div style={{ fontSize: "0.57rem", color: "#22c55e" }}>EC</div>}
+                          {a.rubric?.length > 0 && <div style={{ fontSize: "0.57rem", color: "rgba(255,255,255,0.3)" }}>📋</div>}
+                          {a.due_date && <div style={{ fontSize: "0.57rem", color: "rgba(255,255,255,0.22)" }}>{a.due_date}</div>}
                           {bulkMenu === a.id && (
                             <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "100%", right: 0, zIndex: 30, background: "#1a1400", border: `1px solid ${GOLD}`, borderRadius: 7, padding: "0.4rem", minWidth: 150, textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
                               {!a.rubric?.length && (
@@ -886,12 +990,12 @@ export default function Gradebook({ students, user }) {
                     const trend = gradeTrend(periodAssignments, sg);
                     return (
                       <tr key={student.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <td style={{ padding: "0.4rem 0.75rem", fontWeight: 600, position: "sticky", left: 0, background: "#0d0d0d", zIndex: 1, whiteSpace: "nowrap" }}>
-                          <span onClick={() => setDetailStudent(student)} title="Open full analytics & history" style={{ cursor: "pointer", borderBottom: "1px dotted rgba(245,192,37,0.5)" }}
+                        <td style={{ padding: "0.3rem 0.6rem", fontWeight: 600, position: "sticky", left: 0, background: "#0d0d0d", zIndex: 1, whiteSpace: "nowrap" }}>
+                          <span onClick={() => setDetailStudent(student)} title="Open full analytics & history" style={{ cursor: "pointer", borderBottom: "1px dotted rgba(245,192,37,0.5)", fontSize: "0.79rem" }}
                             onMouseEnter={e => e.currentTarget.style.color = GOLD} onMouseLeave={e => e.currentTarget.style.color = ""}>
                             {student.lastName}, {student.firstName}
                           </span>
-                          <span className="tag tag-amber" style={{ marginLeft: "0.4rem", fontSize: "0.62rem" }}>{student.grade}</span>
+                          <span className="tag tag-amber" style={{ marginLeft: "0.3rem", fontSize: "0.58rem" }}>{student.grade}</span>
                         </td>
                         {periodAssignments.map((a, ai) => (
                           <GradeCell
@@ -908,13 +1012,13 @@ export default function Gradebook({ students, user }) {
                             onOpenRubric={() => setRubricState({ assignment: a, student, grade: sg[a.id] || null })}
                           />
                         ))}
-                        <td style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)", fontWeight: 700, color: TIER_COLORS[tier] }}>
+                        <td style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.08)", fontWeight: 700, color: TIER_COLORS[tier], fontSize: "0.77rem", padding: "0 0.3rem" }}>
                           {pct != null ? `${Math.round(pct)}%` : "—"}<TrendArrow trend={trend} belowPassing={pct != null && pct < 70} />
                         </td>
-                        <td style={{ textAlign: "center", fontWeight: 800, fontSize: "1rem", color: TIER_COLORS[tier] }}>
+                        <td style={{ textAlign: "center", fontWeight: 800, fontSize: "0.9rem", color: TIER_COLORS[tier], padding: "0 0.2rem" }}>
                           {pct != null ? letter : "—"}
                         </td>
-                        <td style={{ textAlign: "center", fontWeight: 700, fontSize: "0.82rem", color: "rgba(255,255,255,0.55)" }}>
+                        <td style={{ textAlign: "center", fontWeight: 700, fontSize: "0.75rem", color: "rgba(255,255,255,0.55)", padding: "0 0.2rem" }}>
                           {pct != null ? (gpaFromPct(pct, scale) ?? "—").toFixed?.(1) ?? "—" : "—"}
                         </td>
                       </tr>
@@ -922,11 +1026,11 @@ export default function Gradebook({ students, user }) {
                   })}
                   {/* Class average row */}
                   <tr style={{ borderTop: "2px solid rgba(255,255,255,0.1)", background: "rgba(245,192,37,0.04)" }}>
-                    <td style={{ padding: "0.4rem 0.75rem", fontWeight: 700, fontSize: "0.78rem", color: "rgba(255,255,255,0.5)", position: "sticky", left: 0, background: "#111", zIndex: 1 }}>Class Avg</td>
+                    <td style={{ padding: "0.3rem 0.6rem", fontWeight: 700, fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", position: "sticky", left: 0, background: "#111", zIndex: 1 }}>Class Avg</td>
                     {periodAssignments.map(a => {
                       const stats = assignmentStats(a, grades.filter(g => g.assignment_id === a.id));
                       return (
-                        <td key={a.id} style={{ textAlign: "center", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", padding: "0.4rem 0.5rem" }}>
+                        <td key={a.id} style={{ textAlign: "center", fontSize: "0.7rem", color: "rgba(255,255,255,0.45)", padding: "0.3rem 0.3rem" }}>
                           {stats ? `${Math.round(stats.avg)}%` : "—"}
                         </td>
                       );

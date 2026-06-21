@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { SEED_EVENTS, SEED_TRIPS, SEED_CEU } from "./constants.js";
+import { SEED_EVENTS, SEED_TRIPS, SEED_CEU, SEED_STUDENTS } from "./constants.js";
 
 // Supabase project URL + anon key. The anon key is safe to ship in the
 // client — row-level security (RLS) is what actually protects the data.
@@ -286,8 +286,8 @@ export function useInfractions() {
 // Table: students — shared school roster (last_name, first_name, grade).
 // Falls back to local state (empty) when Supabase is not configured.
 export function useStudents() {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState(() => !SUPABASE_READY ? SEED_STUDENTS : []);
+  const [loading, setLoading] = useState(SUPABASE_READY);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) { setLoading(false); return; }
@@ -304,6 +304,7 @@ export function useStudents() {
         firstName: r.first_name,
         lastName: r.last_name,
         grade: r.grade || "",
+        section: r.section || "",
         parentEmail: r.parent_email || "",
         studentEmail: r.student_email || "",
       })));
@@ -313,19 +314,21 @@ export function useStudents() {
     return () => { active = false; };
   }, []);
 
+  const rowToStudent = r => ({
+    id: r.id, firstName: r.first_name, lastName: r.last_name,
+    grade: r.grade || "", section: r.section || "",
+    parentEmail: r.parent_email || "", studentEmail: r.student_email || "",
+  });
+
   // Replace the entire roster (used on CSV import).
   async function importStudents(rows) {
-    if (!SUPABASE_READY || !supabase) {
-      setStudents(rows);
-      return;
-    }
-    // Delete all existing rows then insert fresh batch.
+    if (!SUPABASE_READY || !supabase) { setStudents(rows); return; }
     await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (rows.length === 0) { setStudents([]); return; }
     const { data } = await supabase.from("students").insert(
-      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: r.parentEmail || null, student_email: r.studentEmail || null }))
+      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, section: r.section || null, parent_email: r.parentEmail || null, student_email: r.studentEmail || null }))
     ).select("*");
-    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: r.parent_email || "", studentEmail: r.student_email || "" })));
+    setStudents((data || []).map(rowToStudent));
   }
 
   async function addStudent(s) {
@@ -334,9 +337,9 @@ export function useStudents() {
       return;
     }
     const { data } = await supabase.from("students")
-      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null })
+      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, section: s.section || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null })
       .select("*").single();
-    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "", parentEmail: data.parent_email || "", studentEmail: data.student_email || "" }]);
+    if (data) setStudents(prev => [...prev, rowToStudent(data)]);
   }
 
   async function updateStudent(id, s) {
@@ -344,7 +347,7 @@ export function useStudents() {
       setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
       return;
     }
-    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null }).eq("id", id);
+    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, section: s.section || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null }).eq("id", id);
     setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
   }
 
@@ -405,6 +408,12 @@ function loadGIS() {
   });
 }
 
+const GC_SCOPES = [
+  "https://www.googleapis.com/auth/classroom.courses.readonly",
+  "https://www.googleapis.com/auth/classroom.rosters.readonly",
+  "https://www.googleapis.com/auth/classroom.coursework.students",
+].join(" ");
+
 export function useClassroomSync() {
   async function requestToken() {
     await loadGIS();
@@ -413,7 +422,7 @@ export function useClassroomSync() {
     return new Promise((resolve, reject) => {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: "https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.rosters.readonly",
+        scope: GC_SCOPES,
         callback: response => {
           if (response.error) reject(new Error(response.error_description || response.error));
           else resolve(response.access_token);
@@ -441,11 +450,86 @@ export function useClassroomSync() {
         firstName: s.profile?.name?.givenName || "",
         lastName: s.profile?.name?.familyName || "",
         studentEmail: s.profile?.emailAddress || "",
+        gcUserId: s.userId || "",
       }))
       .filter(s => s.firstName || s.lastName);
   }
 
-  return { requestToken, listCourses, listStudents };
+  // Push grades for a set of assignments to a Google Classroom course.
+  // `assignments` — the local gradebook assignments for the current period
+  // `grades`      — flat grade rows from useGradebook
+  // `students`    — student roster (need studentEmail to match GC roster)
+  // Returns { synced, skipped, errors[] }
+  async function syncGradesToCourse(token, courseId, { assignments, grades, students, onProgress }) {
+    // 1. Fetch GC roster → Map<gcUserId, email> and Map<email, gcUserId>
+    const rosterRes = await fetch(
+      `https://classroom.googleapis.com/v1/courses/${courseId}/students?pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!rosterRes.ok) throw new Error(`Roster fetch failed: ${rosterRes.status}`);
+    const rosterData = await rosterRes.json();
+    const userIdToEmail = {};
+    const emailToUserId = {};
+    for (const s of rosterData.students || []) {
+      const email = s.profile?.emailAddress?.toLowerCase();
+      const uid = s.userId;
+      if (email && uid) { userIdToEmail[uid] = email; emailToUserId[email] = uid; }
+    }
+
+    // 2. Fetch GC courseWork
+    const cwRes = await fetch(
+      `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!cwRes.ok) throw new Error(`CourseWork fetch failed: ${cwRes.status}`);
+    const cwData = await cwRes.json();
+    const courseWork = cwData.courseWork || [];
+
+    let synced = 0, skipped = 0;
+    const errors = [];
+
+    for (const assignment of assignments) {
+      // Match local assignment to GC courseWork by title (case-insensitive)
+      const cw = courseWork.find(
+        c => c.title.trim().toLowerCase() === assignment.name.trim().toLowerCase()
+      );
+      if (!cw) { skipped++; continue; }
+
+      // Fetch submissions for this courseWork
+      const subRes = await fetch(
+        `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${cw.id}/studentSubmissions?pageSize=200`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!subRes.ok) { errors.push(`Submissions for "${assignment.name}": ${subRes.status}`); continue; }
+      const subData = await subRes.json();
+      const submissions = subData.studentSubmissions || [];
+
+      for (const sub of submissions) {
+        const email = userIdToEmail[sub.userId];
+        if (!email) continue;
+        const student = students.find(s => s.studentEmail?.toLowerCase() === email);
+        if (!student) continue;
+        const grade = grades.find(g => g.assignment_id === assignment.id && g.student_id === student.id);
+        if (!grade || grade.points_earned == null || grade.excused || grade.missing) continue;
+
+        const patchRes = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${cw.id}/studentSubmissions/${sub.id}?updateMask=assignedGrade,draftGrade`,
+          {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ assignedGrade: grade.points_earned, draftGrade: grade.points_earned }),
+          }
+        );
+        if (patchRes.ok) { synced++; }
+        else { errors.push(`${student.lastName}, ${student.firstName} / ${assignment.name}`); }
+      }
+      onProgress?.({ done: synced + skipped + errors.length, total: assignments.length });
+    }
+
+    return { synced, skipped, errors };
+  }
+
+  return { requestToken, listCourses, listStudents, syncGradesToCourse };
 }
 
 // ─── G-Men Requests (Supabase-backed) ────────────────────────────
