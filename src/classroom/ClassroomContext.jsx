@@ -13,6 +13,7 @@ import {
 } from './data/mockData.js';
 import { putBlob, getBlob, deleteBlob } from './utils/idb.js';
 import { extractText } from './utils/fileText.js';
+import { useSupabaseClassroom } from '../classroomData.js';
 
 const AppContext = createContext(null);
 
@@ -38,7 +39,12 @@ function loadUnits() {
   return clone(SEED_UNITS);
 }
 
-export function AppProvider({ children }) {
+export function AppProvider({ children, user }) {
+  // Supabase-backed classroom data — active when configured AND a teacher email
+  // is known; otherwise everything falls back to the in-memory mock below.
+  const supa = useSupabaseClassroom(user?.email);
+  const useSupa = supa.ready;
+
   // ---- Global UI state ------------------------------------------------------
   const [role, setRole] = useState('teacher'); // 'teacher' | 'student'
   const [activeStudentId, setActiveStudentId] = useState('stu-chem-demo');
@@ -64,18 +70,34 @@ export function AppProvider({ children }) {
     }
   }, [units]);
 
+  // ---- Resolved data source (Supabase when ready, else mock) ----------------
+  const classesR = useSupa ? supa.classes : CLASSES;
+  const studentsR = useSupa ? supa.students : students;
+  const moleRequestsR = useSupa ? supa.moleRequests : moleRequests;
+  const ticketsR = useSupa ? supa.tickets : tickets;
+  const unitsR = useSupa ? supa.units : units;
+  const emailLogR = useSupa ? supa.emailLog : emailLog;
+  const metricsR = useSupa ? supa.metrics : metrics;
+
+  // When backed by Supabase, point the active class/student at real rows.
+  useEffect(() => {
+    if (!useSupa) return;
+    if (classesR.length && !classesR.some((c) => c.id === activeClassId)) setActiveClassId(classesR[0].id);
+    if (studentsR.length && !studentsR.some((s) => s.id === activeStudentId)) setActiveStudentId(studentsR[0].id);
+  }, [useSupa, classesR, studentsR, activeClassId, activeStudentId]);
+
   // ---- Derived helpers ------------------------------------------------------
   const activeStudent = useMemo(
-    () => students.find((s) => s.id === activeStudentId) || students[0],
-    [students, activeStudentId]
+    () => studentsR.find((s) => s.id === activeStudentId) || studentsR[0],
+    [studentsR, activeStudentId]
   );
 
-  const getClass = useCallback((classId) => CLASSES.find((c) => c.id === classId), []);
-  const getStudent = useCallback((id) => students.find((s) => s.id === id), [students]);
+  const getClass = useCallback((classId) => classesR.find((c) => c.id === classId), [classesR]);
+  const getStudent = useCallback((id) => studentsR.find((s) => s.id === id), [studentsR]);
   const getTheme = useCallback((classId) => {
-    const cls = CLASSES.find((c) => c.id === classId);
+    const cls = classesR.find((c) => c.id === classId);
     return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.physics;
-  }, []);
+  }, [classesR]);
 
   // ===========================================================================
   //  WIZARD
@@ -313,8 +335,8 @@ export function AppProvider({ children }) {
   // ===========================================================================
   const getUnitsForClass = useCallback(
     (classId) =>
-      units.filter((u) => u.classId === classId).sort((a, b) => a.order - b.order),
-    [units]
+      unitsR.filter((u) => u.classId === classId).sort((a, b) => a.order - b.order),
+    [unitsR]
   );
 
   const addUnit = useCallback((classId, { title, description }) => {
@@ -442,8 +464,11 @@ export function AppProvider({ children }) {
 
   // ---- Context value --------------------------------------------------------
   const value = {
-    MOCK_MODE,
-    classes: CLASSES,
+    MOCK_MODE: !useSupa,
+    isSupabase: useSupa,
+    loading: useSupa ? supa.loading : false,
+    seedDemo: useSupa ? supa.seedDemo : null,
+    classes: classesR,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: MOLE_MILESTONE,
 
@@ -457,36 +482,36 @@ export function AppProvider({ children }) {
     activeClassId,
     setActiveClassId,
 
-    students,
-    moleRequests,
-    tickets,
-    emailLog,
-    metrics,
+    students: studentsR,
+    moleRequests: moleRequestsR,
+    tickets: ticketsR,
+    emailLog: emailLogR,
+    metrics: metricsR,
     dashboardLayout,
-    units,
+    units: unitsR,
 
     getClass,
     getStudent,
     getTheme,
     getUnitsForClass,
-    addUnit,
-    updateUnit,
-    deleteUnit,
-    addMaterial,
-    deleteMaterial,
-    openMaterialFile,
+    addUnit: useSupa ? supa.addUnit : addUnit,
+    updateUnit: useSupa ? supa.updateUnit : updateUnit,
+    deleteUnit: useSupa ? supa.deleteUnit : deleteUnit,
+    addMaterial: useSupa ? supa.addMaterial : addMaterial,
+    deleteMaterial: useSupa ? supa.deleteMaterial : deleteMaterial,
+    openMaterialFile: useSupa ? supa.openMaterialFile : openMaterialFile,
     resetMaterials,
 
-    completeWizard,
-    submitMoleRequest,
-    approveMoleRequest,
-    denyMoleRequest,
-    submitTicket,
-    advanceTicket,
-    completeTicket,
-    markNotificationsRead,
+    completeWizard: useSupa ? supa.completeWizard : completeWizard,
+    submitMoleRequest: useSupa ? supa.submitMoleRequest : submitMoleRequest,
+    approveMoleRequest: useSupa ? supa.approveMoleRequest : approveMoleRequest,
+    denyMoleRequest: useSupa ? supa.denyMoleRequest : denyMoleRequest,
+    submitTicket: useSupa ? supa.submitTicket : submitTicket,
+    advanceTicket: useSupa ? supa.advanceTicket : advanceTicket,
+    completeTicket: useSupa ? supa.completeTicket : completeTicket,
+    markNotificationsRead: useSupa ? supa.markNotificationsRead : markNotificationsRead,
     generateEmailDraft,
-    sendParentEmail,
+    sendParentEmail: useSupa ? supa.sendParentEmail : sendParentEmail,
 
     toggleWidget,
     moveWidget,

@@ -28,12 +28,15 @@ import AIGrader from '../components/AIGrader.jsx';
 // app-backdrop"> provides it. The classroom keeps its own SideNav +
 // TopControlBar for in-zone navigation.
 export default function ClassroomApp({ user, students = [], isAdmin = false }) {
-  const { role, activeView, activeStudent } = useApp();
+  const { role, activeView, activeStudent, isSupabase, loading, classes, seedDemo } = useApp();
   const [navOpen, setNavOpen] = useState(false);
 
   // Day-1 onboarding intercept: block ALL student navigation until the
   // Welcome Wizard is complete.
   const wizardBlocking = role === 'student' && activeStudent && !activeStudent.wizardComplete;
+
+  // Fresh Supabase teacher with no classes yet → offer a one-time demo seed.
+  const needsSeed = isSupabase && role === 'teacher' && !loading && classes.length === 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -48,18 +51,45 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
             <TopControlBar onMenu={() => setNavOpen(true)} />
             <main className="flex-1 overflow-y-auto p-4 sm:p-6">
               <div className="mx-auto max-w-7xl animate-fade-in">
-                <ViewRouter
-                  role={role}
-                  view={activeView}
-                  user={user}
-                  students={students}
-                  isAdmin={isAdmin}
-                />
+                {needsSeed ? (
+                  <SeedPrompt onSeed={seedDemo} />
+                ) : (
+                  <ViewRouter
+                    role={role}
+                    view={activeView}
+                    user={user}
+                    students={students}
+                    isAdmin={isAdmin}
+                  />
+                )}
               </div>
             </main>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SeedPrompt({ onSeed }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="brand-hairline mx-auto mt-10 max-w-lg rounded-2xl bg-ink-850/80 p-8 text-center ring-1 ring-gold-500/30">
+      <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-50">
+        Welcome to My Classroom
+      </h2>
+      <p className="mt-3 text-sm text-zinc-400">
+        Your classroom is empty. Load the demo science classes (Chemistry, Physics,
+        Geology) with sample rosters, units, and materials so you can explore — you can
+        edit or replace them anytime.
+      </p>
+      <button
+        onClick={async () => { setBusy(true); try { await onSeed?.(); } finally { setBusy(false); } }}
+        disabled={busy}
+        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gold-500 px-5 py-2.5 font-semibold text-ink-950 shadow-gold-sm transition hover:bg-gold-400 disabled:opacity-60"
+      >
+        {busy ? 'Loading…' : 'Load demo classes'}
+      </button>
     </div>
   );
 }

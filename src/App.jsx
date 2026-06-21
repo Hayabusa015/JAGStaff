@@ -311,7 +311,7 @@ export default function App() {
       </nav>
 
       {zone === "classroom" ? (
-        <ClassroomProvider>
+        <ClassroomProvider user={user}>
           <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
         </ClassroomProvider>
       ) : (
