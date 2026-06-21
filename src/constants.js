@@ -1,4 +1,4 @@
-export const GOLD = "#F5C025";
+export const GOLD = "#F5B301";
 export const GOLDBORDER = "rgba(245,192,37,0.35)";
 export const GOLDDIM = "rgba(245,192,37,0.08)";
 export const GOLDGLOW = "rgba(245,192,37,0.35)";
