@@ -36,6 +36,24 @@ export const SEED_STUDENTS = [
   { id: "s6", firstName: "Taylor",  lastName: "Brown",    grade: "11" },
 ];
 
+// Used only as the in-memory fallback when Supabase is not configured, so the
+// local-dev demo still looks populated. With Supabase wired up these come from
+// the weekly_events / trip_rosters tables instead.
+export const SEED_EVENTS = [
+  { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
+  { id: "ev2", type: "State Test", title: "ELA State Assessment", date: "2026-06-04", time: "08:00", details: "Grades 10 & 11 — quiet corridors after 7:55 AM." },
+  { id: "ev3", type: "Field Trip", title: "Varsity Golf @ Pine Hills", date: "2026-06-05", time: "13:30", details: "Coach Davis. Students leave 1:30 PM." },
+];
+
+export const SEED_TRIPS = [
+  {
+    id: "tr1", type: "Athletic Event", title: "Varsity Golf @ Pine Hills",
+    teacher: "Coach Davis", date: "2026-06-05", depart: "13:30", returnTime: "17:30",
+    notes: "Transportation provided.",
+    students: [{ name: "Marcus Thompson", grade: "10" }, { name: "Jordan Garcia", grade: "10" }],
+  },
+];
+
 export const SEED_CEU = [
   { id: "c1", name: "ODE Reading Strategies Module",       hours: 15, date: "2025-09" },
   { id: "c2", name: "Classroom Management Seminar",        hours: 8,  date: "2025-10" },

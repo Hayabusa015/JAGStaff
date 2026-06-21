@@ -13,6 +13,8 @@ import {
 } from './data/mockData.js';
 import { putBlob, getBlob, deleteBlob } from './utils/idb.js';
 import { extractText } from './utils/fileText.js';
+import { SUPABASE_READY } from '../supabase.js';
+import { useTeacherClassroom, useStudentClassroom } from '../classroomData.js';
 
 const AppContext = createContext(null);
 
@@ -38,14 +40,35 @@ function loadUnits() {
   return clone(SEED_UNITS);
 }
 
-export function AppProvider({ children }) {
+// user: the logged-in Supabase user object (or null in mock/dev mode)
+// isStaff: true for teachers, false for real student logins
+export function AppProvider({ children, user = null, isStaff = true }) {
+  const liveMode = SUPABASE_READY && !!user;
+  const teacherEmail = (liveMode && isStaff) ? user.email : null;
+  const studentEmail = (liveMode && !isStaff) ? user.email : null;
+
+  // ---- Supabase hooks (no-op when email is null) ---------------------------
+  const {
+    classes: liveClasses, students: liveStudents,
+    tickets: liveTeacherTickets, requests: liveTeacherRequests,
+    loading: teacherLoading, actions: teacherActions,
+  } = useTeacherClassroom(teacherEmail);
+
+  const {
+    profile: liveProfile, myClass: liveMyClass,
+    tickets: liveStudentTickets, requests: liveStudentRequests,
+    notifications: liveNotifications,
+    loading: studentLoading, notFound: studentNotFound,
+    actions: studentActions,
+  } = useStudentClassroom(studentEmail);
+
   // ---- Global UI state ------------------------------------------------------
-  const [role, setRole] = useState('teacher'); // 'teacher' | 'student'
+  const [role, setRole] = useState(() => isStaff ? 'teacher' : 'student');
   const [activeStudentId, setActiveStudentId] = useState('stu-chem-demo');
   const [activeView, setActiveView] = useState('dashboard');
   const [activeClassId, setActiveClassId] = useState('cls-chem');
 
-  // ---- Mock "database" ------------------------------------------------------
+  // ---- Mock "database" (used when liveMode = false) -------------------------
   const [students, setStudents] = useState(() => clone(STUDENTS));
   const [moleRequests, setMoleRequests] = useState(() => clone(MOLE_REQUESTS));
   const [tickets, setTickets] = useState(() => clone(HELP_TICKETS));
@@ -64,40 +87,118 @@ export function AppProvider({ children }) {
     }
   }, [units]);
 
-  // ---- Derived helpers ------------------------------------------------------
-  const activeStudent = useMemo(
-    () => students.find((s) => s.id === activeStudentId) || students[0],
-    [students, activeStudentId]
-  );
+  // ---- Supabase → local state sync -----------------------------------------
+  // Teacher side: sync live data into local state once it arrives.
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveStudents.length === 0) return;
+    setStudents(liveStudents);
+  }, [liveStudents, liveMode, isStaff]);
 
-  const getClass = useCallback((classId) => CLASSES.find((c) => c.id === classId), []);
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveTeacherTickets.length === 0) return;
+    setTickets(liveTeacherTickets);
+  }, [liveTeacherTickets, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveTeacherRequests.length === 0) return;
+    setMoleRequests(liveTeacherRequests);
+  }, [liveTeacherRequests, liveMode, isStaff]);
+
+  // Student side: load the real student's profile into local state.
+  useEffect(() => {
+    if (!liveMode || isStaff || !liveProfile) return;
+    setStudents([liveProfile]);
+    setActiveStudentId(liveProfile.id);
+    setActiveClassId(liveProfile.classId);
+  }, [liveProfile, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || isStaff) return;
+    setTickets(liveStudentTickets);
+  }, [liveStudentTickets, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || isStaff) return;
+    setMoleRequests(liveStudentRequests);
+  }, [liveStudentRequests, liveMode, isStaff]);
+
+  // ---- Derived helpers ------------------------------------------------------
+  // Merge live classes (Supabase) with the mock CLASSES constant.
+  // In live teacher mode, prefer liveClasses; in live student mode, prefer liveMyClass.
+  const allClasses = useMemo(() => {
+    if (liveMode && isStaff && liveClasses.length > 0) return liveClasses;
+    if (liveMode && !isStaff && liveMyClass) return [liveMyClass];
+    return CLASSES;
+  }, [liveMode, isStaff, liveClasses, liveMyClass]);
+
+  const activeStudent = useMemo(() => {
+    const base = students.find((s) => s.id === activeStudentId) || students[0];
+    // Merge live notifications into the active student in student mode.
+    if (liveMode && !isStaff && base && liveNotifications.length > 0) {
+      return { ...base, notifications: liveNotifications };
+    }
+    return base;
+  }, [students, activeStudentId, liveMode, isStaff, liveNotifications]);
+
+  const getClass = useCallback(
+    (classId) =>
+      allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId),
+    [allClasses]
+  );
   const getStudent = useCallback((id) => students.find((s) => s.id === id), [students]);
-  const getTheme = useCallback((classId) => {
-    const cls = CLASSES.find((c) => c.id === classId);
-    return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.physics;
-  }, []);
+  const getTheme = useCallback(
+    (classId) => {
+      const cls =
+        allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId);
+      return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.chemistry;
+    },
+    [allClasses]
+  );
 
   // ===========================================================================
   //  WIZARD
   // ===========================================================================
-  const completeWizard = useCallback((studentId, payload) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? {
-              ...s,
-              wizardComplete: true,
-              gizmo: { ...payload.gizmo },
-              guardian: { ...payload.guardian },
-              safety: {
-                signedName: payload.safety.signedName,
-                signedAt: payload.safety.signedAt, // exact timestamp logged
-              },
-            }
-          : s
-      )
-    );
-  }, []);
+  const completeWizard = useCallback(
+    (studentId, payload) => {
+      // Live student mode → persist via RPC (balance mutations are server-side).
+      if (liveMode && !isStaff && studentActions) {
+        studentActions.completeWizard(studentId, payload);
+        // Optimistic UI update (realtime will confirm).
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.id === studentId
+              ? {
+                  ...s,
+                  wizardComplete: true,
+                  gizmo: { ...payload.gizmo },
+                  guardian: { ...payload.guardian },
+                  safety: { signedName: payload.safety.signedName, signedAt: payload.safety.signedAt },
+                }
+              : s
+          )
+        );
+        return;
+      }
+      // Mock fallback.
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? {
+                ...s,
+                wizardComplete: true,
+                gizmo: { ...payload.gizmo },
+                guardian: { ...payload.guardian },
+                safety: {
+                  signedName: payload.safety.signedName,
+                  signedAt: payload.safety.signedAt,
+                },
+              }
+            : s
+        )
+      );
+    },
+    [liveMode, isStaff, studentActions]
+  );
 
   // ===========================================================================
   //  MOLE DOLLAR ECONOMY
@@ -109,9 +210,15 @@ export function AppProvider({ children }) {
   // (never nested inside another setter's updater) so they stay correct under
   // React StrictMode's double-invocation of updater functions.
   const submitMoleRequest = useCallback(
-    (studentId, item) => {
+    async (studentId, item) => {
+      // Live student mode → anti-cheat RPC; balance update comes back via realtime.
+      if (liveMode && !isStaff && studentActions) {
+        const ok = await studentActions.submitMoleRequest(studentId, item.label, item.cost);
+        return ok;
+      }
+      // Mock fallback.
       const student = students.find((s) => s.id === studentId);
-      if (!student || student.balance < item.cost) return false; // insufficient funds — no-op
+      if (!student || student.balance < item.cost) return false;
       setStudents((prev) =>
         prev.map((s) =>
           s.id === studentId
@@ -133,14 +240,19 @@ export function AppProvider({ children }) {
       ]);
       return true;
     },
-    [students]
+    [liveMode, isStaff, studentActions, students]
   );
 
   const approveMoleRequest = useCallback(
     (requestId) => {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
-      // Permanently deduct locked tokens (they were already removed from balance).
+      // Live teacher mode → RPC (server moves tokens + sends notification).
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.approveRequest(requestId);
+        return;
+      }
+      // Mock fallback.
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -158,14 +270,19 @@ export function AppProvider({ children }) {
         text: `Your "${req.item}" redemption was approved! 🎉`,
       });
     },
-    [moleRequests]
+    [moleRequests, liveMode, isStaff, teacherActions]
   );
 
   const denyMoleRequest = useCallback(
     (requestId, note) => {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
-      // Return the locked funds to the student's spendable balance.
+      // Live teacher mode → RPC.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.denyRequest(requestId, note);
+        return;
+      }
+      // Mock fallback.
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -186,39 +303,69 @@ export function AppProvider({ children }) {
         text: `Your "${req.item}" redemption was denied. ${note ? `Note: ${note}` : ''}`.trim(),
       });
     },
-    [moleRequests]
+    [moleRequests, liveMode, isStaff, teacherActions]
   );
 
   // ===========================================================================
   //  HELP DESK
   // ===========================================================================
-  const submitTicket = useCallback((studentId, category, details) => {
-    setTickets((prev) => [
-      {
-        id: nextId('tkt'),
-        studentId,
-        category,
-        details,
-        status: 'submitted',
-        createdAt: new Date().toISOString(),
-        archived: false,
-      },
-      ...prev,
-    ]);
-  }, []);
+  const submitTicket = useCallback(
+    (studentId, category, details) => {
+      // Live student mode → direct INSERT (allowed by student RLS policy).
+      if (liveMode && !isStaff && studentActions && activeStudent) {
+        studentActions.submitTicket({
+          studentId,
+          teacherEmail: activeStudent.teacherEmail,
+          classId: activeStudent.classId,
+          studentEm: activeStudent.studentEmail,
+          studentName: activeStudent.name,
+          category,
+          details,
+        });
+        return;
+      }
+      // Mock fallback.
+      setTickets((prev) => [
+        {
+          id: nextId('tkt'),
+          studentId,
+          category,
+          details,
+          status: 'submitted',
+          createdAt: new Date().toISOString(),
+          archived: false,
+        },
+        ...prev,
+      ]);
+    },
+    [liveMode, isStaff, studentActions, activeStudent]
+  );
 
-  const advanceTicket = useCallback((ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId && t.status === 'submitted' ? { ...t, status: 'in_progress' } : t
-      )
-    );
-  }, []);
+  const advanceTicket = useCallback(
+    (ticketId) => {
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.advanceTicket(ticketId);
+        return;
+      }
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId && t.status === 'submitted' ? { ...t, status: 'in_progress' } : t
+        )
+      );
+    },
+    [liveMode, isStaff, teacherActions]
+  );
 
   const completeTicket = useCallback(
     (ticketId) => {
       const t = tickets.find((x) => x.id === ticketId);
       if (!t || t.status === 'completed') return;
+      // Live teacher mode → Supabase update + notification via server.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.completeTicket(ticketId);
+        return;
+      }
+      // Mock fallback.
       setTickets((prev) =>
         prev.map((x) => (x.id === ticketId ? { ...x, status: 'completed', archived: true } : x))
       );
@@ -229,7 +376,7 @@ export function AppProvider({ children }) {
         text: `Your "${t.category}" request was marked complete by Mr. Shull. ✅`,
       });
     },
-    [tickets]
+    [tickets, liveMode, isStaff, teacherActions]
   );
 
   // ===========================================================================
@@ -251,15 +398,23 @@ export function AppProvider({ children }) {
     );
   }
 
-  const markNotificationsRead = useCallback((studentId) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }
-          : s
-      )
-    );
-  }, []);
+  const markNotificationsRead = useCallback(
+    (studentId) => {
+      // Live student mode → mark in Supabase (by email, since that's the RLS column).
+      if (liveMode && !isStaff && studentActions && activeStudent) {
+        studentActions.markNotificationsRead(activeStudent.studentEmail);
+        return;
+      }
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }
+            : s
+        )
+      );
+    },
+    [liveMode, isStaff, studentActions, activeStudent]
+  );
 
   // ===========================================================================
   //  PARENT COMMUNICATION ENGINE
@@ -268,7 +423,7 @@ export function AppProvider({ children }) {
     (studentId, tone, scenario, notes) => {
       const student = students.find((s) => s.id === studentId);
       if (!student) return null;
-      const cls = CLASSES.find((c) => c.id === student.classId);
+      const cls = allClasses.find((c) => c.id === student.classId) || CLASSES.find((c) => c.id === student.classId);
       const guardianName = student.guardian.name || 'Parent/Guardian';
       const firstName = student.name.split(' ')[0];
       const positive = tone === 'positive';
@@ -442,8 +597,12 @@ export function AppProvider({ children }) {
 
   // ---- Context value --------------------------------------------------------
   const value = {
-    MOCK_MODE,
-    classes: CLASSES,
+    MOCK_MODE: !liveMode,
+    liveMode,
+    studentNotFound,    // true if student logged in but has no classroom profile yet
+    teacherLoading,
+    studentLoading,
+    classes: allClasses,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: MOLE_MILESTONE,
 

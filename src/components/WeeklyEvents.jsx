@@ -3,20 +3,20 @@ import { EVENT_TYPES } from "../constants.js";
 
 const blank = { type: "Fire Drill", title: "", date: "", time: "", details: "" };
 
-export default function WeeklyEvents({ weeklyEvents, setWeeklyEvents }) {
+export default function WeeklyEvents({ weeklyEvents, addEvent, removeEvent }) {
   const [form, setForm] = useState(blank);
   const [err, setErr] = useState("");
 
   function add(e) {
     e.preventDefault();
     if (!form.title.trim() || !form.date) { setErr("Title and date are required."); return; }
-    setWeeklyEvents(ev => [...ev, { ...form, id: Date.now().toString(), title: form.title.trim() }]);
+    addEvent({ ...form, title: form.title.trim() });
     setForm(blank);
     setErr("");
   }
 
   function remove(id) {
-    setWeeklyEvents(ev => ev.filter(x => x.id !== id));
+    removeEvent(id);
   }
 
   return (

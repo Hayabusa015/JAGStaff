@@ -15,12 +15,11 @@ export default function AnthropicGatekeeper({ onKeyValid, existingKey }) {
     setStatus("validating");
     setErrorMsg("");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/anthropic/v1/messages", {
         method: "POST",
         headers: {
           "x-api-key": trimmed,
           "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-allow-browser": "true",
           "content-type": "application/json",
         },
         body: JSON.stringify({

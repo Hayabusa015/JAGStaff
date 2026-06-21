@@ -36,7 +36,7 @@ function TripCard({ trip, onRemove }) {
   );
 }
 
-export default function TripRoster({ tripRosters, setTripRosters, students }) {
+export default function TripRoster({ tripRosters, addRoster, removeRoster, students }) {
   const [form, setForm] = useState(blank);
   const [err, setErr] = useState("");
 
@@ -53,18 +53,17 @@ export default function TripRoster({ tripRosters, setTripRosters, students }) {
     const fromRoster = students.filter(s => form.selectedIds.includes(s.id)).map(s => ({ name: `${s.firstName} ${s.lastName}`, grade: s.grade }));
     const fromManual = form.manual.split("\n").map(l => l.trim()).filter(Boolean).map(n => ({ name: n, grade: "" }));
     const roster = [...fromRoster, ...fromManual];
-    setTripRosters(t => [...t, {
-      id: Date.now().toString(),
+    addRoster({
       type: form.type, title: form.title.trim(),
       teacher: form.teacher.trim(), date: form.date,
       depart: form.depart, returnTime: form.returnTime,
       notes: form.notes.trim(), students: roster,
-    }]);
+    });
     setForm(blank);
     setErr("");
   }
 
-  function remove(id) { setTripRosters(t => t.filter(x => x.id !== id)); }
+  function remove(id) { removeRoster(id); }
 
   return (
     <div>
