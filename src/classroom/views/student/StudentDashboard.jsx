@@ -16,6 +16,7 @@ import Card, { CardHeader } from '../../components/Card.jsx';
 import ProgressBar from '../../components/ProgressBar.jsx';
 import Badge from '../../components/Badge.jsx';
 import { formatDateTime, timeAgo } from '../../utils/format.js';
+import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 export default function StudentDashboard() {
   const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView } =
@@ -38,6 +39,8 @@ export default function StudentDashboard() {
       <Card className="overflow-hidden" hairline>
         <div className={`relative flex items-center justify-between gap-4 bg-gradient-to-r ${theme.gradient} px-6 py-6`}>
           <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
+          {/* Subject-specific decorative background on the gold hero banner */}
+          <SubjectFlair subject={cls?.subject} color="#0a0500" opacity={0.11} />
           <div className="relative text-ink-950">
             <p className="font-display text-xs font-bold uppercase tracking-widest opacity-80">
               {cls?.name} · Period {cls?.period}
@@ -46,7 +49,7 @@ export default function StudentDashboard() {
               Hey, {activeStudent.name.split(' ')[0]}!
             </h2>
           </div>
-          <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-ink-950/20 font-display text-2xl font-bold text-ink-950 ring-2 ring-ink-950/30">
+          <div className="relative z-10 grid h-16 w-16 shrink-0 place-items-center rounded-full bg-ink-950/20 font-display text-2xl font-bold text-ink-950 ring-2 ring-ink-950/30">
             {activeStudent.avatar}
           </div>
         </div>

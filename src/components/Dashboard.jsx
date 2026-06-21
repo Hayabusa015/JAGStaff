@@ -149,28 +149,69 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   return (
     <div>
       {/* Header */}
-      <div className="card mb2" style={{ background: "#111", color: "#fff" }}>
-        <div className="flex items-center justify-between">
+      <div className="card mb2" style={{
+        background: "linear-gradient(135deg, #0d0900 0%, #0a0700 60%, #080500 100%)",
+        borderColor: "rgba(245,192,37,0.28)",
+        boxShadow: "0 4px 32px rgba(0,0,0,0.55), 0 0 40px rgba(245,192,37,0.07), inset 0 1px 0 rgba(245,192,37,0.08)",
+        overflow: "hidden",
+        position: "relative",
+      }}>
+        {/* Watermark */}
+        <img src="/logo.png" aria-hidden="true" style={{
+          position: "absolute", right: "-1.5rem", bottom: "-1.5rem",
+          width: "10rem", opacity: 0.06, pointerEvents: "none",
+          filter: "grayscale(0.2)", mixBlendMode: "luminosity",
+        }} />
+        <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <div>
-            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Command Center</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, marginTop: "0.2rem" }}>{now.date}</div>
-            <div style={{ color: GOLD, fontWeight: 800, fontSize: "1.4rem" }}>{now.time}</div>
+            <div style={{
+              fontSize: "0.62rem", color: "rgba(245,192,37,0.65)",
+              letterSpacing: "0.22em", textTransform: "uppercase",
+              fontFamily: "'Oswald', 'Inter', sans-serif", fontWeight: 700,
+            }}>
+              G-Men · Command Center
+            </div>
+            <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.25rem", color: "rgba(255,255,255,0.9)", letterSpacing: "0.01em" }}>
+              {now.date}
+            </div>
+            <div style={{
+              color: GOLD, fontWeight: 900, fontSize: "2.2rem",
+              fontFamily: "'Oswald', 'Inter', sans-serif", letterSpacing: "0.04em",
+              textShadow: "0 0 22px rgba(245,179,1,0.55)", lineHeight: 1.1, marginTop: "0.1rem",
+            }}>
+              {now.time}
+            </div>
           </div>
           <div style={{ textAlign: "right" }}>
             {periodInfo?.status === "in" ? (
-              <div style={{ background: GOLD, color: "#1a1200", borderRadius: 10, padding: "0.4rem 0.9rem", fontWeight: 800 }}>
-                <div style={{ fontSize: "0.9rem" }}>{periodInfo.period.name}</div>
-                <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.75 }}>
-                  {periodInfo.remaining} min remaining
+              <div style={{
+                background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
+                color: "#0a0700", borderRadius: 12, padding: "0.5rem 1rem",
+                fontFamily: "'Oswald', 'Inter', sans-serif",
+                boxShadow: "0 4px 16px rgba(245,192,37,0.35)",
+              }}>
+                <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.04em" }}>{periodInfo.period.name}</div>
+                <div style={{ fontSize: "0.65rem", fontWeight: 700, opacity: 0.75, letterSpacing: "0.06em" }}>
+                  {periodInfo.remaining} MIN REMAINING
                 </div>
               </div>
             ) : periodInfo?.status === "before" ? (
-              <div style={{ background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)", color: "#60a5fa", borderRadius: 10, padding: "0.4rem 0.9rem", fontWeight: 800 }}>
-                <div style={{ fontSize: "0.9rem" }}>{periodInfo.next.name} next</div>
-                <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.8 }}>in {periodInfo.until} min</div>
+              <div style={{
+                background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.35)",
+                color: "#60a5fa", borderRadius: 12, padding: "0.5rem 1rem",
+                fontFamily: "'Oswald', 'Inter', sans-serif",
+              }}>
+                <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.04em" }}>{periodInfo.next.name} NEXT</div>
+                <div style={{ fontSize: "0.65rem", fontWeight: 700, opacity: 0.8, letterSpacing: "0.06em" }}>IN {periodInfo.until} MIN</div>
               </div>
             ) : (
-              <div style={{ background: GOLD, color: "#1a1200", borderRadius: "999px", padding: "0.3rem 0.9rem", fontSize: "0.75rem", fontWeight: 800 }}>
+              <div style={{
+                background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
+                color: "#0a0700", borderRadius: "999px", padding: "0.35rem 1.1rem",
+                fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.1em",
+                fontFamily: "'Oswald', 'Inter', sans-serif",
+                boxShadow: "0 2px 12px rgba(245,192,37,0.3)",
+              }}>
                 {periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}
               </div>
             )}
@@ -199,7 +240,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
         </div>
       )}
       {alerts.length === 0 && (
-        <div className="card mb2" style={{ borderLeft: "4px solid #16a34a" }}>
+        <div className="card mb2" style={{ borderLeft: "3px solid #16a34a", borderColor: "rgba(34,197,94,0.35)", background: "rgba(5, 15, 5, 0.7)" }}>
           <span className="text-green bold" style={{ fontSize: "0.85rem" }}>✓ All students accounted for — no active alerts.</span>
         </div>
       )}
@@ -233,7 +274,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
 
       {/* G-Men Requests */}
       {gmenRequests.length > 0 && (
-        <div className="card mb2" style={{ background: "#1a1200" }}>
+        <div className="card mb2" style={{ background: "rgba(20,12,0,0.85)", borderColor: "rgba(245,192,37,0.25)" }}>
           <div className="section-title section-title-gold">G-Men Period · Today's Requests</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
             {pending.slice(0, 4).map(r => (
