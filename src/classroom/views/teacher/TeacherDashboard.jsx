@@ -21,6 +21,7 @@ import Badge from '../../components/Badge.jsx';
 import MoleApprovalQueue from './MoleApprovalQueue.jsx';
 import HelpDeskKanban from './HelpDeskKanban.jsx';
 import ParentMailer from './ParentMailer.jsx';
+import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 const SPAN_CLASS = {
   1: 'lg:col-span-1',
@@ -189,19 +190,21 @@ function RosterWidget() {
   return (
     <Card>
       <CardHeader title="Class Roster Snapshot" subtitle="Balances & lab status" icon={Users} />
-      <div className="space-y-4 p-4">
+      <div className="space-y-3 p-4">
         {classes.map((cls) => {
           const theme = getTheme(cls.id);
           const roster = students.filter((s) => s.classId === cls.id);
           return (
-            <div key={cls.id}>
-              <div className="mb-2 flex items-center gap-2">
+            <div key={cls.id} className="relative overflow-hidden rounded-xl bg-ink-950/30 p-3">
+              {/* Subject-specific decorative background for this class section */}
+              <SubjectFlair subject={cls.subject} color={theme.hex} opacity={0.07} />
+              <div className="relative mb-2 flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${theme.bg}`} />
                 <p className="font-display text-xs font-bold uppercase tracking-wide text-zinc-200">
                   {cls.name} · P{cls.period}
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="relative space-y-1.5">
                 {roster.map((s) => (
                   <div
                     key={s.id}

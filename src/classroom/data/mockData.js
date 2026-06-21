@@ -55,13 +55,43 @@ export const SUBJECT_THEME = {
     gradient: 'from-gold-600 to-gold-500',
     hex: '#E0A400',
   },
+  calculus: {
+    key: 'calculus',
+    label: 'Calculus',
+    icon: 'sigma', // warm gold tier
+    accent: 'gold',
+    text: 'text-gold-300',
+    glow: 'text-glow-gold',
+    bg: 'bg-gold-500',
+    bgSoft: 'bg-gold-500/10',
+    border: 'border-gold-500/40',
+    ring: 'ring-gold-500/40',
+    gradient: 'from-gold-500 to-gold-400',
+    hex: '#F0B400',
+  },
+  biology: {
+    key: 'biology',
+    label: 'Biology',
+    icon: 'dna', // muted gold tier
+    accent: 'gold',
+    text: 'text-gold-200',
+    glow: 'text-glow-gold',
+    bg: 'bg-gold-400',
+    bgSoft: 'bg-gold-400/10',
+    border: 'border-gold-400/40',
+    ring: 'ring-gold-400/40',
+    gradient: 'from-gold-400 to-gold-300',
+    hex: '#F5C832',
+  },
 };
 
 // Map a SUBJECT_THEME.icon key to a Lucide icon component name.
 export const SUBJECT_ICONS = {
-  flask: 'FlaskConical',
-  atom: 'Atom',
-  mountain: 'Mountain',
+  flask:   'FlaskConical',
+  atom:    'Atom',
+  mountain:'Mountain',
+  sigma:   'Sigma',
+  dna:     'Dna',
 };
 
 // -----------------------------------------------------------------------------
