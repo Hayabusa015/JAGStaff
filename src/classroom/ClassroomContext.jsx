@@ -791,6 +791,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     moveWidget,
     cycleWidgetSpan,
     resetLayout,
+
+    bulkProvisionStudents: teacherActions?.bulkProvisionStudents || (() => Promise.resolve({ added: 0, skipped: 0 })),
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

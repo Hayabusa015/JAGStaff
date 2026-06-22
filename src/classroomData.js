@@ -206,6 +206,31 @@ export function useTeacherClassroom(teacherEmail) {
     return data ? mapStudent(data) : null;
   }, [teacherEmail]);
 
+  // Bulk-provision students from an external source (e.g. Google Classroom sync).
+  // Skips any student_email that already exists for this teacher.
+  // rows: [{ classId, studentEmail, studentName }]
+  const bulkProvisionStudents = useCallback(async (rows) => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return { added: 0, skipped: rows.length };
+    const { data: existing } = await supabase
+      .from('classroom_students')
+      .select('student_email')
+      .eq('teacher_email', teacherEmail);
+    const existingEmails = new Set((existing || []).map(s => s.student_email));
+    const toInsert = rows.filter(r => r.studentEmail && !existingEmails.has(r.studentEmail));
+    if (toInsert.length === 0) return { added: 0, skipped: rows.length };
+    const { error } = await supabase.from('classroom_students').insert(
+      toInsert.map(r => ({
+        teacher_email: teacherEmail,
+        class_id: r.classId,
+        student_email: r.studentEmail,
+        student_name: r.studentName,
+        avatar: '😊',
+      }))
+    );
+    if (error) throw new Error(error.message);
+    return { added: toInsert.length, skipped: rows.length - toInsert.length };
+  }, [teacherEmail]);
+
   return {
     classes,
     students,
@@ -221,6 +246,7 @@ export function useTeacherClassroom(teacherEmail) {
       pushNotification,
       addClass,
       addStudentToClass,
+      bulkProvisionStudents,
     },
   };
 }

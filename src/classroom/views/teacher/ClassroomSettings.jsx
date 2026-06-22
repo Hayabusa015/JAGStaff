@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette } from 'lucide-react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import { PATTERNS } from '../../ClassroomThemeLayer.jsx';
+import { SUPABASE_READY } from '../../../supabase.js';
+import GCSyncModal from '../../components/GCSyncModal.jsx';
 
 // ── Color presets ─────────────────────────────────────────────────────────────
 
@@ -397,6 +399,7 @@ function VisualDesignCard() {
 
 export default function ClassroomSettings() {
   const { teacherProfile, updateTeacherProfile } = useApp();
+  const [showGCSync, setShowGCSync] = useState(false);
 
   const [name, setName] = useState(teacherProfile.name);
   const [classroom, setClassroom] = useState(teacherProfile.classroom);
@@ -554,6 +557,51 @@ export default function ClassroomSettings() {
       </Card>
 
       <VisualDesignCard />
+
+      {/* ── Classroom Roster ── */}
+      <Card hairline>
+        <CardHeader
+          title="Classroom Roster"
+          subtitle="Import students directly from Google Classroom"
+          icon={Users}
+        />
+        <div className="space-y-4 p-5">
+          <p className="text-[13px] text-zinc-400 leading-relaxed">
+            Students join your Google Classroom on day one. Once everyone has joined,
+            use this button to sync the full roster into the portal in seconds. New students
+            will be prompted to complete the{' '}
+            <span className="font-semibold text-zinc-200">Welcome Wizard</span> on their first login
+            — where they set up Gizmos credentials, sign the safety contract, and add a guardian.
+          </p>
+
+          <div className="rounded-xl border border-white/8 bg-ink-950/40 px-4 py-3 text-[11px] text-zinc-500">
+            <strong className="font-semibold text-zinc-300">How it works</strong>
+            <ol className="mt-1.5 list-decimal list-inside space-y-0.5">
+              <li>Students join your Google Classroom course as usual.</li>
+              <li>You click Sync — the portal matches each course to your portal classes.</li>
+              <li>New students are added instantly; existing ones are never duplicated.</li>
+            </ol>
+          </div>
+
+          {SUPABASE_READY ? (
+            <button
+              onClick={() => setShowGCSync(true)}
+              className="font-display flex items-center gap-2 rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-ink-950 shadow-gold transition-all hover:bg-gold-400"
+            >
+              🎓 Sync from Google Classroom
+            </button>
+          ) : (
+            <div className="rounded-xl border border-white/8 bg-ink-950/60 px-4 py-3 text-[11px] text-zinc-500">
+              Connect a Supabase project to enable roster sync. Add{' '}
+              <code className="font-mono text-zinc-300">VITE_SUPABASE_URL</code> and{' '}
+              <code className="font-mono text-zinc-300">VITE_SUPABASE_ANON_KEY</code> to your
+              environment variables.
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {showGCSync && <GCSyncModal onClose={() => setShowGCSync(false)} />}
     </div>
   );
 }
