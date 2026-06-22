@@ -19,7 +19,7 @@ import { formatDateTime, timeAgo } from '../../utils/format.js';
 import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 export default function StudentDashboard() {
-  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile } =
+  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile, currencyName, currencySymbol, classroomDesign } =
     useApp();
   const cls = getClass(activeStudent.classId);
   const theme = getTheme(activeStudent.classId);
@@ -41,7 +41,7 @@ export default function StudentDashboard() {
           <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
           {/* Subject-specific decorative background on the gold hero banner */}
           <SubjectFlair subject={cls?.subject} color="#0a0500" opacity={0.11} />
-          <div className="relative text-ink-950">
+          <div className="relative" style={{ color: classroomDesign.heroText }}>
             <p className="font-display text-xs font-bold uppercase tracking-widest opacity-80">
               {cls?.name} · Period {cls?.period}
             </p>
@@ -56,16 +56,16 @@ export default function StudentDashboard() {
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* Mole Dollar progress */}
+        {/* Currency progress */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Mole Dollar Tracker" subtitle="Earn toward a test-bonus milestone" icon={Coins} />
+          <CardHeader title={`${currencyName} Tracker`} subtitle="Earn toward a test-bonus milestone" icon={Coins} />
           <div className="space-y-4 p-5">
             <div className="flex items-end justify-between">
               <div>
                 <p className="font-display text-5xl font-bold text-gold-400 text-glow-gold">
                   {activeStudent.balance}
                 </p>
-                <p className="text-xs text-zinc-500">spendable Mole Dollars</p>
+                <p className="text-xs text-zinc-500">spendable {currencyName}s</p>
               </div>
               {activeStudent.lockedBalance > 0 && (
                 <Badge tone="neutral" icon={Lock}>
@@ -75,7 +75,7 @@ export default function StudentDashboard() {
             </div>
             <div>
               <div className="mb-1 flex items-center justify-between text-xs text-zinc-400">
-                <span>Milestone bonus at {moleMilestone} MD</span>
+                <span>Milestone bonus at {moleMilestone} {currencySymbol}</span>
                 <span className="font-bold text-zinc-50">
                   {Math.max(0, moleMilestone - activeStudent.balance)} to go
                 </span>
@@ -140,7 +140,7 @@ export default function StudentDashboard() {
           <div className="p-5">
             <p className="font-display text-4xl font-bold text-zinc-50">{pendingMole.length}</p>
             <p className="text-xs text-zinc-500">
-              {pendingMole.reduce((sum, r) => sum + r.cost, 0)} MD locked
+              {pendingMole.reduce((sum, r) => sum + r.cost, 0)} {currencySymbol} locked
             </p>
           </div>
         </Card>

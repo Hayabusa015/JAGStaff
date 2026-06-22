@@ -747,7 +747,7 @@ export const LESSON_PLANS = {
 // -----------------------------------------------------------------------------
 export const SAFETY_RULES = [
   'I will wear approved splash goggles whenever any chemical, flame, or glassware is in use.',
-  'I will never taste, touch, or smell chemicals unless explicitly directed by Mr. Shull.',
+  'I will never taste, touch, or smell chemicals unless explicitly directed by my teacher.',
   'I will tie back long hair and avoid loose clothing during all lab activities.',
   'I will report every spill, broken glass, or injury immediately — no matter how small.',
   'I know the location of the eyewash station, fire extinguisher, and safety shower.',

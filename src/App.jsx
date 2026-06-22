@@ -18,6 +18,7 @@ import Infractions from "./components/Infractions.jsx";
 // Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
 import { AppProvider as ClassroomProvider } from "./classroom/ClassroomContext.jsx";
 import ClassroomApp from "./classroom/ClassroomApp.jsx";
+import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -122,7 +123,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           color: "rgba(240,234,216,0.45)", fontSize: "0.72rem",
           letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.75rem",
         }}>
-          Staff Portal
+          G-Men Portal
         </p>
         <div style={{
           display: "inline-block",
@@ -131,7 +132,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           fontSize: "0.65rem", color: "rgba(245,192,37,0.5)",
           letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2.25rem",
         }}>
-          Internal Staff Access Only
+          Students &amp; Staff
         </div>
 
         {error && (
@@ -179,7 +180,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
         )}
 
         <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
-          Only <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> accounts are permitted.<br />
+          Use your <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> school Google account.<br />
           Sessions expire after 7 hours of inactivity.
         </p>
       </div>
@@ -194,12 +195,14 @@ export default function App() {
 
   useEffect(() => {
     if (!user) { setIsStaff(null); setIsAdmin(false); return; }
-    isStaffEmail(user.email).then(({ isStaff, isAdmin }) => {
-      setIsStaff(isStaff);
-      setIsAdmin(isAdmin);
+    isStaffEmail(user.email).then(({ isStaff: staff, isAdmin: admin }) => {
+      setIsStaff(staff);
+      setIsAdmin(admin);
+      if (staff && !tourDone(user.email)) setShowTour(true);
     });
   }, [user]);
 
+  const [showTour, setShowTour] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
   // Top-level zone: building-wide "school" vs the teacher's own "classroom".
@@ -261,6 +264,14 @@ export default function App() {
 
   return (
     <div className="app-shell app-backdrop">
+      {showTour && (
+        <StaffWelcomeTour
+          userEmail={user.email}
+          onClose={() => setShowTour(false)}
+          onGoToClassroom={() => { setZone("classroom"); setShowTour(false); }}
+        />
+      )}
+
       {/* Top nav — two rows */}
       <nav className="top-nav">
         {/* Row 1: brand + zone toggle + user */}

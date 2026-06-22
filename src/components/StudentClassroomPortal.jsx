@@ -3,6 +3,17 @@
 
 import { useState } from "react";
 import { GOLD } from "../constants.js";
+
+function getTeacherName() {
+  try {
+    const stored = localStorage.getItem("gmen-teacher-profile-v1");
+    if (stored) {
+      const { name } = JSON.parse(stored);
+      if (name) return name;
+    }
+  } catch {}
+  return "your teacher";
+}
 import { AppProvider as ClassroomProvider, useApp } from "../classroom/ClassroomContext.jsx";
 import ClassroomApp from "../classroom/ClassroomApp.jsx";
 import GmenEnrollmentView from "./GmenEnrollmentView.jsx";
@@ -84,7 +95,7 @@ function StudentClassroomInner({ user, zone }) {
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", lineHeight: 1.6 }}>
             Your account (<strong style={{ color: "rgba(255,255,255,0.8)" }}>{user?.email}</strong>) hasn't
             been added to a classroom by your teacher yet. Check back later or ask{" "}
-            <strong style={{ color: "rgba(255,255,255,0.8)" }}>Mr. Shull</strong> to add you.
+            <strong style={{ color: "rgba(255,255,255,0.8)" }}>{getTeacherName()}</strong> to add you.
           </p>
           <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.75rem", marginTop: "1rem" }}>
             You can still sign up for G-Men Period using the tab above.

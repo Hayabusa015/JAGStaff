@@ -13,18 +13,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 
-const TEACHER_NAV = [
-  { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
-  { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
-  { id: 'aigrader', label: 'AI Grader', icon: Sparkles },
-  { id: 'materials', label: 'Class Materials', icon: Library },
-  { id: 'mole', label: 'Mole Dollar Vault', icon: Coins },
-  { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
-  { id: 'mailer', label: 'Parent Mailer', icon: Mail },
-  { id: 'lessons', label: 'Lesson Plans', icon: CalendarRange },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
-];
-
 const STUDENT_NAV = [
   { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
   { id: 'materials', label: 'Materials', icon: Library },
@@ -34,8 +22,19 @@ const STUDENT_NAV = [
 ];
 
 export default function SideNav({ open, onClose }) {
-  const { role, activeView, setActiveView, teacherProfile } = useApp();
-  const nav = role === 'teacher' ? TEACHER_NAV : STUDENT_NAV;
+  const { role, activeView, setActiveView, teacherProfile, currencyName } = useApp();
+  const teacherNav = [
+    { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
+    { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
+    { id: 'aigrader', label: 'AI Grader', icon: Sparkles },
+    { id: 'materials', label: 'Class Materials', icon: Library },
+    { id: 'mole', label: `${currencyName} Vault`, icon: Coins },
+    { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
+    { id: 'mailer', label: 'Parent Mailer', icon: Mail },
+    { id: 'lessons', label: 'Lesson Plans', icon: CalendarRange },
+    { id: 'settings', label: 'Settings', icon: Settings2 },
+  ];
+  const nav = role === 'teacher' ? teacherNav : STUDENT_NAV;
 
   const go = (id) => {
     setActiveView(id);

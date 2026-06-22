@@ -19,13 +19,23 @@ function mapClass(r) {
   };
 }
 
-function mapStudent(r, notifications = []) {
+// cls: the mapped classroom_classes row for this student (needed for section/period).
+function mapStudent(r, cls = null, notifications = []) {
+  const parts = (r.student_name || '').trim().split(/\s+/);
   return {
     id: r.id,
     classId: r.class_id,
     teacherEmail: r.teacher_email,
     studentEmail: r.student_email,
     name: r.student_name,
+    // Gradebook-compatible name fields
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || '',
+    // Section = "Period N" — lets the gradebook filter by class/period
+    section: cls ? `Period ${cls.period}` : '',
+    grade: '',
+    // Parent email lives inside guardian JSON; gradebook reads parentEmail directly
+    parentEmail: r.guardian?.email || '',
     avatar: r.avatar || '😊',
     balance: r.balance ?? 0,
     lockedBalance: r.locked_balance ?? 0,
@@ -116,8 +126,10 @@ export function useTeacherClassroom(teacherEmail) {
             .order('created_at', { ascending: false }),
         ]);
       if (!active) return;
-      setClasses((cls || []).map(mapClass));
-      setStudents((stu || []).map((s) => mapStudent(s)));
+      const mappedClasses = (cls || []).map(mapClass);
+      const classById = Object.fromEntries(mappedClasses.map(c => [c.id, c]));
+      setClasses(mappedClasses);
+      setStudents((stu || []).map((s) => mapStudent(s, classById[s.class_id])));
       setTickets((tkt || []).map(mapTicket));
       setRequests((req || []).map(mapRequest));
       setLoading(false);
@@ -203,8 +215,67 @@ export function useTeacherClassroom(teacherEmail) {
       })
       .select()
       .single();
-    return data ? mapStudent(data) : null;
-  }, [teacherEmail]);
+    const cls = classes.find(c => c.id === classId);
+    return data ? mapStudent(data, cls) : null;
+  }, [teacherEmail, classes]);
+
+  // Bulk-provision students from an external source (e.g. Google Classroom sync).
+  // Writes to classroom_students AND the school-wide students table in one pass
+  // so teachers only need to sync once for both sides of the app.
+  // rows: [{ classId, studentEmail, studentName }]
+  const bulkProvisionStudents = useCallback(async (rows) => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return { added: 0, skipped: rows.length };
+
+    // ── 1. classroom_students (teacher-scoped, email-deduped) ──────────────────
+    const { data: existing } = await supabase
+      .from('classroom_students')
+      .select('student_email')
+      .eq('teacher_email', teacherEmail);
+    const existingEmails = new Set((existing || []).map(s => s.student_email));
+    const toInsert = rows.filter(r => r.studentEmail && !existingEmails.has(r.studentEmail));
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('classroom_students').insert(
+        toInsert.map(r => ({
+          teacher_email: teacherEmail,
+          class_id: r.classId,
+          student_email: r.studentEmail,
+          student_name: r.studentName,
+          avatar: '😊',
+        }))
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    // ── 2. school-wide students table (shared roster, email-deduped) ───────────
+    // Only inserts emails not already present — safe to re-run across multiple teachers.
+    const validRows = rows.filter(r => r.studentEmail);
+    if (validRows.length > 0) {
+      const { data: schoolExisting } = await supabase
+        .from('students')
+        .select('student_email')
+        .in('student_email', validRows.map(r => r.studentEmail));
+      const schoolEmails = new Set((schoolExisting || []).map(s => s.student_email));
+      const schoolToInsert = validRows.filter(r => !schoolEmails.has(r.studentEmail));
+      if (schoolToInsert.length > 0) {
+        await supabase.from('students').insert(
+          schoolToInsert.map(r => {
+            const parts = r.studentName.trim().split(/\s+/);
+            const cls = classes.find(c => c.id === r.classId);
+            return {
+              first_name: parts[0] || '',
+              last_name: parts.slice(1).join(' ') || '',
+              student_email: r.studentEmail,
+              // section = "Period N" so the school-wide gradebook can filter by class
+              section: cls ? String(cls.period) : null,
+            };
+          })
+        );
+      }
+    }
+
+    return { added: toInsert.length, skipped: rows.length - toInsert.length };
+  }, [teacherEmail, classes]);
 
   return {
     classes,
@@ -221,6 +292,7 @@ export function useTeacherClassroom(teacherEmail) {
       pushNotification,
       addClass,
       addStudentToClass,
+      bulkProvisionStudents,
     },
   };
 }

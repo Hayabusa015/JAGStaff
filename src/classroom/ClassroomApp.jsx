@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from './ClassroomContext.jsx';
+import ClassroomSetupWizard, { setupDone } from './views/ClassroomSetupWizard.jsx';
 import RoleSwitcherBanner from './components/RoleSwitcherBanner.jsx';
 import SideNav from './components/SideNav.jsx';
 import TopControlBar from './components/TopControlBar.jsx';
@@ -22,6 +23,7 @@ import StudentLessonPlans from './views/student/StudentLessonPlans.jsx';
 
 // Per-teacher tools relocated from the School zone into "My Classroom".
 import Gradebook from '../components/Gradebook.jsx';
+import ClassroomThemeLayer from './ClassroomThemeLayer.jsx';
 import AIGrader from '../components/AIGrader.jsx';
 
 // Embedded inside the JAGStaff shell (below the school top nav) — so this no
@@ -31,13 +33,23 @@ import AIGrader from '../components/AIGrader.jsx';
 export default function ClassroomApp({ user, students = [], isAdmin = false }) {
   const { role, activeView, activeStudent } = useApp();
   const [navOpen, setNavOpen] = useState(false);
+  const [showSetup, setShowSetup] = useState(
+    () => role === 'teacher' && !!user?.email && !setupDone(user.email)
+  );
 
   // Day-1 onboarding intercept: block ALL student navigation until the
   // Welcome Wizard is complete.
   const wizardBlocking = role === 'student' && activeStudent && !activeStudent.wizardComplete;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <ClassroomThemeLayer>
+      {showSetup && (
+        <ClassroomSetupWizard
+          userEmail={user?.email}
+          onComplete={() => setShowSetup(false)}
+        />
+      )}
+
       <RoleSwitcherBanner />
 
       {wizardBlocking ? (
@@ -61,7 +73,7 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
           </div>
         </div>
       )}
-    </div>
+    </ClassroomThemeLayer>
   );
 }
 

@@ -3,19 +3,18 @@ import { Menu, Coins, Lock, Database, CheckCircle2, Trophy } from 'lucide-react'
 import { useApp } from '../ClassroomContext.jsx';
 import NotificationFlag from './NotificationFlag.jsx';
 
-const VIEW_TITLES = {
-  dashboard: { teacher: 'Command Center', student: 'My Dashboard' },
-  materials: { teacher: 'Class Materials', student: 'Class Materials' },
-  mole: { teacher: 'Mole Dollar Vault', student: 'Cash-In Shop' },
-  helpdesk: { teacher: 'Help Desk Queue', student: 'Student Help Desk' },
-  mailer: { teacher: 'Parent Communication', student: '' },
-  lessons: { teacher: 'Lesson Plans', student: 'Lesson Plans' },
-  settings: { teacher: 'Classroom Settings', student: '' },
-};
-
 export default function TopControlBar({ onMenu }) {
-  const { role, activeView, MOCK_MODE, metrics, activeStudent, getClass, teacherProfile } = useApp();
-  const title = VIEW_TITLES[activeView]?.[role] || 'Command Center';
+  const { role, activeView, MOCK_MODE, metrics, activeStudent, getClass, teacherProfile, currencyName, currencySymbol } = useApp();
+  const viewTitles = {
+    dashboard: { teacher: 'Command Center', student: 'My Dashboard' },
+    materials: { teacher: 'Class Materials', student: 'Class Materials' },
+    mole: { teacher: `${currencyName} Vault`, student: 'Cash-In Shop' },
+    helpdesk: { teacher: 'Help Desk Queue', student: 'Student Help Desk' },
+    mailer: { teacher: 'Parent Communication', student: '' },
+    lessons: { teacher: 'Lesson Plans', student: 'Lesson Plans' },
+    settings: { teacher: 'Classroom Settings', student: '' },
+  };
+  const title = viewTitles[activeView]?.[role] || 'Command Center';
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-ink-950/80 px-4 py-3 backdrop-blur">
@@ -53,12 +52,12 @@ export default function TopControlBar({ onMenu }) {
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
         {role === 'teacher' ? (
           <>
-            <Metric icon={Trophy} label="MD Approved" value={metrics.approvedMoleDollars} />
+            <Metric icon={Trophy} label={`${currencySymbol} Approved`} value={metrics.approvedMoleDollars} />
             <Metric icon={CheckCircle2} label="Tasks Done" value={metrics.completedTasks} />
           </>
         ) : (
           <>
-            <Metric icon={Coins} label="Mole $" value={activeStudent.balance} />
+            <Metric icon={Coins} label={currencySymbol} value={activeStudent.balance} />
             {activeStudent.lockedBalance > 0 && (
               <Metric icon={Lock} label="Locked" value={activeStudent.lockedBalance} muted />
             )}
