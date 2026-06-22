@@ -122,7 +122,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           color: "rgba(240,234,216,0.45)", fontSize: "0.72rem",
           letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.75rem",
         }}>
-          Staff Portal
+          G-Men Portal
         </p>
         <div style={{
           display: "inline-block",
@@ -131,7 +131,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           fontSize: "0.65rem", color: "rgba(245,192,37,0.5)",
           letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2.25rem",
         }}>
-          Internal Staff Access Only
+          Students &amp; Staff
         </div>
 
         {error && (
@@ -179,7 +179,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
         )}
 
         <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
-          Only <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> accounts are permitted.<br />
+          Use your <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> school Google account.<br />
           Sessions expire after 7 hours of inactivity.
         </p>
       </div>
