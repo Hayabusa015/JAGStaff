@@ -363,24 +363,20 @@ export function useStudents() {
   async function syncClassroomStudents(incomingRows) {
     if (!SUPABASE_READY || !supabase) {
       setStudents(prev => {
-        const existing = new Set(prev.map(s => `${s.firstName}|${s.lastName}`));
-        const toAdd = incomingRows.filter(r => !existing.has(`${r.firstName}|${r.lastName}`));
+        const existing = new Set(prev.map(s => s.studentEmail).filter(Boolean));
+        const toAdd = incomingRows.filter(r => r.studentEmail && !existing.has(r.studentEmail));
         return [...prev, ...toAdd.map(r => ({ id: Date.now().toString() + Math.random(), ...r }))];
       });
       return { added: incomingRows.length, skipped: 0 };
     }
-    const { data: current } = await supabase.from("students").select("first_name, last_name");
-    const existingKeys = new Set((current || []).map(r => `${r.first_name}|${r.last_name}`));
-    const toInsert = incomingRows.filter(r => !existingKeys.has(`${r.firstName}|${r.lastName}`));
-    // For existing students, upsert their email if we now have it
-    const toUpdateEmail = incomingRows.filter(r =>
-      existingKeys.has(`${r.firstName}|${r.lastName}`) && r.studentEmail
-    );
-    for (const r of toUpdateEmail) {
-      await supabase.from("students")
-        .update({ student_email: r.studentEmail })
-        .eq("first_name", r.firstName).eq("last_name", r.lastName);
-    }
+    // Deduplicate by email — more reliable than name matching across multiple teachers.
+    const emailsToCheck = incomingRows.map(r => r.studentEmail).filter(Boolean);
+    const { data: current } = await supabase
+      .from("students")
+      .select("student_email")
+      .in("student_email", emailsToCheck);
+    const existingEmails = new Set((current || []).map(r => r.student_email));
+    const toInsert = incomingRows.filter(r => r.studentEmail && !existingEmails.has(r.studentEmail));
     if (toInsert.length > 0) {
       const { data } = await supabase.from("students").insert(
         toInsert.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: null, student_email: r.studentEmail || null }))

@@ -207,27 +207,57 @@ export function useTeacherClassroom(teacherEmail) {
   }, [teacherEmail]);
 
   // Bulk-provision students from an external source (e.g. Google Classroom sync).
-  // Skips any student_email that already exists for this teacher.
+  // Writes to classroom_students AND the school-wide students table in one pass
+  // so teachers only need to sync once for both sides of the app.
   // rows: [{ classId, studentEmail, studentName }]
   const bulkProvisionStudents = useCallback(async (rows) => {
     if (!SUPABASE_READY || !supabase || !teacherEmail) return { added: 0, skipped: rows.length };
+
+    // ── 1. classroom_students (teacher-scoped, email-deduped) ──────────────────
     const { data: existing } = await supabase
       .from('classroom_students')
       .select('student_email')
       .eq('teacher_email', teacherEmail);
     const existingEmails = new Set((existing || []).map(s => s.student_email));
     const toInsert = rows.filter(r => r.studentEmail && !existingEmails.has(r.studentEmail));
-    if (toInsert.length === 0) return { added: 0, skipped: rows.length };
-    const { error } = await supabase.from('classroom_students').insert(
-      toInsert.map(r => ({
-        teacher_email: teacherEmail,
-        class_id: r.classId,
-        student_email: r.studentEmail,
-        student_name: r.studentName,
-        avatar: '😊',
-      }))
-    );
-    if (error) throw new Error(error.message);
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('classroom_students').insert(
+        toInsert.map(r => ({
+          teacher_email: teacherEmail,
+          class_id: r.classId,
+          student_email: r.studentEmail,
+          student_name: r.studentName,
+          avatar: '😊',
+        }))
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    // ── 2. school-wide students table (shared roster, email-deduped) ───────────
+    // Only inserts emails not already present — safe to re-run across multiple teachers.
+    const validRows = rows.filter(r => r.studentEmail);
+    if (validRows.length > 0) {
+      const { data: schoolExisting } = await supabase
+        .from('students')
+        .select('student_email')
+        .in('student_email', validRows.map(r => r.studentEmail));
+      const schoolEmails = new Set((schoolExisting || []).map(s => s.student_email));
+      const schoolToInsert = validRows.filter(r => !schoolEmails.has(r.studentEmail));
+      if (schoolToInsert.length > 0) {
+        await supabase.from('students').insert(
+          schoolToInsert.map(r => {
+            const parts = r.studentName.trim().split(/\s+/);
+            return {
+              first_name: parts[0] || '',
+              last_name: parts.slice(1).join(' ') || '',
+              student_email: r.studentEmail,
+            };
+          })
+        );
+      }
+    }
+
     return { added: toInsert.length, skipped: rows.length - toInsert.length };
   }, [teacherEmail]);
 
