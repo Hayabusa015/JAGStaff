@@ -7,7 +7,7 @@ import Badge, { StatusBadge as SB } from '../../components/Badge.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function CashInShop() {
-  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme, teacherProfile, currencyName, currencySymbol } = useApp();
+  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme, teacherProfile, currencyName, currencySymbol, classroomDesign } = useApp();
   const theme = getTheme(activeStudent.classId);
   const [selected, setSelected] = useState(() => shopItems[0]?.id ?? null);
   const [flash, setFlash] = useState(null);
@@ -34,7 +34,7 @@ export default function CashInShop() {
       <Card className="overflow-hidden" hairline>
         <div className={`relative bg-gradient-to-r ${theme.gradient} px-5 py-4`}>
           <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
-          <div className="relative flex items-center justify-between text-ink-950">
+          <div className="relative flex items-center justify-between" style={{ color: classroomDesign.heroText }}>
             <div className="flex items-center gap-2">
               <Coins className="h-6 w-6" />
               <span className="font-display text-sm font-bold uppercase tracking-widest">

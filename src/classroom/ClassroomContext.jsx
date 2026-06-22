@@ -28,6 +28,32 @@ const clone = (data) => JSON.parse(JSON.stringify(data));
 const UNITS_STORAGE_KEY = 'gmen-units-v1';
 const MOLE_EC_KEY = 'gmen-mole-ec-v1';
 const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
+const CLASSROOM_DESIGN_KEY = 'gmen-classroom-design-v1';
+
+export const DEFAULT_CLASSROOM_DESIGN = {
+  preset: 'gold',
+  accentColor: '#F5C025',
+  accentAlt: '#c98f00',
+  heroText: '#0a0700',
+  bgColor: '#08080A',
+  bgType: 'solid',
+  bgGradientFrom: '#080600',
+  bgGradientTo: '#150f00',
+  bgImageUrl: '',
+  bgImageOpacity: 0.15,
+  pattern: 'none',
+  patternOpacity: 0.04,
+};
+
+function loadClassroomDesign() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(CLASSROOM_DESIGN_KEY);
+      if (saved) return { ...DEFAULT_CLASSROOM_DESIGN, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+  }
+  return { ...DEFAULT_CLASSROOM_DESIGN };
+}
 
 const DEFAULT_TEACHER_PROFILE = {
   name: 'Mr. Shull',
@@ -109,6 +135,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [units, setUnits] = useState(loadUnits);
   const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
   const [teacherProfile, setTeacherProfile] = useState(loadTeacherProfile);
+  const [classroomDesign, setClassroomDesign] = useState(loadClassroomDesign);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
@@ -133,6 +160,14 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       window.localStorage.setItem(TEACHER_PROFILE_KEY, JSON.stringify(teacherProfile));
     } catch { /* ignore */ }
   }, [teacherProfile]);
+
+  // Persist classroom visual design.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(CLASSROOM_DESIGN_KEY, JSON.stringify(classroomDesign));
+    } catch { /* ignore */ }
+  }, [classroomDesign]);
 
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
@@ -616,6 +651,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     setTeacherProfile((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const updateClassroomDesign = useCallback((patch) => {
+    setClassroomDesign((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   // ===========================================================================
   //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
   // ===========================================================================
@@ -696,6 +735,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
     teacherProfile,
     updateTeacherProfile,
+    classroomDesign,
+    updateClassroomDesign,
     currencyName: teacherProfile.currencyName || 'Mole Dollar',
     currencySymbol: teacherProfile.currencySymbol || 'MD',
 

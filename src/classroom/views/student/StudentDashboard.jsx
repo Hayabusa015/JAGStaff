@@ -19,7 +19,7 @@ import { formatDateTime, timeAgo } from '../../utils/format.js';
 import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 export default function StudentDashboard() {
-  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile, currencyName, currencySymbol } =
+  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile, currencyName, currencySymbol, classroomDesign } =
     useApp();
   const cls = getClass(activeStudent.classId);
   const theme = getTheme(activeStudent.classId);
@@ -41,7 +41,7 @@ export default function StudentDashboard() {
           <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
           {/* Subject-specific decorative background on the gold hero banner */}
           <SubjectFlair subject={cls?.subject} color="#0a0500" opacity={0.11} />
-          <div className="relative text-ink-950">
+          <div className="relative" style={{ color: classroomDesign.heroText }}>
             <p className="font-display text-xs font-bold uppercase tracking-widest opacity-80">
               {cls?.name} · Period {cls?.period}
             </p>

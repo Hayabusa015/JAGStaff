@@ -22,6 +22,7 @@ import StudentLessonPlans from './views/student/StudentLessonPlans.jsx';
 
 // Per-teacher tools relocated from the School zone into "My Classroom".
 import Gradebook from '../components/Gradebook.jsx';
+import ClassroomThemeLayer from './ClassroomThemeLayer.jsx';
 import AIGrader from '../components/AIGrader.jsx';
 
 // Embedded inside the JAGStaff shell (below the school top nav) — so this no
@@ -37,7 +38,7 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
   const wizardBlocking = role === 'student' && activeStudent && !activeStudent.wizardComplete;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <ClassroomThemeLayer>
       <RoleSwitcherBanner />
 
       {wizardBlocking ? (
@@ -61,7 +62,7 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
           </div>
         </div>
       )}
-    </div>
+    </ClassroomThemeLayer>
   );
 }
 
