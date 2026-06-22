@@ -19,13 +19,23 @@ function mapClass(r) {
   };
 }
 
-function mapStudent(r, notifications = []) {
+// cls: the mapped classroom_classes row for this student (needed for section/period).
+function mapStudent(r, cls = null, notifications = []) {
+  const parts = (r.student_name || '').trim().split(/\s+/);
   return {
     id: r.id,
     classId: r.class_id,
     teacherEmail: r.teacher_email,
     studentEmail: r.student_email,
     name: r.student_name,
+    // Gradebook-compatible name fields
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || '',
+    // Section = "Period N" — lets the gradebook filter by class/period
+    section: cls ? `Period ${cls.period}` : '',
+    grade: '',
+    // Parent email lives inside guardian JSON; gradebook reads parentEmail directly
+    parentEmail: r.guardian?.email || '',
     avatar: r.avatar || '😊',
     balance: r.balance ?? 0,
     lockedBalance: r.locked_balance ?? 0,
@@ -116,8 +126,10 @@ export function useTeacherClassroom(teacherEmail) {
             .order('created_at', { ascending: false }),
         ]);
       if (!active) return;
-      setClasses((cls || []).map(mapClass));
-      setStudents((stu || []).map((s) => mapStudent(s)));
+      const mappedClasses = (cls || []).map(mapClass);
+      const classById = Object.fromEntries(mappedClasses.map(c => [c.id, c]));
+      setClasses(mappedClasses);
+      setStudents((stu || []).map((s) => mapStudent(s, classById[s.class_id])));
       setTickets((tkt || []).map(mapTicket));
       setRequests((req || []).map(mapRequest));
       setLoading(false);
@@ -203,8 +215,9 @@ export function useTeacherClassroom(teacherEmail) {
       })
       .select()
       .single();
-    return data ? mapStudent(data) : null;
-  }, [teacherEmail]);
+    const cls = classes.find(c => c.id === classId);
+    return data ? mapStudent(data, cls) : null;
+  }, [teacherEmail, classes]);
 
   // Bulk-provision students from an external source (e.g. Google Classroom sync).
   // Writes to classroom_students AND the school-wide students table in one pass
@@ -248,10 +261,13 @@ export function useTeacherClassroom(teacherEmail) {
         await supabase.from('students').insert(
           schoolToInsert.map(r => {
             const parts = r.studentName.trim().split(/\s+/);
+            const cls = classes.find(c => c.id === r.classId);
             return {
               first_name: parts[0] || '',
               last_name: parts.slice(1).join(' ') || '',
               student_email: r.studentEmail,
+              // section = "Period N" so the school-wide gradebook can filter by class
+              section: cls ? String(cls.period) : null,
             };
           })
         );
@@ -259,7 +275,7 @@ export function useTeacherClassroom(teacherEmail) {
     }
 
     return { added: toInsert.length, skipped: rows.length - toInsert.length };
-  }, [teacherEmail]);
+  }, [teacherEmail, classes]);
 
   return {
     classes,
