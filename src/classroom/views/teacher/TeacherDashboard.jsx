@@ -151,11 +151,11 @@ function WidgetRenderer({ widget }) {
 }
 
 function MetricsWidget() {
-  const { metrics, moleRequests, tickets, students } = useApp();
+  const { metrics, moleRequests, tickets, students, currencySymbol } = useApp();
   const pendingMole = moleRequests.filter((r) => r.status === 'pending').length;
   const openTickets = tickets.filter((t) => t.status !== 'completed').length;
   const stats = [
-    { icon: Trophy, label: 'Mole $ Approved', value: metrics.approvedMoleDollars },
+    { icon: Trophy, label: `${currencySymbol} Approved`, value: metrics.approvedMoleDollars },
     { icon: CheckCircle2, label: 'Tasks Completed', value: metrics.completedTasks },
     { icon: Bell, label: 'Pending Redemptions', value: pendingMole },
     { icon: LifeBuoy, label: 'Open Tickets', value: openTickets },

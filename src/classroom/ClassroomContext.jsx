@@ -33,6 +33,8 @@ const DEFAULT_TEACHER_PROFILE = {
   name: 'Mr. Shull',
   classroom: 'Shull Science',
   tagline: 'G-MEN Command',
+  currencyName: 'Mole Dollar',
+  currencySymbol: 'MD',
 };
 
 function loadTeacherProfile() {
@@ -694,6 +696,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
     teacherProfile,
     updateTeacherProfile,
+    currencyName: teacherProfile.currencyName || 'Mole Dollar',
+    currencySymbol: teacherProfile.currencySymbol || 'MD',
 
     role,
     setRole,

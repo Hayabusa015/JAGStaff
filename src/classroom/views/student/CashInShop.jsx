@@ -7,7 +7,7 @@ import Badge, { StatusBadge as SB } from '../../components/Badge.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function CashInShop() {
-  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme, teacherProfile } = useApp();
+  const { activeStudent, moleRequests, submitMoleRequest, moleMilestone, shopItems, getTheme, teacherProfile, currencyName, currencySymbol } = useApp();
   const theme = getTheme(activeStudent.classId);
   const [selected, setSelected] = useState(() => shopItems[0]?.id ?? null);
   const [flash, setFlash] = useState(null);
@@ -21,9 +21,9 @@ export default function CashInShop() {
   const submit = () => {
     const ok = submitMoleRequest(activeStudent.id, item);
     if (ok) {
-      setFlash({ tone: 'success', text: `Locked ${item.cost} MD for "${item.label}". Sent to ${teacherProfile.name} for approval!` });
+      setFlash({ tone: 'success', text: `Locked ${item.cost} ${currencySymbol} for "${item.label}". Sent to ${teacherProfile.name} for approval!` });
     } else {
-      setFlash({ tone: 'error', text: `Not enough Mole Dollars for "${item.label}".` });
+      setFlash({ tone: 'error', text: `Not enough ${currencyName}s for "${item.label}".` });
     }
     setTimeout(() => setFlash(null), 4000);
   };
@@ -38,7 +38,7 @@ export default function CashInShop() {
             <div className="flex items-center gap-2">
               <Coins className="h-6 w-6" />
               <span className="font-display text-sm font-bold uppercase tracking-widest">
-                Mole Dollar Balance
+                {currencyName} Balance
               </span>
             </div>
             <span className="font-display text-4xl font-bold">{activeStudent.balance}</span>
@@ -48,14 +48,14 @@ export default function CashInShop() {
           <div className="flex items-center justify-between text-xs text-zinc-400">
             <span>Progress to next milestone bonus</span>
             <span className="font-bold text-zinc-50">
-              {activeStudent.balance} / {moleMilestone} MD
+              {activeStudent.balance} / {moleMilestone} {currencySymbol}
             </span>
           </div>
           <ProgressBar value={activeStudent.balance} max={moleMilestone} />
           {activeStudent.lockedBalance > 0 && (
             <p className="flex items-center gap-1.5 text-xs text-zinc-400">
               <Lock className="h-3.5 w-3.5" />
-              <strong className="text-zinc-200">{activeStudent.lockedBalance} MD</strong> locked in
+              <strong className="text-zinc-200">{activeStudent.lockedBalance} {currencySymbol}</strong> locked in
               pending requests
             </p>
           )}
@@ -82,7 +82,7 @@ export default function CashInShop() {
                     ].join(' ')}
                   >
                     <span className="text-sm font-semibold text-zinc-50">{opt.label}</span>
-                    <Badge tone="gold">{opt.cost} MD</Badge>
+                    <Badge tone="gold">{opt.cost} {currencySymbol}</Badge>
                   </button>
                 );
               })}
@@ -107,7 +107,7 @@ export default function CashInShop() {
               className="font-display flex w-full items-center justify-center gap-2 rounded-xl bg-gold-500 py-3 text-sm font-bold uppercase tracking-wide text-ink-950 shadow-gold transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
-              {affordable ? `Submit Request · ${item.cost} MD` : 'Insufficient Balance'}
+              {affordable ? `Submit Request · ${item.cost} ${currencySymbol}` : 'Insufficient Balance'}
             </button>
             <p className="text-center text-[11px] text-zinc-500">
               Submitting instantly locks the tokens out of your spendable balance until {teacherProfile.name}
@@ -128,7 +128,7 @@ export default function CashInShop() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-zinc-50">{r.item}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {r.cost} MD · {timeAgo(r.createdAt)}
+                      {r.cost} {currencySymbol} · {timeAgo(r.createdAt)}
                     </p>
                     {r.status === 'denied' && r.note && (
                       <p className="mt-1 text-[11px] italic text-red-300/80">“{r.note}”</p>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2 } from 'lucide-react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 
@@ -9,19 +9,25 @@ export default function ClassroomSettings() {
   const [name, setName] = useState(teacherProfile.name);
   const [classroom, setClassroom] = useState(teacherProfile.classroom);
   const [tagline, setTagline] = useState(teacherProfile.tagline);
+  const [currencyName, setCurrencyName] = useState(teacherProfile.currencyName || 'Mole Dollar');
+  const [currencySymbol, setCurrencySymbol] = useState(teacherProfile.currencySymbol || 'MD');
   const [saved, setSaved] = useState(false);
 
   const isDirty =
     name.trim() !== teacherProfile.name ||
     classroom.trim() !== teacherProfile.classroom ||
-    tagline.trim() !== teacherProfile.tagline;
+    tagline.trim() !== teacherProfile.tagline ||
+    currencyName.trim() !== (teacherProfile.currencyName || 'Mole Dollar') ||
+    currencySymbol.trim() !== (teacherProfile.currencySymbol || 'MD');
 
   const save = () => {
-    if (!name.trim() || !classroom.trim() || !tagline.trim()) return;
+    if (!name.trim() || !classroom.trim() || !tagline.trim() || !currencyName.trim() || !currencySymbol.trim()) return;
     updateTeacherProfile({
       name: name.trim(),
       classroom: classroom.trim(),
       tagline: tagline.trim(),
+      currencyName: currencyName.trim(),
+      currencySymbol: currencySymbol.trim().toUpperCase(),
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -77,11 +83,42 @@ export default function ClassroomSettings() {
             />
           </section>
 
+          {/* Classroom economy */}
+          <section className="space-y-4">
+            <h3 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-gold-500">
+              Classroom Economy
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Currency Name"
+                icon={Coins}
+                value={currencyName}
+                onChange={setCurrencyName}
+                onKeyDown={handleKey}
+                placeholder="e.g. Spirit Points"
+                hint="What students earn — shown in balance cards and shop."
+              />
+              <Field
+                label="Symbol / Abbreviation"
+                icon={Coins}
+                value={currencySymbol}
+                onChange={(v) => setCurrencySymbol(v.toUpperCase().slice(0, 4))}
+                onKeyDown={handleKey}
+                placeholder="e.g. SP"
+                hint="Short form used in compact displays and badges."
+              />
+            </div>
+            <div className="rounded-xl border border-white/10 bg-ink-950/60 p-3 text-[11px] text-zinc-500">
+              Example: <span className="font-bold text-gold-300">{currencyName || 'Spirit Points'}</span> · badge shows{' '}
+              <span className="font-bold text-gold-300">{currencySymbol || 'SP'}</span>
+            </div>
+          </section>
+
           {/* Save */}
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={save}
-              disabled={!isDirty || !name.trim() || !classroom.trim() || !tagline.trim()}
+              disabled={!isDirty || !name.trim() || !classroom.trim() || !tagline.trim() || !currencyName.trim() || !currencySymbol.trim()}
               className="font-display flex items-center gap-2 rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-ink-950 shadow-gold transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Save Changes

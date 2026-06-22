@@ -114,6 +114,7 @@ export default function MoleEconSettings() {
     updateShopItem,
     removeShopItem,
     resetMoleEconomy,
+    currencyName,
   } = useApp();
 
   const [milestoneInput, setMilestoneInput] = useState(String(moleMilestone));
@@ -181,7 +182,7 @@ export default function MoleEconSettings() {
               onKeyDown={(e) => { if (e.key === 'Enter') flushMilestone(); }}
               className="w-24 rounded-xl border border-gold-500/30 bg-ink-900 px-3 py-2 text-center font-display text-xl font-bold text-gold-300 focus:border-gold-500 focus:outline-none"
             />
-            <span className="text-sm font-semibold text-zinc-400">Mole Dollars</span>
+            <span className="text-sm font-semibold text-zinc-400">{currencyName}s</span>
           </div>
         </div>
 
