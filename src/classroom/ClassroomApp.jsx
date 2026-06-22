@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from './ClassroomContext.jsx';
+import ClassroomSetupWizard, { setupDone } from './views/ClassroomSetupWizard.jsx';
 import RoleSwitcherBanner from './components/RoleSwitcherBanner.jsx';
 import SideNav from './components/SideNav.jsx';
 import TopControlBar from './components/TopControlBar.jsx';
@@ -32,6 +33,9 @@ import AIGrader from '../components/AIGrader.jsx';
 export default function ClassroomApp({ user, students = [], isAdmin = false }) {
   const { role, activeView, activeStudent } = useApp();
   const [navOpen, setNavOpen] = useState(false);
+  const [showSetup, setShowSetup] = useState(
+    () => role === 'teacher' && !!user?.email && !setupDone(user.email)
+  );
 
   // Day-1 onboarding intercept: block ALL student navigation until the
   // Welcome Wizard is complete.
@@ -39,6 +43,13 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
 
   return (
     <ClassroomThemeLayer>
+      {showSetup && (
+        <ClassroomSetupWizard
+          userEmail={user?.email}
+          onComplete={() => setShowSetup(false)}
+        />
+      )}
+
       <RoleSwitcherBanner />
 
       {wizardBlocking ? (

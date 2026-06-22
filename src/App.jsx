@@ -18,6 +18,7 @@ import Infractions from "./components/Infractions.jsx";
 // Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
 import { AppProvider as ClassroomProvider } from "./classroom/ClassroomContext.jsx";
 import ClassroomApp from "./classroom/ClassroomApp.jsx";
+import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -194,12 +195,14 @@ export default function App() {
 
   useEffect(() => {
     if (!user) { setIsStaff(null); setIsAdmin(false); return; }
-    isStaffEmail(user.email).then(({ isStaff, isAdmin }) => {
-      setIsStaff(isStaff);
-      setIsAdmin(isAdmin);
+    isStaffEmail(user.email).then(({ isStaff: staff, isAdmin: admin }) => {
+      setIsStaff(staff);
+      setIsAdmin(admin);
+      if (staff && !tourDone(user.email)) setShowTour(true);
     });
   }, [user]);
 
+  const [showTour, setShowTour] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
   // Top-level zone: building-wide "school" vs the teacher's own "classroom".
@@ -261,6 +264,14 @@ export default function App() {
 
   return (
     <div className="app-shell app-backdrop">
+      {showTour && (
+        <StaffWelcomeTour
+          userEmail={user.email}
+          onClose={() => setShowTour(false)}
+          onGoToClassroom={() => { setZone("classroom"); setShowTour(false); }}
+        />
+      )}
+
       {/* Top nav — two rows */}
       <nav className="top-nav">
         {/* Row 1: brand + zone toggle + user */}

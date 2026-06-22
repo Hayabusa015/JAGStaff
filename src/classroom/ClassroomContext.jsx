@@ -29,6 +29,23 @@ const UNITS_STORAGE_KEY = 'gmen-units-v1';
 const MOLE_EC_KEY = 'gmen-mole-ec-v1';
 const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
 const CLASSROOM_DESIGN_KEY = 'gmen-classroom-design-v1';
+const QUICK_LINKS_KEY = 'gmen-quick-links-v1';
+
+const DEFAULT_QUICK_LINKS = [
+  { id: 'dl', label: 'Delta Math',     url: 'https://deltamath.com',  icon: '📐' },
+  { id: 'qz', label: 'Quizizz',        url: 'https://quizizz.com',    icon: '🧠' },
+  { id: 'vc', label: 'Vocabulary.com', url: 'https://vocabulary.com', icon: '📚' },
+];
+
+function loadQuickLinks() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(QUICK_LINKS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return [...DEFAULT_QUICK_LINKS];
+}
 
 export const DEFAULT_CLASSROOM_DESIGN = {
   preset: 'gold',
@@ -61,6 +78,7 @@ const DEFAULT_TEACHER_PROFILE = {
   tagline: 'G-MEN Command',
   currencyName: 'Mole Dollar',
   currencySymbol: 'MD',
+  commonCurriculumApiKey: '',
 };
 
 function loadTeacherProfile() {
@@ -136,6 +154,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
   const [teacherProfile, setTeacherProfile] = useState(loadTeacherProfile);
   const [classroomDesign, setClassroomDesign] = useState(loadClassroomDesign);
+  const [quickLinks, setQuickLinks] = useState(loadQuickLinks);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
@@ -168,6 +187,14 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       window.localStorage.setItem(CLASSROOM_DESIGN_KEY, JSON.stringify(classroomDesign));
     } catch { /* ignore */ }
   }, [classroomDesign]);
+
+  // Persist quick links.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(QUICK_LINKS_KEY, JSON.stringify(quickLinks));
+    } catch { /* ignore */ }
+  }, [quickLinks]);
 
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
@@ -655,6 +682,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     setClassroomDesign((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const updateQuickLinks = useCallback((links) => setQuickLinks(links), []);
+
   // ===========================================================================
   //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
   // ===========================================================================
@@ -793,6 +822,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     resetLayout,
 
     bulkProvisionStudents: teacherActions?.bulkProvisionStudents || (() => Promise.resolve({ added: 0, skipped: 0 })),
+
+    quickLinks,
+    updateQuickLinks,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
