@@ -14,7 +14,7 @@ import {
 } from './data/mockData.js';
 import { putBlob, getBlob, deleteBlob } from './utils/idb.js';
 import { extractText } from './utils/fileText.js';
-import { SUPABASE_READY } from '../supabase.js';
+import { SUPABASE_READY, applyMoleDropLowest, applyMoleBonus } from '../supabase.js';
 import { useTeacherClassroom, useStudentClassroom } from '../classroomData.js';
 
 const AppContext = createContext(null);
@@ -30,6 +30,17 @@ const MOLE_EC_KEY = 'gmen-mole-ec-v1';
 const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
 const CLASSROOM_DESIGN_KEY = 'gmen-classroom-design-v1';
 const QUICK_LINKS_KEY = 'gmen-quick-links-v1';
+const MOLE_CREDITS_KEY = 'gmen-mole-credits-v1';
+
+function loadMoleGradeCredits() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(MOLE_CREDITS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return [];
+}
 
 const DEFAULT_QUICK_LINKS = [
   { id: 'dl', label: 'Delta Math',     url: 'https://deltamath.com',  icon: '📐' },
@@ -79,6 +90,7 @@ const DEFAULT_TEACHER_PROFILE = {
   currencyName: 'Mole Dollar',
   currencySymbol: 'MD',
   commonCurriculumApiKey: '',
+  currentGradingPeriod: 1,
 };
 
 function loadTeacherProfile() {
@@ -153,6 +165,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [units, setUnits] = useState(loadUnits);
   const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
   const [teacherProfile, setTeacherProfile] = useState(loadTeacherProfile);
+  const [moleGradeCredits, setMoleGradeCredits] = useState(loadMoleGradeCredits);
   const [classroomDesign, setClassroomDesign] = useState(loadClassroomDesign);
   const [quickLinks, setQuickLinks] = useState(loadQuickLinks);
 
@@ -179,6 +192,12 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       window.localStorage.setItem(TEACHER_PROFILE_KEY, JSON.stringify(teacherProfile));
     } catch { /* ignore */ }
   }, [teacherProfile]);
+
+  // Persist mole grade credits.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem(MOLE_CREDITS_KEY, JSON.stringify(moleGradeCredits)); } catch { /* ignore */ }
+  }, [moleGradeCredits]);
 
   // Persist classroom visual design.
   useEffect(() => {
@@ -320,9 +339,30 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   // React StrictMode's double-invocation of updater functions.
   const submitMoleRequest = useCallback(
     async (studentId, item) => {
+      const rewardMeta = {
+        rewardType: item.rewardType || null,
+        gradeCategory: item.gradeCategory || null,
+        gradingPeriod: item.rewardType ? (teacherProfile.currentGradingPeriod || 1) : null,
+      };
       // Live student mode → anti-cheat RPC; balance update comes back via realtime.
       if (liveMode && !isStaff && studentActions) {
         const ok = await studentActions.submitMoleRequest(studentId, item.label, item.cost);
+        if (ok) {
+          // Optimistic local insert so per-period checks work immediately.
+          setMoleRequests((prev) => [
+            {
+              id: nextId('req'),
+              studentId,
+              item: item.label,
+              cost: item.cost,
+              status: 'pending',
+              note: '',
+              createdAt: new Date().toISOString(),
+              ...rewardMeta,
+            },
+            ...prev,
+          ]);
+        }
         return ok;
       }
       // Mock fallback.
@@ -344,12 +384,13 @@ export function AppProvider({ children, user = null, isStaff = true }) {
           status: 'pending',
           note: '',
           createdAt: new Date().toISOString(),
+          ...rewardMeta,
         },
         ...prev,
       ]);
       return true;
     },
-    [liveMode, isStaff, studentActions, students]
+    [liveMode, isStaff, studentActions, students, teacherProfile]
   );
 
   const approveMoleRequest = useCallback(
@@ -377,8 +418,41 @@ export function AppProvider({ children, user = null, isStaff = true }) {
         tone: 'success',
         text: `Your "${req.item}" redemption was approved! 🎉`,
       });
+
+      // Auto-apply grade reward if the request carries a rewardType.
+      const grantRewardType = req.rewardType
+        || moleEconomy.shopItems.find(i => i.label === req.item)?.rewardType;
+      const grantCategory = req.gradeCategory
+        || moleEconomy.shopItems.find(i => i.label === req.item)?.gradeCategory;
+      const grantPeriod = req.gradingPeriod || teacherProfile.currentGradingPeriod || 1;
+      const studentForGrant = students.find(s => s.id === req.studentId);
+
+      if (grantRewardType && teacherEmail && studentForGrant?.studentEmail) {
+        const creditBase = {
+          requestId: req.id, studentId: req.studentId,
+          studentName: studentForGrant.name, type: grantRewardType,
+          gradeCategory: grantCategory, gradingPeriod: grantPeriod,
+          appliedAt: new Date().toISOString(),
+        };
+        if (grantRewardType === 'dropLowest') {
+          applyMoleDropLowest(teacherEmail, studentForGrant.studentEmail, grantCategory, grantPeriod)
+            .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
+        } else if (grantRewardType === 'moleDollarBonus') {
+          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost)
+            .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
+        }
+      } else if (grantRewardType) {
+        // Mock mode / no student email — still record the credit for display.
+        setMoleGradeCredits(prev => [...prev, {
+          requestId: req.id, studentId: req.studentId,
+          studentName: studentForGrant?.name || req.studentId,
+          type: grantRewardType, gradeCategory: grantCategory,
+          gradingPeriod: grantPeriod, appliedAt: new Date().toISOString(),
+          result: { ok: false, reason: 'no_supabase' },
+        }]);
+      }
     },
-    [moleRequests, liveMode, isStaff, teacherActions]
+    [moleRequests, liveMode, isStaff, teacherActions, moleEconomy, teacherEmail, teacherProfile, students]
   );
 
   const denyMoleRequest = useCallback(
@@ -820,6 +894,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
     quickLinks,
     updateQuickLinks,
+
+    moleGradeCredits,
+    currentGradingPeriod: teacherProfile.currentGradingPeriod || 1,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

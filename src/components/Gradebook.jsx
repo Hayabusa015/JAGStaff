@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useGradebook, useClassroomSync } from "../supabase.js";
 import { useGmailSend } from "../supabase.js";
+import { useApp as useClassroomApp } from "../classroom/ClassroomContext.jsx";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, gradePct, gradeTier,
   effectivePoints, assignmentStats, rubricTotal, DEFAULT_SCALE,
@@ -525,6 +526,7 @@ export default function Gradebook({ students, user }) {
   const { assignments, grades, profiles, settings, addAssignment, updateAssignment, deleteAssignment, saveGrade, saveProfile, setActiveProfile, deleteProfile, saveSettings } = useGradebook(user?.email);
   const { requestGmailToken, sendEmail } = useGmailSend();
   const { requestToken: requestGCToken, listCourses, syncGradesToCourse } = useClassroomSync();
+  const { moleGradeCredits = [], currentGradingPeriod = 1 } = useClassroomApp();
 
   const [subTab, setSubTab] = useState("grades");
   const [period, setPeriod] = useState(1);
@@ -889,7 +891,7 @@ export default function Gradebook({ students, user }) {
 
       {/* Sub-tabs */}
       <div className="flex gap1 mb2" style={{ flexWrap: "wrap" }}>
-        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "missing", label: "Missing Work" }, { key: "analytics", label: "📊 Analytics" }, { key: "reports", label: "Reports" }, { key: "settings", label: "⚙ Settings" }].map(t => (
+        {[{ key: "grades", label: "Grades" }, { key: "assignments", label: "Assignments" }, { key: "missing", label: "Missing Work" }, { key: "analytics", label: "📊 Analytics" }, { key: "reports", label: "Reports" }, { key: "credits", label: `🪙 Credits${moleGradeCredits.length ? ` (${moleGradeCredits.length})` : ""}` }, { key: "settings", label: "⚙ Settings" }].map(t => (
           <button key={t.key} className={`btn btn-sm ${subTab === t.key ? "btn-primary" : "btn-ghost"}`} onClick={() => setSubTab(t.key)}>{t.label}</button>
         ))}
       </div>
@@ -1135,6 +1137,53 @@ export default function Gradebook({ students, user }) {
       {/* ── ANALYTICS tab ───────────────────────────────────────────────── */}
       {subTab === "analytics" && (
         <GradebookAnalytics students={students} assignments={assignments} grades={grades} profiles={profiles} settings={settings} onOpenStudent={setDetailStudent} />
+      )}
+
+      {/* ── MOLE CREDITS tab ────────────────────────────────────────────── */}
+      {subTab === "credits" && (
+        <div style={{ padding: "1rem 0" }}>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.25rem" }}>
+              🪙 Mole Dollar Grade Credits
+            </p>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem" }}>
+              Automatically applied grade changes from approved Mole Dollar redemptions. Active quarter: Q{currentGradingPeriod}.
+            </p>
+          </div>
+          {moleGradeCredits.length === 0 ? (
+            <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.82rem", padding: "2rem", textAlign: "center", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
+              No grade credits applied yet. They appear here when you approve drop-lowest or Mole Dollar Bonus requests.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {[...moleGradeCredits].reverse().map((credit, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.6rem 0.9rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ color: "#f4f4f5", fontSize: "0.82rem", fontWeight: 600, marginBottom: "0.15rem" }}>
+                      {credit.studentName}
+                      {" "}
+                      <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>
+                        {credit.type === "dropLowest" ? `· Drop ${credit.gradeCategory} · Q${credit.gradingPeriod}` : "· Mole Dollar Bonus"}
+                      </span>
+                    </p>
+                    <p style={{ color: credit.result?.ok ? "#22c55e" : "rgba(255,255,255,0.35)", fontSize: "0.72rem" }}>
+                      {credit.result?.ok
+                        ? credit.type === "dropLowest"
+                          ? `✓ Excused: ${credit.result.assignmentName}`
+                          : `✓ Bonus total: ${credit.result.totalPoints} pts`
+                        : credit.result?.reason === "no_supabase"
+                          ? "Mock mode — will apply when connected to Supabase"
+                          : `⚠ ${credit.result?.reason || "Pending"}`}
+                    </p>
+                  </div>
+                  <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.7rem", whiteSpace: "nowrap" }}>
+                    {new Date(credit.appliedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── REPORTS tab ─────────────────────────────────────────────────── */}

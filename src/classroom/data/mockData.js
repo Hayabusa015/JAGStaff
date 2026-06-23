@@ -575,11 +575,15 @@ export const STUDENTS = [
 export const MOLE_MILESTONE = 100; // tokens toward a test-bonus milestone
 
 export const CASH_IN_SHOP = [
-  { id: 'shop-quiz2', label: '+2 Quiz Bonus', cost: 25, icon: 'sparkles' },
-  { id: 'shop-test5', label: '+5 Test Bonus', cost: 50, icon: 'rocket' },
-  { id: 'shop-homework', label: 'Homework Pass', cost: 30, icon: 'ticket' },
-  { id: 'shop-music', label: 'Lab Playlist Pick', cost: 15, icon: 'music' },
-  { id: 'shop-retest', label: 'Retest Token', cost: 75, icon: 'repeat' },
+  { id: 'shop-quiz2',     label: '+2 Quiz Bonus',        cost: 25, icon: 'sparkles' },
+  { id: 'shop-test5',     label: '+5 Test Bonus',         cost: 50, icon: 'rocket' },
+  { id: 'shop-homework',  label: 'Homework Pass',         cost: 30, icon: 'ticket' },
+  { id: 'shop-music',     label: 'Lab Playlist Pick',     cost: 15, icon: 'music' },
+  { id: 'shop-retest',    label: 'Retest Token',          cost: 75, icon: 'repeat' },
+  { id: 'shop-drop-hw',   label: 'Drop Lowest Homework',  cost: 3,  icon: 'eraser', rewardType: 'dropLowest', gradeCategory: 'Homework', limitPerPeriod: true },
+  { id: 'shop-drop-quiz', label: 'Drop Lowest Quiz',      cost: 5,  icon: 'eraser', rewardType: 'dropLowest', gradeCategory: 'Quizzes',  limitPerPeriod: true },
+  { id: 'shop-drop-lab',  label: 'Drop Lowest Lab',       cost: 5,  icon: 'eraser', rewardType: 'dropLowest', gradeCategory: 'Labs',     limitPerPeriod: true },
+  { id: 'shop-md-bonus',  label: 'Mole Dollar Bonus',     cost: 10, icon: 'zap',    rewardType: 'moleDollarBonus' },
 ];
 
 // -----------------------------------------------------------------------------

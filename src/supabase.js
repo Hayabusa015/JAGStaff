@@ -1528,3 +1528,89 @@ export function useRequisitions(teacherEmail) {
 
   return { requisitions, addRequisition };
 }
+
+// ─── Mole Dollar Grade Actions ────────────────────────────────────────────────
+
+export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCategory, gradingPeriod) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
+  const { data: profile } = await supabase
+    .from('gradebook_profiles')
+    .select('id, student_name')
+    .eq('teacher_email', teacherEmail)
+    .ilike('student_email', studentEmail)
+    .maybeSingle();
+  if (!profile) return { ok: false, reason: 'no_profile' };
+  const { data: assignments } = await supabase
+    .from('gradebook_assignments')
+    .select('id, name, max_points')
+    .eq('teacher_email', teacherEmail)
+    .ilike('category', gradeCategory)
+    .eq('grading_period', gradingPeriod)
+    .eq('extra_credit', false);
+  if (!assignments?.length) return { ok: false, reason: 'no_assignments' };
+  const { data: grades } = await supabase
+    .from('gradebook_grades')
+    .select('id, assignment_id, points_earned, excused, missing')
+    .eq('teacher_email', teacherEmail)
+    .eq('student_id', profile.id)
+    .in('assignment_id', assignments.map(a => a.id));
+  const gradeByAsgn = {};
+  (grades || []).forEach(g => { gradeByAsgn[g.assignment_id] = g; });
+  let lowestAsgn = null;
+  let lowestPct = Infinity;
+  for (const asgn of assignments) {
+    const g = gradeByAsgn[asgn.id];
+    if (g?.excused) continue;
+    const pct = (!g || g.missing || g.points_earned == null)
+      ? 0 : g.points_earned / (asgn.max_points || 100);
+    if (pct < lowestPct) { lowestPct = pct; lowestAsgn = { asgn, grade: g }; }
+  }
+  if (!lowestAsgn) return { ok: false, reason: 'nothing_to_drop' };
+  const { asgn, grade } = lowestAsgn;
+  const row = {
+    teacher_email: teacherEmail, assignment_id: asgn.id,
+    student_id: profile.id, student_name: profile.student_name,
+    excused: true, missing: false, points_earned: null,
+    graded_at: new Date().toISOString(),
+  };
+  if (grade) { await supabase.from('gradebook_grades').update(row).eq('id', grade.id); }
+  else { await supabase.from('gradebook_grades').insert(row); }
+  return { ok: true, assignmentName: asgn.name };
+}
+
+export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
+  const { data: profile } = await supabase
+    .from('gradebook_profiles')
+    .select('id, student_name')
+    .eq('teacher_email', teacherEmail)
+    .ilike('student_email', studentEmail)
+    .maybeSingle();
+  if (!profile) return { ok: false, reason: 'no_profile' };
+  let { data: asgn } = await supabase
+    .from('gradebook_assignments').select('id, max_points')
+    .eq('teacher_email', teacherEmail).eq('name', 'Mole Dollar Bonus').maybeSingle();
+  if (!asgn) {
+    const { data: created } = await supabase.from('gradebook_assignments').insert({
+      teacher_email: teacherEmail, name: 'Mole Dollar Bonus', category: 'Tests',
+      grading_period: 1, max_points: 100, extra_credit: true,
+      description: 'Bonus points earned via Mole Dollar redemptions.',
+      created_at: new Date().toISOString(),
+    }).select('id, max_points').single();
+    asgn = created;
+  }
+  if (!asgn) return { ok: false, reason: 'could_not_create_assignment' };
+  const { data: existing } = await supabase.from('gradebook_grades').select('id, points_earned')
+    .eq('teacher_email', teacherEmail).eq('assignment_id', asgn.id)
+    .eq('student_id', profile.id).maybeSingle();
+  const newPts = Math.min(asgn.max_points || 100, (existing?.points_earned ?? 0) + bonusPoints);
+  const row = {
+    teacher_email: teacherEmail, assignment_id: asgn.id,
+    student_id: profile.id, student_name: profile.student_name,
+    points_earned: newPts, missing: false, excused: false,
+    graded_at: new Date().toISOString(),
+  };
+  if (existing) { await supabase.from('gradebook_grades').update(row).eq('id', existing.id); }
+  else { await supabase.from('gradebook_grades').insert(row); }
+  return { ok: true, totalPoints: newPts };
+}
