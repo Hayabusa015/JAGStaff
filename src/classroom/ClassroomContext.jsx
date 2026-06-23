@@ -357,11 +357,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
       // Live teacher mode → RPC (server moves tokens + sends notification).
+      // Also do optimistic local update so UI responds immediately.
       if (liveMode && isStaff && teacherActions) {
         teacherActions.approveRequest(requestId);
-        return;
       }
-      // Mock fallback.
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -386,12 +385,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     (requestId, note) => {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
-      // Live teacher mode → RPC.
+      // Live teacher mode → RPC. Also optimistic local update.
       if (liveMode && isStaff && teacherActions) {
         teacherActions.denyRequest(requestId, note);
-        return;
       }
-      // Mock fallback.
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -452,9 +449,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
   const advanceTicket = useCallback(
     (ticketId) => {
+      // Live mode → RPC. Also optimistic local update.
       if (liveMode && isStaff && teacherActions) {
         teacherActions.advanceTicket(ticketId);
-        return;
       }
       setTickets((prev) =>
         prev.map((t) =>
@@ -469,12 +466,10 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     (ticketId) => {
       const t = tickets.find((x) => x.id === ticketId);
       if (!t || t.status === 'completed') return;
-      // Live teacher mode → Supabase update + notification via server.
+      // Live teacher mode → Supabase update. Also optimistic local update.
       if (liveMode && isStaff && teacherActions) {
         teacherActions.completeTicket(ticketId);
-        return;
       }
-      // Mock fallback.
       setTickets((prev) =>
         prev.map((x) => (x.id === ticketId ? { ...x, status: 'completed', archived: true } : x))
       );
