@@ -357,7 +357,7 @@ export default function ClassroomSetupWizard({ userEmail, onComplete }) {
     if (step !== "building") return;
     const featureItems = FEATURES.filter(f => enabled[f.id]);
     const buildSteps = [
-      { label: "Laying the foundation",        icon: "🏗️" },
+      { label: "Laying the foundation",         icon: "🏗️" },
       { label: "Setting up your classroom",     icon: "🏫" },
       { label: "Loading the gradebook",         icon: "📊" },
       ...featureItems.map(f => ({ label: `Enabling ${f.title}`, icon: f.icon })),
@@ -367,7 +367,11 @@ export default function ClassroomSetupWizard({ userEmail, onComplete }) {
     ];
     let idx = 0;
     const id = setInterval(() => {
-      setBuildItems(prev => [...prev, buildSteps[idx]]);
+      // Capture item value immediately — don't let the updater close over `idx`
+      // because React may run the updater after `idx` has already incremented.
+      const item = buildSteps[idx];
+      if (!item) return;
+      setBuildItems(prev => [...prev, item]);
       setBuildProgress(Math.round(((idx + 1) / buildSteps.length) * 100));
       idx++;
       if (idx >= buildSteps.length) {

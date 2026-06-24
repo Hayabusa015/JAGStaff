@@ -7,9 +7,11 @@ import {
   Target,
   ShoppingBag,
   Check,
+  BarChart2,
 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
+import Badge from '../../components/Badge.jsx';
 
 function ItemRow({ item, onUpdate, onRemove }) {
   const [label, setLabel] = useState(item.label);
@@ -188,16 +190,54 @@ export default function MoleEconSettings() {
 
         <hr className="border-white/8" />
 
-        {/* ── Shop items ── */}
+        {/* ── Grade Automation Items (read-only system items) ── */}
+        {shopItems.some(i => i.rewardType) && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <BarChart2 className="h-4 w-4 text-blue-400" />
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                Grade Automation
+              </p>
+              <Badge tone="neutral">System</Badge>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              These items automatically apply grade changes in the Gradebook when approved. They are read-only — costs are fixed and they cannot be deleted.
+            </p>
+            <div className="space-y-2">
+              {shopItems.filter(i => i.rewardType).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <BarChart2 className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                    <span className="text-sm font-semibold text-zinc-50">{item.label}</span>
+                    {item.gradeCategory && (
+                      <Badge tone="neutral">{item.gradeCategory}</Badge>
+                    )}
+                    {item.limitPerPeriod && (
+                      <Badge tone="neutral">1×/period</Badge>
+                    )}
+                  </div>
+                  <Badge tone="gold">{item.cost} MD</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {shopItems.some(i => i.rewardType) && <hr className="border-white/8" />}
+
+        {/* ── Custom Shop items ── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShoppingBag className="h-4 w-4 text-gold-400" />
               <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                Shop Items
+                Custom Shop Items
               </p>
               <span className="rounded-full bg-ink-800 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
-                {shopItems.length}
+                {shopItems.filter(i => !i.rewardType).length}
               </span>
             </div>
             {!showAdd && (
@@ -215,12 +255,12 @@ export default function MoleEconSettings() {
           </p>
 
           <div className="space-y-2">
-            {shopItems.length === 0 && (
+            {shopItems.filter(i => !i.rewardType).length === 0 && (
               <p className="rounded-xl border border-white/8 px-4 py-6 text-center text-sm text-zinc-600">
-                No items — add one below or reset to defaults.
+                No custom items — add one below or reset to defaults.
               </p>
             )}
-            {shopItems.map((item) => (
+            {shopItems.filter(i => !i.rewardType).map((item) => (
               <ItemRow
                 key={item.id}
                 item={item}

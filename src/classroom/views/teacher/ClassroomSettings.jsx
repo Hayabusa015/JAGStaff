@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users } from 'lucide-react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users, Calendar } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import { PATTERNS } from '../../ClassroomThemeLayer.jsx';
@@ -509,6 +509,34 @@ export default function ClassroomSettings() {
               {' '}· badge shows{' '}
               <span className="font-bold text-gold-300">{currencySymbol || 'SP'}</span>
             </div>
+          </section>
+
+          {/* Grading Period */}
+          <section className="space-y-3">
+            <h3 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-gold-500">
+              Grading Period
+            </h3>
+            <p className="text-[11px] text-zinc-500">
+              Controls which grading period is active for Mole Dollar grade drops (drop-lowest items). Students are blocked from using the same drop type twice in the same period.
+            </p>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => updateTeacherProfile({ currentGradingPeriod: p })}
+                  className={`font-display flex h-10 w-16 items-center justify-center rounded-xl border text-sm font-bold uppercase tracking-wide transition-all ${
+                    teacherProfile.currentGradingPeriod === p
+                      ? 'border-gold-500/40 bg-gold-500/15 text-gold-300 ring-1 ring-gold-500/40'
+                      : 'border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                  }`}
+                >
+                  Q{p}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Active: <strong className="text-zinc-200">Quarter {teacherProfile.currentGradingPeriod || 1}</strong>
+            </p>
           </section>
 
           {/* Save */}
