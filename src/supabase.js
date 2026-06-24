@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { SEED_EVENTS, SEED_TRIPS, SEED_CEU, SEED_STUDENTS } from "./constants.js";
+import { SEED_EVENTS, SEED_TRIPS, SEED_CEU, SEED_STUDENTS, SEED_GRADEBOOK_PROFILE, SEED_GRADEBOOK_ASSIGNMENTS, SEED_GRADEBOOK_GRADES } from "./constants.js";
 
 // Supabase project URL + anon key. The anon key is safe to ship in the
 // client — row-level security (RLS) is what actually protects the data.
@@ -1158,9 +1158,9 @@ export function useGmenChangeRequests() {
 
 // ─── Gradebook ───────────────────────────────────────────────────────────────
 export function useGradebook(teacherEmail) {
-  const [assignments, setAssignments] = useState([]);
-  const [grades, setGrades] = useState([]);        // flat array of all grade rows
-  const [profiles, setProfiles] = useState([]);
+  const [assignments, setAssignments] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_ASSIGNMENTS : []);
+  const [grades, setGrades] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_GRADES : []);
+  const [profiles, setProfiles] = useState(() => !SUPABASE_READY ? [SEED_GRADEBOOK_PROFILE] : []);
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {

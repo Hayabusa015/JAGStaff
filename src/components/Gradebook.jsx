@@ -598,7 +598,8 @@ export default function Gradebook({ students, user }) {
 
   // Order: category index → sort_order → due_date → created_at.
   const periodAssignments = useMemo(() =>
-    assignments.filter(a => a.grading_period === period)
+    assignments
+      .filter(a => a.grading_period === period && (!activeSection || !a.section || a.section === activeSection))
       .sort((a, b) => {
         const ci = categories.findIndex(c => c.name === a.category);
         const cj = categories.findIndex(c => c.name === b.category);
@@ -608,7 +609,7 @@ export default function Gradebook({ students, user }) {
         if (ao !== bo) return ao - bo;
         return new Date(a.created_at) - new Date(b.created_at);
       }),
-    [assignments, period, categories]
+    [assignments, period, categories, activeSection]
   );
 
   const gradeMap = useMemo(() => {
