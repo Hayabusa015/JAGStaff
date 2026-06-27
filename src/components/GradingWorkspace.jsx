@@ -87,7 +87,7 @@ function saveToHistory(entry) {
     const history = raw ? JSON.parse(raw) : [];
     history.unshift(entry);
     localStorage.setItem("ai_grader_history", JSON.stringify(history.slice(0, 10)));
-  } catch {}
+  } catch { /* ignore storage errors */ }
 }
 
 function loadHistory() {

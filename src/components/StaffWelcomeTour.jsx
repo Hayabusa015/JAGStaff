@@ -20,7 +20,7 @@ const STEPS = [
     subtitle: "Your daily command center",
     body: "The dashboard gives you an instant read on the school day. Current period, late arrivals, today's events, and behavior escalation flags — all before you finish your first cup of coffee.",
     features: ["Live bell schedule & countdown to next period", "Late arrival tracker updated in real time", "Scrolling events ticker for the week ahead", "Escalated behavior alerts across the building"],
-    mockup: "dashboard",
+    mockup: "Dashboard",
     tab: "dashboard",
   },
   {
@@ -30,7 +30,7 @@ const STEPS = [
     subtitle: "No more paper slips",
     body: "Send a student anywhere in the building with one click. The receiving teacher confirms arrival and the pass closes automatically. Every movement is logged with exact timestamps.",
     features: ["One-click pass to office, restroom, or any classroom", "Cross-classroom pass sharing in real time", "Receiving teacher confirms arrival — logged automatically", "Full movement history for any student"],
-    mockup: "hallpass",
+    mockup: "Hallpass",
     tab: "hallpass",
   },
   {
@@ -148,7 +148,7 @@ const MOCKUPS = {
     </div>
   ),
 
-  dashboard: () => {
+  Dashboard: () => {
     const [tick, setTick] = useState(0);
     useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 1200); return () => clearInterval(t); }, []);
     const events = ["Early Release — Friday 2:30pm", "AP Testing — Rm 214", "Faculty Meeting @ 3pm", "Spirit Week starts Monday"];
@@ -184,7 +184,7 @@ const MOCKUPS = {
     );
   },
 
-  hallpass: () => {
+  Hallpass: () => {
     const [step, setStep] = useState(0);
     useEffect(() => { const t = setInterval(() => setStep(x => (x + 1) % 3), 1400); return () => clearInterval(t); }, []);
     const steps = [
@@ -366,7 +366,7 @@ export function tourDone(email) {
   try { return !!localStorage.getItem(`gmen-tour-${email}-v1`); } catch { return false; }
 }
 function markTourDone(email) {
-  try { localStorage.setItem(`gmen-tour-${email}-v1`, "1"); } catch {}
+  try { localStorage.setItem(`gmen-tour-${email}-v1`, "1"); } catch { /* ignore storage errors */ }
 }
 
 // ── Main component ────────────────────────────────────────────────────────────

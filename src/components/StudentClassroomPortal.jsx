@@ -11,7 +11,7 @@ function getTeacherName() {
       const { name } = JSON.parse(stored);
       if (name) return name;
     }
-  } catch {}
+  } catch { /* ignore storage errors */ }
   return "your teacher";
 }
 import { AppProvider as ClassroomProvider, useApp } from "../classroom/ClassroomContext.jsx";
