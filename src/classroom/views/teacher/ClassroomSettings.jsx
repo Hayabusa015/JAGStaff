@@ -17,7 +17,7 @@ const BLANK_DRAFT = { name: '', subject: 'chemistry', period: 1, room: '' };
 // ── ClassManager ──────────────────────────────────────────────────────────────
 
 function ClassManager() {
-  const { classes, addClass, updateClass, deleteClass } = useApp();
+  const { managedClasses: classes, addClass, updateClass, deleteClass } = useApp();
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState(BLANK_DRAFT);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);

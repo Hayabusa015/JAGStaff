@@ -68,6 +68,21 @@ export default function RoleSwitcherBanner() {
                     ))}
                 </optgroup>
               ))}
+              {/* Demo students whose classId doesn't match any live class */}
+              {(() => {
+                const liveIds = new Set(classes.map((c) => c.id));
+                const orphans = students.filter((s) => !liveIds.has(s.classId));
+                if (!orphans.length) return null;
+                return (
+                  <optgroup label="Demo Students">
+                    {orphans.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ⭐
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })()}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 top-1.5 h-4 w-4 text-zinc-400" />
           </div>

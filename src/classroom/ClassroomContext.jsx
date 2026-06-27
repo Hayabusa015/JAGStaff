@@ -251,13 +251,16 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   }, [liveStudentRequests, liveMode, isStaff]);
 
   // ---- Derived helpers ------------------------------------------------------
-  // Merge live classes (Supabase) with the mock CLASSES constant.
-  // In live teacher mode, prefer liveClasses; in live student mode, prefer liveMyClass.
+  // allClasses: live Supabase classes in live mode, mock CLASSES otherwise.
+  // managedClasses: same as allClasses — exposed separately so ClassManager
+  //   can use it without pulling in mock CLASSES that may linger in `students`.
   const allClasses = useMemo(() => {
     if (liveMode && isStaff && liveClasses.length > 0) return liveClasses;
     if (liveMode && !isStaff && liveMyClass) return [liveMyClass];
     return CLASSES;
   }, [liveMode, isStaff, liveClasses, liveMyClass]);
+
+  const managedClasses = allClasses;
 
   const activeStudent = useMemo(() => {
     const base = students.find((s) => s.id === activeStudentId) || students[0];
@@ -830,6 +833,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     myGrades,
     myGradeProfile,
     classes: allClasses,
+    managedClasses,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: moleEconomy.milestone,
     shopItems: moleEconomy.shopItems,
