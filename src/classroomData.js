@@ -309,6 +309,9 @@ export function useStudentClassroom(studentEmail) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [myAssignments, setMyAssignments] = useState([]);
+  const [myGrades, setMyGrades] = useState([]);
+  const [myGradeProfile, setMyGradeProfile] = useState(null);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase || !studentEmail) return;
@@ -365,6 +368,17 @@ export function useStudentClassroom(studentEmail) {
         setTickets((tkt || []).map(mapTicket));
         setRequests((req || []).map(mapRequest));
         setNotifications(notifMapped);
+
+        const [{ data: gAssignments }, { data: gGrades }, { data: gProfile }] =
+          await Promise.all([
+            supabase.from('gradebook_assignments').select('*').eq('teacher_email', stu.teacher_email),
+            supabase.from('gradebook_grades').select('*').eq('student_id', stu.id),
+            supabase.from('gradebook_profiles').select('*').eq('teacher_email', stu.teacher_email).eq('is_active', true).maybeSingle(),
+          ]);
+        if (!active) return;
+        setMyAssignments(gAssignments || []);
+        setMyGrades(gGrades || []);
+        setMyGradeProfile(gProfile || null);
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -440,6 +454,9 @@ export function useStudentClassroom(studentEmail) {
     tickets,
     requests,
     notifications,
+    myAssignments,
+    myGrades,
+    myGradeProfile,
     loading,
     notFound,
     actions: { submitTicket, submitMoleRequest, completeWizard, markNotificationsRead },
