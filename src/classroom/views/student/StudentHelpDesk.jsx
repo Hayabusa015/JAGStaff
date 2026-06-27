@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LifeBuoy, Send, Inbox, CheckCircle2 } from 'lucide-react';
+import { LifeBuoy, Send, Inbox, CheckCircle2, ArrowLeft, LayoutDashboard } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import { TICKET_CATEGORIES } from '../../data/mockData.js';
 import Card, { CardHeader } from '../../components/Card.jsx';
@@ -9,23 +9,60 @@ import EmptyState from '../../components/EmptyState.jsx';
 import { timeAgo } from '../../utils/format.js';
 
 export default function StudentHelpDesk() {
-  const { activeStudent, tickets, submitTicket, teacherProfile } = useApp();
+  const { activeStudent, tickets, submitTicket, teacherProfile, setActiveView } = useApp();
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
   const [details, setDetails] = useState('');
-  const [flash, setFlash] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const myTickets = tickets
     .filter((t) => t.studentId === activeStudent.id)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!details.trim()) return;
-    submitTicket(activeStudent.id, category, details.trim());
+    if (!details.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await submitTicket(activeStudent.id, category, details.trim());
+    } catch {
+      // non-fatal — ticket may still persist
+    }
     setDetails('');
-    setFlash(true);
-    setTimeout(() => setFlash(false), 3500);
+    setCategory(TICKET_CATEGORIES[0]);
+    setSubmitting(false);
+    setSubmitted(true);
   };
+
+  if (submitted) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gold-500/15 ring-2 ring-gold-500/30">
+          <CheckCircle2 className="h-10 w-10 text-gold-400" />
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-bold text-white">Ticket Submitted!</h2>
+        <p className="mb-1 text-sm text-zinc-400">
+          Your request has been sent to {teacherProfile.name}.
+        </p>
+        <p className="mb-8 text-xs text-zinc-600">You can track its progress in My Tickets.</p>
+
+        <div className="flex flex-col items-center gap-3 sm:flex-row">
+          <button
+            onClick={() => setActiveView('dashboard')}
+            className="font-display flex items-center gap-2 rounded-xl bg-gold-500 px-6 py-3 text-sm font-bold uppercase tracking-wide text-ink-950 shadow-gold transition-all hover:bg-gold-400"
+          >
+            <LayoutDashboard className="h-4 w-4" /> Back to Dashboard
+          </button>
+          <button
+            onClick={() => setSubmitted(false)}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-zinc-300 transition-all hover:bg-white/10"
+          >
+            <ArrowLeft className="h-4 w-4" /> View My Tickets
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-5 lg:grid-cols-5">
@@ -59,17 +96,12 @@ export default function StudentHelpDesk() {
                 className="w-full resize-none rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-gold-500 focus:outline-none"
               />
             </div>
-            {flash && (
-              <div className="flex items-center gap-2 rounded-xl border border-gold-500/40 bg-gold-500/10 px-3 py-2.5 text-xs text-gold-300 animate-pop-in">
-                <CheckCircle2 className="h-4 w-4" /> Ticket submitted! Track its status below.
-              </div>
-            )}
             <button
               type="submit"
-              disabled={!details.trim()}
+              disabled={!details.trim() || submitting}
               className="font-display flex w-full items-center justify-center gap-2 rounded-xl bg-gold-500 py-3 text-sm font-bold uppercase tracking-wide text-ink-950 shadow-gold transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Send className="h-4 w-4" /> Submit Ticket
+              <Send className="h-4 w-4" /> {submitting ? 'Submitting…' : 'Submit Ticket'}
             </button>
           </form>
         </Card>
