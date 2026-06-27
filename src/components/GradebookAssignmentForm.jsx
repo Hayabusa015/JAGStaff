@@ -109,45 +109,43 @@ export default function AssignmentForm({ initial, categories, period, onSave, on
         </div>
       )}
 
-      {sections.length > 0 && (
-        <div style={{ marginBottom: "0.75rem" }}>
-          <label style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", display: "block", marginBottom: "0.4rem" }}>
-            {isEdit ? "Class" : "Add to Classes"}
-          </label>
-          <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setSelectedSections([])}
-              style={{
-                background: selectedSections.length === 0 ? GOLD : "rgba(255,255,255,0.06)",
-                border: selectedSections.length === 0 ? "none" : "1px solid rgba(255,255,255,0.12)",
-                color: selectedSections.length === 0 ? "#000" : "rgba(255,255,255,0.6)",
-                borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem",
-              }}
-            >
-              All Classes
-            </button>
-            {sections.map(sec => {
-              const active = selectedSections.includes(sec);
-              return (
-                <button
-                  key={sec}
-                  type="button"
-                  onClick={() => toggleSection(sec)}
-                  style={{
-                    background: active ? GOLD : "rgba(255,255,255,0.06)",
-                    border: active ? "none" : "1px solid rgba(255,255,255,0.12)",
-                    color: active ? "#000" : "rgba(255,255,255,0.6)",
-                    borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: active ? 700 : 400, fontSize: "0.76rem",
-                  }}
-                >
-                  {sec}
-                </button>
-              );
-            })}
-          </div>
+      <div style={{ marginBottom: "0.75rem" }}>
+        <label style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", display: "block", marginBottom: "0.4rem" }}>
+          {isEdit ? "Class" : "Add to Classes"}
+        </label>
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setSelectedSections([])}
+            style={{
+              background: selectedSections.length === 0 ? GOLD : "rgba(255,255,255,0.06)",
+              border: selectedSections.length === 0 ? "none" : "1px solid rgba(255,255,255,0.12)",
+              color: selectedSections.length === 0 ? "#000" : "rgba(255,255,255,0.6)",
+              borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem",
+            }}
+          >
+            All Classes
+          </button>
+          {sections.map(sec => {
+            const active = selectedSections.includes(sec);
+            return (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => toggleSection(sec)}
+                style={{
+                  background: active ? GOLD : "rgba(255,255,255,0.06)",
+                  border: active ? "none" : "1px solid rgba(255,255,255,0.12)",
+                  color: active ? "#000" : "rgba(255,255,255,0.6)",
+                  borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: active ? 700 : 400, fontSize: "0.76rem",
+                }}
+              >
+                {sec}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
         <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", borderRadius: 6, padding: "0.4rem 1rem", cursor: "pointer" }}>Cancel</button>
