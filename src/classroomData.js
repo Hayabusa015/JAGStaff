@@ -192,6 +192,16 @@ export function useTeacherClassroom(teacherEmail) {
     });
   }, []);
 
+  const reloadClasses = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    const { data } = await supabase
+      .from('classroom_classes')
+      .select('*')
+      .eq('teacher_email', teacherEmail)
+      .order('period');
+    setClasses((data || []).map(mapClass));
+  }, [teacherEmail]);
+
   const addClass = useCallback(async ({ name, subject, period, room }) => {
     if (!SUPABASE_READY || !supabase || !teacherEmail) return null;
     const { data } = await supabase
@@ -199,8 +209,25 @@ export function useTeacherClassroom(teacherEmail) {
       .insert({ teacher_email: teacherEmail, name, subject, period, room })
       .select()
       .single();
-    return data ? mapClass(data) : null;
-  }, [teacherEmail]);
+    const mapped = data ? mapClass(data) : null;
+    await reloadClasses();
+    return mapped;
+  }, [teacherEmail, reloadClasses]);
+
+  const updateClass = useCallback(async (id, { name, subject, period, room }) => {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase
+      .from('classroom_classes')
+      .update({ name, subject, period, room })
+      .eq('id', id);
+    await reloadClasses();
+  }, [reloadClasses]);
+
+  const deleteClass = useCallback(async (id) => {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from('classroom_classes').delete().eq('id', id);
+    await reloadClasses();
+  }, [reloadClasses]);
 
   const addStudentToClass = useCallback(async ({ classId, studentEmail, studentName, avatar }) => {
     if (!SUPABASE_READY || !supabase || !teacherEmail) return null;
@@ -291,6 +318,8 @@ export function useTeacherClassroom(teacherEmail) {
       completeTicket,
       pushNotification,
       addClass,
+      updateClass,
+      deleteClass,
       addStudentToClass,
       bulkProvisionStudents,
     },

@@ -1,10 +1,167 @@
 import { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users } from 'lucide-react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users, Pencil, Trash2, Plus, BookOpen } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import { PATTERNS } from '../../ClassroomThemeLayer.jsx';
 import { SUPABASE_READY } from '../../../supabase.js';
 import GCSyncModal from '../../components/GCSyncModal.jsx';
+import { SUBJECT_THEME } from '../../data/mockData.js';
+
+// ── Subject options ───────────────────────────────────────────────────────────
+
+const SUBJECT_OPTIONS = Object.values(SUBJECT_THEME).map(s => ({ value: s.key, label: s.label }));
+const PERIOD_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+const BLANK_DRAFT = { name: '', subject: 'chemistry', period: 1, room: '' };
+
+// ── ClassManager ──────────────────────────────────────────────────────────────
+
+function ClassManager() {
+  const { classes, addClass, updateClass, deleteClass } = useApp();
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState(BLANK_DRAFT);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [addDraft, setAddDraft] = useState(BLANK_DRAFT);
+  const [adding, setAdding] = useState(false);
+
+  const sorted = [...classes].sort((a, b) => (a.period ?? 99) - (b.period ?? 99));
+
+  function startEdit(cls) {
+    setEditingId(cls.id);
+    setEditDraft({ name: cls.name, subject: cls.subject, period: cls.period ?? 1, room: cls.room || '' });
+    setConfirmDeleteId(null);
+  }
+
+  async function saveEdit() {
+    if (!editDraft.name.trim()) return;
+    await updateClass(editingId, { ...editDraft, name: editDraft.name.trim(), period: Number(editDraft.period) });
+    setEditingId(null);
+  }
+
+  async function handleDelete(id) {
+    if (confirmDeleteId === id) {
+      await deleteClass(id);
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(id);
+      setEditingId(null);
+    }
+  }
+
+  async function handleAdd() {
+    if (!addDraft.name.trim()) return;
+    setAdding(true);
+    await addClass({ ...addDraft, name: addDraft.name.trim(), period: Number(addDraft.period) });
+    setAddDraft(BLANK_DRAFT);
+    setAdding(false);
+  }
+
+  const selectCls = 'w-full rounded-lg border border-white/10 bg-ink-900 px-3 py-2.5 text-sm text-white focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500/30';
+  const inputCls = 'w-full rounded-lg border border-white/10 bg-ink-900 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500/30';
+
+  return (
+    <Card hairline>
+      <CardHeader title="My Classes" subtitle="Set up your class roster — required before syncing from Google Classroom" icon={BookOpen} />
+      <div className="p-5 space-y-3">
+
+        {/* Existing classes */}
+        {sorted.length === 0 && (
+          <p className="text-sm text-zinc-500 text-center py-4">No classes yet — add one below.</p>
+        )}
+        {sorted.map(cls => (
+          <div
+            key={cls.id}
+            className="group rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3"
+          >
+            {editingId === cls.id ? (
+              /* ── Inline edit form ── */
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <input
+                    className={inputCls + ' sm:col-span-1'}
+                    placeholder="Class name"
+                    value={editDraft.name}
+                    onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                    autoFocus
+                  />
+                  <select className={selectCls} value={editDraft.period} onChange={e => setEditDraft(d => ({ ...d, period: e.target.value }))}>
+                    {PERIOD_OPTIONS.map(p => <option key={p} value={p}>Period {p}</option>)}
+                  </select>
+                  <select className={selectCls} value={editDraft.subject} onChange={e => setEditDraft(d => ({ ...d, subject: e.target.value }))}>
+                    {SUBJECT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditingId(null)} className="px-4 py-1.5 rounded-lg text-sm text-zinc-400 border border-white/10 hover:bg-white/5">Cancel</button>
+                  <button onClick={saveEdit} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gold-500 text-black hover:bg-gold-400">Save</button>
+                </div>
+              </div>
+            ) : (
+              /* ── Read row ── */
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-xs font-bold text-gold-400">
+                  P{cls.period}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-semibold text-white">{cls.name}</div>
+                  <div className="text-xs text-zinc-500 capitalize">{SUBJECT_THEME[cls.subject]?.label || cls.subject}</div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {confirmDeleteId === cls.id ? (
+                    <>
+                      <button onClick={() => setConfirmDeleteId(null)} className="px-2 py-1 text-xs rounded-md text-zinc-400 hover:bg-white/5">Cancel</button>
+                      <button onClick={() => handleDelete(cls.id)} className="px-2 py-1 text-xs rounded-md bg-red-600/20 text-red-400 hover:bg-red-600/30 font-semibold">Delete</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(cls)} className="p-1.5 rounded-lg text-zinc-500 hover:text-gold-400 hover:bg-gold-500/10">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(cls.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Add form */}
+        <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-3 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Add a Class</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input
+              className={inputCls + ' sm:col-span-1'}
+              placeholder="e.g. AP Chemistry"
+              value={addDraft.name}
+              onChange={e => setAddDraft(d => ({ ...d, name: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            />
+            <select className={selectCls} value={addDraft.period} onChange={e => setAddDraft(d => ({ ...d, period: e.target.value }))}>
+              {PERIOD_OPTIONS.map(p => <option key={p} value={p}>Period {p}</option>)}
+            </select>
+            <select className={selectCls} value={addDraft.subject} onChange={e => setAddDraft(d => ({ ...d, subject: e.target.value }))}>
+              {SUBJECT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleAdd}
+              disabled={adding || !addDraft.name.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-gold-500 text-black hover:bg-gold-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="h-4 w-4" />
+              {adding ? 'Adding…' : 'Add Class'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 // ── Color presets ─────────────────────────────────────────────────────────────
 
@@ -434,6 +591,8 @@ export default function ClassroomSettings() {
 
   return (
     <div className="space-y-5">
+      <ClassManager />
+
       <Card hairline>
         <CardHeader
           title="Classroom Settings"

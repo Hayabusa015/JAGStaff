@@ -894,6 +894,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     resetLayout,
 
     bulkProvisionStudents: teacherActions?.bulkProvisionStudents || (() => Promise.resolve({ added: 0, skipped: 0 })),
+    addClass:    teacherActions?.addClass    || (() => Promise.resolve(null)),
+    updateClass: teacherActions?.updateClass || (() => Promise.resolve()),
+    deleteClass: teacherActions?.deleteClass || (() => Promise.resolve()),
 
     quickLinks,
     updateQuickLinks,
