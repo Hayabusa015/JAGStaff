@@ -1,16 +1,17 @@
 import { useState } from "react";
 import AnthropicGatekeeper from "./AnthropicGatekeeper.jsx";
 import GradingWorkspace from "./GradingWorkspace.jsx";
+import { getApiKey, clearApiKey } from "../apiKey.js";
 
 export default function AIGrader({ user }) {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("anthropic_api_key"));
+  const [apiKey, setApiKey] = useState(getApiKey);
 
   function handleKeyValid(key) {
     setApiKey(key);
   }
 
   function handleClearKey() {
-    localStorage.removeItem("anthropic_api_key");
+    clearApiKey();
     setApiKey(null);
   }
 

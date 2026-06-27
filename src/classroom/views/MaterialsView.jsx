@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { FlaskConical, Atom, Mountain, Plus, Library, X } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import UnitSection from '../components/UnitSection.jsx';

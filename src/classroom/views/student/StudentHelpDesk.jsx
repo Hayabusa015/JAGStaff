@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { LifeBuoy, Send, Inbox, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import { TICKET_CATEGORIES } from '../../data/mockData.js';

@@ -130,7 +130,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
   const { periodsToday } = useBellSchedule();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => { setNow({ date: fmtDate(), time: fmtTime() }); setTick(t => t + 1); }, 30000);
     return () => clearInterval(id);

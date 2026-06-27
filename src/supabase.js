@@ -320,14 +320,19 @@ export function useStudents() {
     parentEmail: r.parent_email || "", studentEmail: r.student_email || "",
   });
 
+  // Inverse of rowToStudent: camelCase UI shape → snake_case DB columns.
+  const studentToRow = s => ({
+    first_name: s.firstName, last_name: s.lastName,
+    grade: s.grade || null, section: s.section || null,
+    parent_email: s.parentEmail || null, student_email: s.studentEmail || null,
+  });
+
   // Replace the entire roster (used on CSV import).
   async function importStudents(rows) {
     if (!SUPABASE_READY || !supabase) { setStudents(rows); return; }
     await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (rows.length === 0) { setStudents([]); return; }
-    const { data } = await supabase.from("students").insert(
-      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, section: r.section || null, parent_email: r.parentEmail || null, student_email: r.studentEmail || null }))
-    ).select("*");
+    const { data } = await supabase.from("students").insert(rows.map(studentToRow)).select("*");
     setStudents((data || []).map(rowToStudent));
   }
 
@@ -337,8 +342,7 @@ export function useStudents() {
       return;
     }
     const { data } = await supabase.from("students")
-      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, section: s.section || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null })
-      .select("*").single();
+      .insert(studentToRow(s)).select("*").single();
     if (data) setStudents(prev => [...prev, rowToStudent(data)]);
   }
 
@@ -347,7 +351,7 @@ export function useStudents() {
       setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
       return;
     }
-    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, section: s.section || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null }).eq("id", id);
+    await supabase.from("students").update(studentToRow(s)).eq("id", id);
     setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
   }
 
@@ -614,23 +618,19 @@ export function useGmenRequests() {
 }
 
 // ─── Staff Directory ──────────────────────────────────────────────
-// Auto-registers each teacher when they open Hall Pass.
 // Powers the "Send to Teacher" dropdown for room passes.
+//
+// SECURITY: staff are NOT self-registered from the client. is_staff() requires
+// staff_directory membership, so a client-side self-upsert would let any
+// signed-in student promote themselves to staff. Staff are provisioned by an
+// admin (see the 20260627 migration). This hook is read-only.
 export function useStaffDirectory(user, room) {
   const [staff, setStaff] = useState([]);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase || !user?.email) return;
 
-    // Upsert this teacher so others can see them in the dropdown.
-    supabase.from("staff_directory").upsert({
-      email: user.email,
-      name: user.name,
-      room: room || null,
-      last_seen: new Date().toISOString(),
-    }, { onConflict: "email" });
-
-    // Load all staff.
+    // Read-only: load the directory for the dropdown.
     supabase.from("staff_directory")
       .select("*")
       .order("name")
@@ -1531,15 +1531,25 @@ export function useRequisitions(teacherEmail) {
 
 // ─── Mole Dollar Grade Actions ────────────────────────────────────────────────
 
-export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCategory, gradingPeriod) {
-  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
-  const { data: profile } = await supabase
-    .from('gradebook_profiles')
-    .select('id, student_name')
-    .eq('teacher_email', teacherEmail)
+// Resolve the gradebook student (the `students` roster row) by email. Email is
+// the canonical key that bridges the classroom roster (stu-*) and the gradebook
+// roster (students.id). Returns { id, name } or null. NOTE: the gradebook's
+// notion of a "student" lives in public.students, NOT gradebook_profiles — that
+// table holds category-weight profiles and has no student columns.
+async function resolveGradebookStudent(studentEmail) {
+  const { data } = await supabase
+    .from('students')
+    .select('id, first_name, last_name')
     .ilike('student_email', studentEmail)
     .maybeSingle();
-  if (!profile) return { ok: false, reason: 'no_profile' };
+  if (!data) return null;
+  return { id: data.id, name: `${data.first_name} ${data.last_name}`.trim() };
+}
+
+export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCategory, gradingPeriod) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
+  const student = await resolveGradebookStudent(studentEmail);
+  if (!student) return { ok: false, reason: 'no_student' };
   const { data: assignments } = await supabase
     .from('gradebook_assignments')
     .select('id, name, max_points')
@@ -1550,26 +1560,39 @@ export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCateg
   if (!assignments?.length) return { ok: false, reason: 'no_assignments' };
   const { data: grades } = await supabase
     .from('gradebook_grades')
-    .select('id, assignment_id, points_earned, excused, missing')
+    .select('id, assignment_id, points_earned, retake_score, excused, missing')
     .eq('teacher_email', teacherEmail)
-    .eq('student_id', profile.id)
+    .eq('student_id', student.id)
     .in('assignment_id', assignments.map(a => a.id));
   const gradeByAsgn = {};
   (grades || []).forEach(g => { gradeByAsgn[g.assignment_id] = g; });
+
+  // Server-side enforcement of one-drop-per-category-per-period: if any
+  // assignment in this category/period is already excused, the student has
+  // already used their drop. This is the authoritative check (the client guard
+  // in CashInShop is only UX).
+  if ((grades || []).some(g => g.excused)) {
+    return { ok: false, reason: 'already_dropped' };
+  }
+
   let lowestAsgn = null;
   let lowestPct = Infinity;
   for (const asgn of assignments) {
     const g = gradeByAsgn[asgn.id];
-    if (g?.excused) continue;
-    const pct = (!g || g.missing || g.points_earned == null)
-      ? 0 : g.points_earned / (asgn.max_points || 100);
+    // Use the effective (best) score — a passing retake means the raw low
+    // score isn't actually the grade dragging the average down.
+    const effective = g
+      ? Math.max(g.points_earned ?? 0, g.retake_score ?? 0)
+      : 0;
+    const pct = (!g || g.missing || (g.points_earned == null && g.retake_score == null))
+      ? 0 : effective / (asgn.max_points || 100);
     if (pct < lowestPct) { lowestPct = pct; lowestAsgn = { asgn, grade: g }; }
   }
   if (!lowestAsgn) return { ok: false, reason: 'nothing_to_drop' };
   const { asgn, grade } = lowestAsgn;
   const row = {
     teacher_email: teacherEmail, assignment_id: asgn.id,
-    student_id: profile.id, student_name: profile.student_name,
+    student_id: student.id, student_name: student.name,
     excused: true, missing: false, points_earned: null,
     graded_at: new Date().toISOString(),
   };
@@ -1578,22 +1601,20 @@ export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCateg
   return { ok: true, assignmentName: asgn.name };
 }
 
-export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints) {
+export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints, gradingPeriod = 1) {
   if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
-  const { data: profile } = await supabase
-    .from('gradebook_profiles')
-    .select('id, student_name')
-    .eq('teacher_email', teacherEmail)
-    .ilike('student_email', studentEmail)
-    .maybeSingle();
-  if (!profile) return { ok: false, reason: 'no_profile' };
+  const student = await resolveGradebookStudent(studentEmail);
+  if (!student) return { ok: false, reason: 'no_student' };
+  // The bonus assignment is per grading period so it affects the period the
+  // student is actually in.
   let { data: asgn } = await supabase
     .from('gradebook_assignments').select('id, max_points')
-    .eq('teacher_email', teacherEmail).eq('name', 'Mole Dollar Bonus').maybeSingle();
+    .eq('teacher_email', teacherEmail).eq('name', 'Mole Dollar Bonus')
+    .eq('grading_period', gradingPeriod).maybeSingle();
   if (!asgn) {
     const { data: created } = await supabase.from('gradebook_assignments').insert({
       teacher_email: teacherEmail, name: 'Mole Dollar Bonus', category: 'Tests',
-      grading_period: 1, max_points: 100, extra_credit: true,
+      grading_period: gradingPeriod, max_points: 100, extra_credit: true,
       description: 'Bonus points earned via Mole Dollar redemptions.',
       created_at: new Date().toISOString(),
     }).select('id, max_points').single();
@@ -1602,11 +1623,11 @@ export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints) {
   if (!asgn) return { ok: false, reason: 'could_not_create_assignment' };
   const { data: existing } = await supabase.from('gradebook_grades').select('id, points_earned')
     .eq('teacher_email', teacherEmail).eq('assignment_id', asgn.id)
-    .eq('student_id', profile.id).maybeSingle();
+    .eq('student_id', student.id).maybeSingle();
   const newPts = Math.min(asgn.max_points || 100, (existing?.points_earned ?? 0) + bonusPoints);
   const row = {
     teacher_email: teacherEmail, assignment_id: asgn.id,
-    student_id: profile.id, student_name: profile.student_name,
+    student_id: student.id, student_name: student.name,
     points_earned: newPts, missing: false, excused: false,
     graded_at: new Date().toISOString(),
   };

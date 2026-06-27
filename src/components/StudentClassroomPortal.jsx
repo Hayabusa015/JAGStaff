@@ -11,7 +11,7 @@ function getTeacherName() {
       const { name } = JSON.parse(stored);
       if (name) return name;
     }
-  } catch {}
+  } catch { /* ignore storage errors */ }
   return "your teacher";
 }
 import { AppProvider as ClassroomProvider, useApp } from "../classroom/ClassroomContext.jsx";
@@ -59,7 +59,7 @@ function ZoneTab({ active, onClick, children }) {
 }
 
 // Inner component that reads studentNotFound from ClassroomContext.
-function StudentClassroomInner({ user, zone }) {
+function StudentClassroomInner({ user, _zone }) {
   const { studentNotFound, studentLoading } = useApp();
 
   if (studentLoading) {

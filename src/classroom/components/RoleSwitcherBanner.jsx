@@ -1,4 +1,3 @@
-import React from 'react';
 import { FlaskConical, GraduationCap, ShieldAlert, UserCog, ChevronDown } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 

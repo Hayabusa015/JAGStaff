@@ -20,7 +20,7 @@ export function setupDone(email) {
   try { return !!localStorage.getItem(`gmen-classroom-setup-done-${email}-v1`); } catch { return false; }
 }
 export function markSetupDone(email) {
-  try { localStorage.setItem(`gmen-classroom-setup-done-${email}-v1`, "1"); } catch {}
+  try { localStorage.setItem(`gmen-classroom-setup-done-${email}-v1`, "1"); } catch { /* ignore storage errors */ }
 }
 
 // ── Sub-step components ───────────────────────────────────────────────────────
@@ -378,8 +378,8 @@ export default function ClassroomSetupWizard({ userEmail, onComplete }) {
         clearInterval(id);
         // Persist all settings
         if (apiKey.trim()) updateTeacherProfile({ commonCurriculumApiKey: apiKey.trim() });
-        try { localStorage.setItem("gmen-quick-links-v1", JSON.stringify(links)); } catch {}
-        try { localStorage.setItem(`gmen-features-${userEmail}-v1`, JSON.stringify(enabled)); } catch {}
+        try { localStorage.setItem("gmen-quick-links-v1", JSON.stringify(links)); } catch { /* ignore storage errors */ }
+        try { localStorage.setItem(`gmen-features-${userEmail}-v1`, JSON.stringify(enabled)); } catch { /* ignore storage errors */ }
         markSetupDone(userEmail);
         setTimeout(() => setStep("launch"), 700);
       }

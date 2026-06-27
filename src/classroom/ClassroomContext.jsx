@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
 import {
-  MOCK_MODE,
   CLASSES,
   STUDENTS,
   MOLE_REQUESTS,
@@ -438,7 +437,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
           applyMoleDropLowest(teacherEmail, studentForGrant.studentEmail, grantCategory, grantPeriod)
             .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
         } else if (grantRewardType === 'moleDollarBonus') {
-          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost)
+          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost, grantPeriod)
             .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
         }
       } else if (grantRewardType) {
@@ -625,7 +624,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
         body: `Dear ${guardianName},\n\n${opener}\n\n${body}${notesBlock}\n\n${closing}\n\nWarm regards,\n${teacherProfile.name}\n${teacherProfile.classroom} · Jag Schools`,
       };
     },
-    [students, teacherProfile]
+    [students, teacherProfile, allClasses]
   );
 
   const sendParentEmail = useCallback((draft, meta) => {

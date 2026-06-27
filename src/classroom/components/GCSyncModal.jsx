@@ -1,12 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, ChevronRight, Loader2, CheckCircle2, AlertCircle, Users, RefreshCw } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import { useClassroomSync } from '../../supabase.js';
 
 // GCSyncModal — multi-step Google Classroom roster import for the classroom portal.
 // Steps: requesting → mapping → previewing → syncing → done | error
-
-const STEPS = ['requesting', 'mapping', 'previewing', 'syncing', 'done', 'error'];
 
 function fuzzyMatch(localName, gcName) {
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -18,7 +16,7 @@ export default function GCSyncModal({ onClose }) {
   const { requestToken, listCourses, listStudents } = useClassroomSync();
 
   const [step, setStep] = useState('requesting');
-  const [token, setToken] = useState(null);
+  const [, setToken] = useState(null);
   const [gcCourses, setGcCourses] = useState([]);
   // mapping: { [localClassId]: gcCourseId | '' }
   const [mapping, setMapping] = useState({});

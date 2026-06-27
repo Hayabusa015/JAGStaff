@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import { PATTERNS } from '../../ClassroomThemeLayer.jsx';

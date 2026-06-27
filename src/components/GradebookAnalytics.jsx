@@ -16,7 +16,7 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
   const [view, setView] = useState("semester"); // 1-6 (period) or "semester"
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
-  const categories = activeProfile?.categories || [];
+  const categories = useMemo(() => activeProfile?.categories || [], [activeProfile]);
   const scale = settings?.grading_scale || DEFAULT_SCALE;
   const periodWeights = settings?.period_weights || DEFAULT_PERIOD_WEIGHTS;
   const autoZeroOpts = useMemo(() => ({
@@ -54,6 +54,7 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
     students.map(s => ({ student: s, pct: isSemester ? semesterPct(s.id) : periodPct(s.id, view) }))
       .filter(x => x.pct != null)
       .sort((a, b) => b.pct - a.pct),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [students, view, gradeMaps, categories, autoZeroOpts, periodWeights]
   );
 
@@ -130,6 +131,7 @@ export default function GradebookAnalytics({ students, assignments, grades, prof
       const pcts = students.map(s => periodPct(s.id, p)).filter(v => v != null);
       return { label: PERIOD_SHORT[p], value: pcts.length ? mean(pcts) : null };
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [students, gradeMaps, categories, autoZeroOpts]
   );
 

@@ -10,7 +10,6 @@ export const TEXTMUTED = "rgba(0,0,0,0.35)";
 
 export const ALLOWED_DOMAIN = "jagschools.org";
 export const SESSION_TIMEOUT_MS = 7 * 60 * 60 * 1000;
-export const KIOSK_PIN = "1234";
 
 export const EVENT_TYPES = [
   "Fire Drill","Field Trip","State Test","ACT","Assembly",
@@ -92,10 +91,12 @@ export const SEED_GRADEBOOK_PROFILE = {
   name: 'Science Standard',
   is_active: true,
   categories: [
-    { name: 'Tests',    weight: 70, color: '#ef4444', drop_lowest: 0 },
+    // Labs carries real weight so the "Drop Lowest Lab" reward actually changes
+    // a grade (a 0-weight category would make that redemption a no-op).
+    { name: 'Tests',    weight: 60, color: '#ef4444', drop_lowest: 0 },
     { name: 'Quizzes',  weight: 20, color: '#f59e0b', drop_lowest: 0 },
     { name: 'Homework', weight: 10, color: '#60a5fa', drop_lowest: 0 },
-    { name: 'Labs',     weight: 0,  color: '#22c55e', drop_lowest: 0 },
+    { name: 'Labs',     weight: 10, color: '#22c55e', drop_lowest: 0 },
   ],
 };
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GOLD } from "../constants.js";
+import { setApiKey, clearApiKey } from "../apiKey.js";
 
 const BG = "#0d0d0d";
 const BORDER = "rgba(245,192,37,0.25)";
@@ -30,14 +31,14 @@ export default function AnthropicGatekeeper({ onKeyValid, existingKey }) {
       });
       if (res.ok || res.status === 400) {
         // 400 means the request was understood (key valid), just malformed prompt
-        localStorage.setItem("anthropic_api_key", trimmed);
+        setApiKey(trimmed);
         onKeyValid(trimmed);
       } else {
         const data = await res.json().catch(() => ({}));
         setErrorMsg(data?.error?.message || `Invalid key (status ${res.status})`);
         setStatus("error");
       }
-    } catch (e) {
+    } catch {
       setErrorMsg("Network error — check your connection and try again.");
       setStatus("error");
     }
@@ -104,7 +105,7 @@ export default function AnthropicGatekeeper({ onKeyValid, existingKey }) {
 
         {existingKey && (
           <button
-            onClick={() => { localStorage.removeItem("anthropic_api_key"); onKeyValid(null); }}
+            onClick={() => { clearApiKey(); onKeyValid(null); }}
             style={{
               marginTop: "1rem", background: "none", border: "none",
               color: "rgba(240,234,216,0.35)", fontSize: "0.72rem",

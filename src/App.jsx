@@ -3,7 +3,6 @@ import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail } from "./supabase.js";
 import AdminSettings from "./components/AdminSettings.jsx";
-import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
 import StudentClassroomPortal from "./components/StudentClassroomPortal.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";

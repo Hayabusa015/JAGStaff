@@ -4,7 +4,7 @@ import { GOLD } from "../constants.js";
 
 // Strip emojis and extra whitespace from Classroom course names
 function cleanName(name) {
-  return name.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}]/gu, "").replace(/\s+/g, " ").trim();
+  return name.replace(/\p{Extended_Pictographic}/gu, "").replace(/[^ -~]/g, "").replace(/\s+/g, " ").trim();
 }
 
 // Steps: idle → requesting → picking → loading-preview → previewing → syncing → done → error
@@ -18,9 +18,8 @@ export default function ClassroomSyncModal({ onClose, students, syncClassroomStu
   const [preview, setPreview] = useState([]);
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    if (step === "idle") startSync();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { startSync(); }, []);
 
   async function startSync() {
     setStep("requesting");
