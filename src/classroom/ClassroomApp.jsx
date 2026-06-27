@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useApp } from './ClassroomContext.jsx';
 import ClassroomSetupWizard, { setupDone } from './views/ClassroomSetupWizard.jsx';
 import RoleSwitcherBanner from './components/RoleSwitcherBanner.jsx';

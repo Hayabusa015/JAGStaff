@@ -3,7 +3,7 @@ import { GOLD } from "../constants.js";
 import { gradePct, effectivePoints, isPastDue } from "../gradebook.js";
 import { cellColor } from "./gradebook-constants.js";
 
-export default function GradeCell({ assignment, grade, student, onSave, onOpenRubric, quickEntry, autoZeroOpts, gridPos, registerRef, onGridNav }) {
+export default function GradeCell({ assignment, grade, _student, onSave, onOpenRubric, quickEntry, autoZeroOpts, gridPos, registerRef, onGridNav }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
 

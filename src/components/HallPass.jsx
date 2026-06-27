@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY } from "../supabase.js";
@@ -40,7 +40,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const [selected, setSelected] = useState(null);
   const [kioskSearch, setKioskSearch] = useState("");
   const [flash, setFlash] = useState(null); // {type:'in'|'out', name, dest}
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
   const { isFs, toggle: toggleFs } = useFullscreen();
 

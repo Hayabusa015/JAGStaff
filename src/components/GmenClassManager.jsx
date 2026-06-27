@@ -5,7 +5,7 @@ const DAYS = ["Tuesday", "Wednesday", "Thursday"];
 
 export default function GmenClassManager({
   user, classes, enrollments, settings,
-  addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen,
+  addGmenClass, updateGmenClass, _deleteGmenClass, toggleOpen,
 }) {
   const period = settings?.active_period || 1;
   const myClass = classes.find(

@@ -44,7 +44,7 @@ export const PATTERNS = {
 
 function buildThemeCSS(d) {
   const [r, g, b] = hexToRgb(d.accentColor);
-  const [ra, ga, ba] = hexToRgb(d.accentAlt);
+  hexToRgb(d.accentAlt); // pre-warms cache; individual channels unused for now
   const a = d.accentColor;
   const aa = d.accentAlt;
   // Ink shades derived from bgColor

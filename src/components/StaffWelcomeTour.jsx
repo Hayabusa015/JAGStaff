@@ -113,16 +113,6 @@ function MockupCard({ children, accent = false, style = {} }) {
   );
 }
 
-function MockRow({ label, value, tag }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(245,192,37,0.5)", flexShrink: 0 }} />
-      <MockupBar w="40%" color="rgba(255,255,255,0.15)" h={5} />
-      <MockupBar w="20%" color="rgba(255,255,255,0.08)" h={5} />
-      {tag && <div style={{ marginLeft: "auto", background: "rgba(245,192,37,0.2)", borderRadius: 4, padding: "1px 6px", fontSize: "0.58rem", color: GOLD }}>{tag}</div>}
-    </div>
-  );
-}
 
 const MOCKUPS = {
   welcome: () => (

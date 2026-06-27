@@ -388,7 +388,7 @@ function HistoryTab() {
   );
 }
 
-export default function GradingWorkspace({ apiKey, user, onClearKey }) {
+export default function GradingWorkspace({ apiKey, _user, onClearKey }) {
   const [subTab, setSubTab] = useState("grade");
 
   const subTabs = [

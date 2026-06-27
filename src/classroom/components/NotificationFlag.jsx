@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Bell, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import { timeAgo } from '../utils/format.js';

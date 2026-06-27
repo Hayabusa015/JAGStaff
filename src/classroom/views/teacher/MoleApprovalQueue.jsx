@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Coins, Check, X, Bell, Trophy, History, Settings2 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';

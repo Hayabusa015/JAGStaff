@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useGradebook, useClassroomSync, useGmailSend } from "../supabase.js";
 import { useApp as useClassroomApp } from "../classroom/ClassroomContext.jsx";
 import {
   calcPeriodGrade, letterGrade, gradePct, assignmentStats,
-  DEFAULT_SCALE, DEFAULT_PERIOD_WEIGHTS, gradeTrend, gpaFromPct,
+  DEFAULT_SCALE, gradeTrend, gpaFromPct,
 } from "../gradebook.js";
 import { toCSV, downloadCSV } from "../csv.js";
 import { PERIOD_LABELS, TIER_COLORS } from "./gradebook-constants.js";
@@ -82,9 +82,8 @@ export default function Gradebook({ students, user }) {
   }, [students]);
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
-  const categories = activeProfile?.categories || [];
+  const categories = useMemo(() => activeProfile?.categories || [], [activeProfile]);
   const scale = settings?.grading_scale || DEFAULT_SCALE;
-  const periodWeights = settings?.period_weights || DEFAULT_PERIOD_WEIGHTS;
   const autoZeroOpts = useMemo(() => ({
     autoZeroMissing: settings?.auto_zero_missing ?? false,
     graceDays: settings?.auto_zero_grace_days ?? 0,

@@ -4,8 +4,7 @@ import { PRESET_PROFILES, DEFAULT_SCALE, DEFAULT_PERIOD_WEIGHTS } from "../grade
 
 const CAT_COLORS = ["#ef4444","#f59e0b","#60a5fa","#8b5cf6","#22c55e","#f97316","#ec4899","#14b8a6"];
 
-export default function GradebookSettings({ profiles, settings, saveProfile, setActiveProfile, deleteProfile, saveSettings, user }) {
-  const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
+export default function GradebookSettings({ profiles, settings, saveProfile, setActiveProfile, deleteProfile, saveSettings }) {
   const [editingProfile, setEditingProfile] = useState(null);
   const [scaleEdit, setScaleEdit] = useState(false);
   const [scaleDraft, setScaleDraft] = useState(null);

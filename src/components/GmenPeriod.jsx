@@ -501,7 +501,7 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
         });
         sent++;
         setPushProgress({ sent, total: targets.length });
-      } catch (e) {
+      } catch {
         // skip individual failures — continue the batch
       }
     }

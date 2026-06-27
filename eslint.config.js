@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
+import reactPlugin from "eslint-plugin-react";
 import globals from "globals";
 
 export default [
@@ -12,9 +13,11 @@ export default [
       parserOptions: { ecmaFeatures: { jsx: true } },
       globals: { ...globals.browser, ...globals.es2021 },
     },
-    plugins: { "react-hooks": reactHooks },
+    plugins: { "react-hooks": reactHooks, react: reactPlugin },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Mark variables used in JSX as "used" so components aren't false-flagged.
+      "react/jsx-uses-vars": "warn",
       // The existing `eslint-disable react-hooks/exhaustive-deps` comments in the
       // codebase now reference a rule that is actually enforced.
       "react-hooks/exhaustive-deps": "warn",

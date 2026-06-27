@@ -1,4 +1,3 @@
-import React from 'react';
 import { LifeBuoy, CheckCircle2, PlayCircle, Clock, Inbox } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';

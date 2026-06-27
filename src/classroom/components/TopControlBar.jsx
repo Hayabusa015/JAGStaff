@@ -1,4 +1,3 @@
-import React from 'react';
 import { Menu, Coins, Lock, Database, CheckCircle2, Trophy } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import NotificationFlag from './NotificationFlag.jsx';

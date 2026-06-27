@@ -18,9 +18,8 @@ export default function ClassroomSyncModal({ onClose, students, syncClassroomStu
   const [preview, setPreview] = useState([]);
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    if (step === "idle") startSync();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { startSync(); }, []);
 
   async function startSync() {
     setStep("requesting");

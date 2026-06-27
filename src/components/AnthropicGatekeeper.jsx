@@ -38,7 +38,7 @@ export default function AnthropicGatekeeper({ onKeyValid, existingKey }) {
         setErrorMsg(data?.error?.message || `Invalid key (status ${res.status})`);
         setStatus("error");
       }
-    } catch (e) {
+    } catch {
       setErrorMsg("Network error — check your connection and try again.");
       setStatus("error");
     }

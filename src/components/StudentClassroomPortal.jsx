@@ -59,7 +59,7 @@ function ZoneTab({ active, onClick, children }) {
 }
 
 // Inner component that reads studentNotFound from ClassroomContext.
-function StudentClassroomInner({ user, zone }) {
+function StudentClassroomInner({ user, _zone }) {
   const { studentNotFound, studentLoading } = useApp();
 
   if (studentLoading) {
