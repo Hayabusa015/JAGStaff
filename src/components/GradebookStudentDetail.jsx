@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { GOLD } from "../constants.js";
+import { getApiKey } from "../apiKey.js";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, letterToGpa, gradePct,
   effectivePoints, assignmentStats, gradeTrend, missingItemsFor, gpaFromPct,
@@ -193,7 +194,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
   }
 
   async function generateAI() {
-    const apiKey = localStorage.getItem("anthropic_api_key");
+    const apiKey = getApiKey();
     if (!apiKey) { setAiState("error"); setAiError("No Anthropic API key saved. Add one in the AI Grader tab first."); return; }
     setAiState("loading"); setAiError("");
     const lines = [

@@ -360,7 +360,7 @@ export function useStudentClassroom(studentEmail) {
       if (!active) return;
 
       const notifMapped = (notif || []).map(mapNotification);
-      setProfile(mapStudent(stu, notifMapped));
+      setProfile(mapStudent(stu, cls, notifMapped));
       setMyClass(cls ? mapClass(cls) : null);
       setTickets((tkt || []).map(mapTicket));
       setRequests((req || []).map(mapRequest));

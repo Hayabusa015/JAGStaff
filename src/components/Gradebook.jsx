@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useGradebook, useClassroomSync } from "../supabase.js";
 import { useGmailSend } from "../supabase.js";
@@ -307,7 +307,9 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
     today: new Date(),
   };
 
-  useMemo(() => {
+  // Derive search results as a side-effect of search/roster changes. (useEffect,
+  // not useMemo — setState belongs in an effect, not a memo computed in render.)
+  useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
     setResults(students.filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase())).slice(0, 8));
   }, [search, students]);
@@ -344,7 +346,9 @@ function GradebookReports({ students, assignments, grades, profiles, settings, u
     try {
       const token = await requestGmailToken();
       await sendEmail(token, { to: student.parentEmail, from: user?.email, subject: `Grade Report — ${student.firstName} ${student.lastName}`, body });
-    } catch {
+    } catch (err) {
+      // Gmail send failed — fall back to the user's mail client.
+      console.warn("Grade-report Gmail send failed; opening mailto fallback:", err);
       window.open(`mailto:${student.parentEmail}?subject=${encodeURIComponent(`Grade Report — ${student.firstName} ${student.lastName}`)}&body=${encodeURIComponent(body)}`);
     }
   }
@@ -633,23 +637,29 @@ export default function Gradebook({ students, user }) {
     const assignment = assignments.find(a => a.id === assignmentId);
     await saveGrade(assignmentId, student.id, `${student.firstName} ${student.lastName}`, data);
 
-    // Auto-email parent on fail
-    if (data.points_earned != null && assignment && student.parentEmail && settings?.auto_email_fail !== false) {
-      const pct = (data.points_earned / assignment.max_points) * 100;
-      if (pct < 60 && assignment.category !== "Homework") {
+    // Auto-email parent on fail. Use the effective grade % (factors in retakes,
+    // rubric scores, late penalties) so a passing retake doesn't trigger a false
+    // "failing grade" notice — not the raw points_earned/max_points.
+    if (assignment && student.parentEmail && settings?.auto_email_fail !== false) {
+      const pct = gradePct(data, assignment, autoZeroOpts);
+      if (pct != null && pct < 60 && assignment.category !== "Homework") {
         const body = `Dear Parent/Guardian,\n\n${student.firstName} ${student.lastName} received a failing grade on "${assignment.name}" (${Math.round(pct)}%).\n\nPlease reach out if you have questions.\n\n— ${user?.name}, ${user?.email}`;
         try {
           const token = await requestGmailToken();
           await sendEmail(token, { to: student.parentEmail, from: user?.email, subject: `Failing Grade Notice — ${student.firstName} ${student.lastName}`, body });
-        } catch {
-          // Silently fail — teacher can email manually from Reports
+        } catch (err) {
+          // Non-fatal — teacher can email manually from Reports. Surface it so a
+          // failed send isn't completely invisible.
+          console.warn("Failing-grade auto-email did not send:", err);
         }
       }
     }
   }
 
   async function handleAddAssignment(data) {
-    await addAssignment(data);
+    // Stamp the active section so the assignment shows only in its own section
+    // tab. A blank section would otherwise render across every section.
+    await addAssignment({ ...data, section: data.section ?? activeSection ?? null });
     setShowForm(false);
   }
 

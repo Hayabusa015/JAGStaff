@@ -438,7 +438,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
           applyMoleDropLowest(teacherEmail, studentForGrant.studentEmail, grantCategory, grantPeriod)
             .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
         } else if (grantRewardType === 'moleDollarBonus') {
-          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost)
+          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost, grantPeriod)
             .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
         }
       } else if (grantRewardType) {
