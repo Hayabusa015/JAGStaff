@@ -85,13 +85,14 @@ const STEPS = [
   },
   {
     id: "classroom",
-    icon: "🎓",
-    title: "Want your own classroom zone?",
-    subtitle: "Personal tools for your students — completely optional",
-    body: "Beyond the school-wide tools, the portal has a personal classroom side. Gradebook with Google Classroom sync, a student currency economy, help desk tickets, lesson plans, and more. Takes 5 minutes to set up.",
+    icon: "🔒",
+    title: "Classroom Zone — Coming Soon",
+    subtitle: "Personal tools for your students — rolling out soon",
+    body: "The classroom side of the portal is in active development. Gradebook with Google Classroom sync, a student currency economy, help desk tickets, lesson plans, and more. It will be available to all teachers once it's ready.",
     features: ["Gradebook with direct GC grade push", "Student currency economy & Cash-In Shop", "Help desk ticket system & kanban board", "Lesson plans with student-facing view"],
     mockup: "classroom",
     isLast: true,
+    comingSoon: true,
   },
 ];
 
@@ -496,25 +497,24 @@ export default function StaffWelcomeTour({ userEmail, onClose, onGoToClassroom }
 
           {/* Navigation */}
           {current.isLast ? (
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                onClick={() => navigate(-1)}
-                style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600 }}
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => finish(false)}
-                style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600 }}
-              >
-                No thanks — done
-              </button>
-              <button
-                onClick={() => finish(true)}
-                style={{ flex: 2, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#0a0700", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)", letterSpacing: "0.04em" }}
-              >
-                🎓 Set Up My Classroom →
-              </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "0.7rem 1rem", textAlign: "center", fontSize: "0.78rem", color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", fontWeight: 600 }}>
+                🔒 COMING SOON — Stay tuned
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => navigate(-1)}
+                  style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600 }}
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={() => finish(false)}
+                  style={{ flex: 2, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#0a0700", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)" }}
+                >
+                  Got it — done ✓
+                </button>
+              </div>
             </div>
           ) : (
             <div style={{ display: "flex", gap: 10 }}>

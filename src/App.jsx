@@ -285,7 +285,7 @@ export default function App() {
   // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
   if (isStaff === false) return <StudentClassroomPortal user={user} signOut={signOut} />;
 
-  const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email === CLASSROOM_OWNER_EMAIL;
+  const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email.toLowerCase() === CLASSROOM_OWNER_EMAIL.toLowerCase();
 
   const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
