@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -83,7 +83,7 @@ export default function WelcomeWizard() {
             const done = s.id < step;
             const active = s.id === step;
             return (
-              <React.Fragment key={s.id}>
+              <Fragment key={s.id}>
                 <div className="flex flex-col items-center gap-1.5">
                   <div
                     className={[
@@ -112,7 +112,7 @@ export default function WelcomeWizard() {
                     }`}
                   />
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>

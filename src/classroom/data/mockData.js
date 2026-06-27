@@ -413,7 +413,7 @@ export const CLASSES = [
 const completedGuardian = (name, phone, email) => ({ name, phone, email });
 const demoStudent = (id, classId, email) => ({
   id, classId, name: 'Demo Student', email, studentEmail: email, avatar: 'DS',
-  isDemo: true, balance: 55, lockedBalance: 0, wizardComplete: false,
+  isDemo: true, balance: 55, lockedBalance: 0, wizardComplete: true,
   gizmo: { username: '', password: '' },
   safety: { signedName: '', signedAt: null },
   guardian: { name: '', phone: '', email: '' },
