@@ -317,55 +317,59 @@ export function useStudentClassroom(studentEmail) {
     setNotFound(false);
 
     async function load() {
-      const { data: stu } = await supabase
-        .from('classroom_students')
-        .select('*')
-        .eq('student_email', studentEmail)
-        .maybeSingle();
+      try {
+        const { data: stu } = await supabase
+          .from('classroom_students')
+          .select('*')
+          .eq('student_email', studentEmail)
+          .maybeSingle();
 
-      if (!active) return;
+        if (!active) return;
 
-      if (!stu) {
-        setProfile(null);
-        setNotFound(true);
-        setLoading(false);
-        return;
+        if (!stu) {
+          setProfile(null);
+          setNotFound(true);
+          return;
+        }
+
+        const [{ data: cls }, { data: tkt }, { data: req }, { data: notif }] =
+          await Promise.all([
+            supabase
+              .from('classroom_classes')
+              .select('*')
+              .eq('id', stu.class_id)
+              .single(),
+            supabase
+              .from('help_tickets')
+              .select('*')
+              .eq('student_email', studentEmail)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('mole_requests')
+              .select('*')
+              .eq('student_email', studentEmail)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('classroom_notifications')
+              .select('*')
+              .eq('student_email', studentEmail)
+              .order('created_at', { ascending: false })
+              .limit(20),
+          ]);
+
+        if (!active) return;
+
+        const notifMapped = (notif || []).map(mapNotification);
+        setProfile(mapStudent(stu, cls, notifMapped));
+        setMyClass(cls ? mapClass(cls) : null);
+        setTickets((tkt || []).map(mapTicket));
+        setRequests((req || []).map(mapRequest));
+        setNotifications(notifMapped);
+      } catch {
+        if (active) setNotFound(true);
+      } finally {
+        if (active) setLoading(false);
       }
-
-      const [{ data: cls }, { data: tkt }, { data: req }, { data: notif }] =
-        await Promise.all([
-          supabase
-            .from('classroom_classes')
-            .select('*')
-            .eq('id', stu.class_id)
-            .single(),
-          supabase
-            .from('help_tickets')
-            .select('*')
-            .eq('student_email', studentEmail)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('mole_requests')
-            .select('*')
-            .eq('student_email', studentEmail)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('classroom_notifications')
-            .select('*')
-            .eq('student_email', studentEmail)
-            .order('created_at', { ascending: false })
-            .limit(20),
-        ]);
-
-      if (!active) return;
-
-      const notifMapped = (notif || []).map(mapNotification);
-      setProfile(mapStudent(stu, cls, notifMapped));
-      setMyClass(cls ? mapClass(cls) : null);
-      setTickets((tkt || []).map(mapTicket));
-      setRequests((req || []).map(mapRequest));
-      setNotifications(notifMapped);
-      setLoading(false);
     }
 
     load();
