@@ -386,6 +386,7 @@ export default function Gradebook({ students, user }) {
       <div className="flex gap1 mb2" style={{ flexWrap: "wrap" }}>
         {[
           { key: "grades", label: "Grades" },
+          { key: "classes", label: "Classes" },
           { key: "assignments", label: "Assignments" },
           { key: "missing", label: "Missing Work" },
           { key: "analytics", label: "📊 Analytics" },
@@ -547,6 +548,109 @@ export default function Gradebook({ students, user }) {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CLASSES tab ─────────────────────────────────────────────────── */}
+      {subTab === "classes" && (
+        <div>
+          {/* Period selector */}
+          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+            {[1,2,3,4,5,6].map(p => (
+              <button key={p} onClick={() => setPeriod(p)} style={{ background: period === p ? GOLD : "rgba(255,255,255,0.06)", border: period === p ? "none" : "1px solid rgba(255,255,255,0.12)", color: period === p ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
+                {p <= 4 ? `P${p}` : p === 5 ? "Mid" : "Final"}
+              </button>
+            ))}
+          </div>
+
+          {sections.length === 0 ? (
+            <div className="card" style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,0.4)" }}>
+              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>🏫</div>
+              <div style={{ fontWeight: 700, marginBottom: "0.4rem", color: "rgba(255,255,255,0.7)" }}>No class sections set up yet</div>
+              <div style={{ fontSize: "0.83rem", lineHeight: 1.6 }}>
+                Add a <strong style={{ color: GOLD }}>Section</strong> value to students in the Student Roster
+                (e.g. "P1 · Biology") to see per-class breakdowns here.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {sections.map(sec => {
+                const secStudents = students
+                  .filter(s => s.section === sec)
+                  .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+                const secAssignments = assignments.filter(
+                  a => a.grading_period === period && (!a.section || a.section === sec)
+                );
+                const studentGrades = secStudents.map(s => {
+                  const sg = gradeMap[s.id] || {};
+                  const { pct } = calcPeriodGrade(secAssignments, sg, categories, autoZeroOpts);
+                  return { s, pct, letter: letterGrade(pct, scale) };
+                });
+                const gradedPcts = studentGrades.map(g => g.pct).filter(v => v != null);
+                const classAvg = gradedPcts.length
+                  ? gradedPcts.reduce((a, b) => a + b, 0) / gradedPcts.length
+                  : null;
+
+                return (
+                  <div key={sec} style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, overflow: "hidden" }}>
+                    {/* Section header */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.65rem 0.85rem", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>{sec}</span>
+                        <span style={{ background: "rgba(255,255,255,0.08)", borderRadius: 99, padding: "0.1rem 0.5rem", fontSize: "0.72rem", color: "rgba(255,255,255,0.5)" }}>
+                          {secStudents.length} student{secStudents.length !== 1 ? "s" : ""}
+                        </span>
+                        {classAvg != null && (
+                          <span style={{ background: "rgba(245,192,37,0.15)", border: "1px solid rgba(245,192,37,0.35)", borderRadius: 99, padding: "0.1rem 0.55rem", fontSize: "0.72rem", color: GOLD, fontWeight: 700 }}>
+                            {PERIOD_LABELS[period]} avg: {Math.round(classAvg)}%
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => { setActiveSection(sec); setSubTab("grades"); }}
+                        style={{ background: "none", border: `1px solid rgba(245,192,37,0.35)`, color: GOLD, borderRadius: 6, padding: "0.22rem 0.7rem", cursor: "pointer", fontWeight: 700, fontSize: "0.74rem" }}
+                      >
+                        View Full Grades →
+                      </button>
+                    </div>
+
+                    {/* Student rows */}
+                    {secStudents.length === 0 ? (
+                      <div style={{ padding: "0.75rem 0.85rem", fontSize: "0.82rem", color: "rgba(255,255,255,0.35)" }}>No students in this section.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                            <th style={{ padding: "0.35rem 0.85rem", textAlign: "left", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "40%" }}>Last Name</th>
+                            <th style={{ padding: "0.35rem 0.5rem", textAlign: "left", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "35%" }}>First Name</th>
+                            <th style={{ padding: "0.35rem 0.5rem", textAlign: "center", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "13%" }}>{PERIOD_LABELS[period]}</th>
+                            <th style={{ padding: "0.35rem 0.85rem", textAlign: "center", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "12%" }}>Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentGrades.map(({ s, pct, letter }) => {
+                            const tier = pct == null ? "ungraded" : pct >= 90 ? "a" : pct >= 80 ? "b" : pct >= 70 ? "c" : pct >= 60 ? "d" : "f";
+                            return (
+                              <tr key={s.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                <td style={{ padding: "0.3rem 0.85rem", fontWeight: 600 }}>{s.lastName}</td>
+                                <td style={{ padding: "0.3rem 0.5rem" }}>{s.firstName}</td>
+                                <td style={{ padding: "0.3rem 0.5rem", textAlign: "center", color: TIER_COLORS[tier], fontWeight: 700 }}>
+                                  {pct != null ? `${Math.round(pct)}%` : "—"}
+                                </td>
+                                <td style={{ padding: "0.3rem 0.85rem", textAlign: "center", fontWeight: 800, color: TIER_COLORS[tier], fontSize: "0.88rem" }}>
+                                  {pct != null ? letter : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
