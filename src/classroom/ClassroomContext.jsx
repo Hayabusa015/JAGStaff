@@ -144,6 +144,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     profile: liveProfile, myClass: liveMyClass,
     tickets: liveStudentTickets, requests: liveStudentRequests,
     notifications: liveNotifications,
+    myAssignments, myGrades, myGradeProfile,
     loading: studentLoading, notFound: studentNotFound,
     actions: studentActions,
   } = useStudentClassroom(studentEmail);
@@ -825,6 +826,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     studentNotFound,    // true if student logged in but has no classroom profile yet
     teacherLoading,
     studentLoading,
+    myAssignments,
+    myGrades,
+    myGradeProfile,
     classes: allClasses,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: moleEconomy.milestone,
@@ -890,6 +894,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     resetLayout,
 
     bulkProvisionStudents: teacherActions?.bulkProvisionStudents || (() => Promise.resolve({ added: 0, skipped: 0 })),
+    addClass:    teacherActions?.addClass    || (() => Promise.resolve(null)),
+    updateClass: teacherActions?.updateClass || (() => Promise.resolve()),
+    deleteClass: teacherActions?.deleteClass || (() => Promise.resolve()),
 
     quickLinks,
     updateQuickLinks,

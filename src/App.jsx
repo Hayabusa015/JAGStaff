@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Lock } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail } from "./supabase.js";
@@ -52,11 +53,11 @@ function SchoolLogo({ size = 42 }) {
   );
 }
 
-function ZoneToggle({ zone, setZone }) {
-  const opts = [
-    { key: "school",    label: "School" },
-    { key: "classroom", label: "My Classroom" },
-  ];
+// When VITE_CLASSROOM_OWNER_EMAIL is set, only that address can access the Classroom zone.
+// Leave it unset (or empty) to allow all staff in — useful during dev / initial rollout.
+const CLASSROOM_OWNER_EMAIL = import.meta.env.VITE_CLASSROOM_OWNER_EMAIL || "";
+
+function ZoneToggle({ zone, setZone, isClassroomOwner }) {
   return (
     <div
       role="tablist"
@@ -70,34 +71,59 @@ function ZoneToggle({ zone, setZone }) {
         border: `1px solid ${GOLD}33`,
       }}
     >
-      {opts.map(o => {
-        const active = zone === o.key;
-        return (
-          <button
-            key={o.key}
-            role="tab"
-            aria-selected={active}
-            onClick={() => setZone(o.key)}
-            style={{
-              padding: "0.3rem 0.85rem",
-              borderRadius: 999,
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s",
-              background: active ? GOLD : "transparent",
-              color: active ? "#0a0700" : "rgba(255,255,255,0.6)",
-              boxShadow: active ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
+      {/* School tab */}
+      <button
+        role="tab"
+        aria-selected={zone === "school"}
+        onClick={() => setZone("school")}
+        style={{
+          padding: "0.3rem 0.85rem",
+          borderRadius: 999,
+          border: "none",
+          cursor: "pointer",
+          fontSize: "0.68rem",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          transition: "all 0.15s",
+          background: zone === "school" ? GOLD : "transparent",
+          color: zone === "school" ? "#0a0700" : "rgba(255,255,255,0.6)",
+          boxShadow: zone === "school" ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
+        }}
+      >
+        School
+      </button>
+
+      {/* Classroom tab — locked for non-owners */}
+      <button
+        role="tab"
+        aria-selected={zone === "classroom"}
+        onClick={() => setZone("classroom")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.35rem",
+          padding: "0.3rem 0.85rem",
+          borderRadius: 999,
+          border: "none",
+          cursor: isClassroomOwner ? "pointer" : "default",
+          fontSize: "0.68rem",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          transition: "all 0.15s",
+          background: zone === "classroom" ? (isClassroomOwner ? GOLD : "rgba(255,255,255,0.07)") : "transparent",
+          color: zone === "classroom"
+            ? (isClassroomOwner ? "#0a0700" : "rgba(255,255,255,0.45)")
+            : (isClassroomOwner ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"),
+          boxShadow: zone === "classroom" && isClassroomOwner ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
+        }}
+      >
+        {!isClassroomOwner && <Lock style={{ width: 10, height: 10, flexShrink: 0 }} />}
+        My Classroom
+      </button>
     </div>
   );
 }
@@ -259,6 +285,8 @@ export default function App() {
   // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
   if (isStaff === false) return <StudentClassroomPortal user={user} signOut={signOut} />;
 
+  const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email.toLowerCase() === CLASSROOM_OWNER_EMAIL.toLowerCase();
+
   const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
   return (
@@ -283,7 +311,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ marginLeft: "1rem" }}>
-            <ZoneToggle zone={zone} setZone={setZone} />
+            <ZoneToggle zone={zone} setZone={setZone} isClassroomOwner={isClassroomOwner} />
           </div>
           <div className="nav-user">
             {user.avatarUrl && (
@@ -310,10 +338,27 @@ export default function App() {
         )}
       </nav>
 
-      {zone === "classroom" ? (
+      {zone === "classroom" && isClassroomOwner ? (
         <ClassroomProvider user={user} isStaff={true}>
           <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
         </ClassroomProvider>
+      ) : zone === "classroom" ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+          <div style={{
+            textAlign: "center", maxWidth: 400,
+            background: "rgba(255,255,255,0.03)",
+            border: `1px solid ${GOLD}22`,
+            borderRadius: 20, padding: "3rem 2.5rem",
+          }}>
+            <Lock style={{ width: 44, height: 44, color: `${GOLD}55`, margin: "0 auto 1.25rem" }} />
+            <h2 style={{ color: GOLD, fontWeight: 900, fontSize: "1.05rem", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              My Classroom
+            </h2>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.65 }}>
+              This zone is currently set up for one teacher. It'll open up to the rest of the staff when it's ready.
+            </p>
+          </div>
+        </div>
       ) : (
       /* Page content */
       <div className="content-area">

@@ -192,6 +192,16 @@ export function useTeacherClassroom(teacherEmail) {
     });
   }, []);
 
+  const reloadClasses = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    const { data } = await supabase
+      .from('classroom_classes')
+      .select('*')
+      .eq('teacher_email', teacherEmail)
+      .order('period');
+    setClasses((data || []).map(mapClass));
+  }, [teacherEmail]);
+
   const addClass = useCallback(async ({ name, subject, period, room }) => {
     if (!SUPABASE_READY || !supabase || !teacherEmail) return null;
     const { data } = await supabase
@@ -199,8 +209,25 @@ export function useTeacherClassroom(teacherEmail) {
       .insert({ teacher_email: teacherEmail, name, subject, period, room })
       .select()
       .single();
-    return data ? mapClass(data) : null;
-  }, [teacherEmail]);
+    const mapped = data ? mapClass(data) : null;
+    await reloadClasses();
+    return mapped;
+  }, [teacherEmail, reloadClasses]);
+
+  const updateClass = useCallback(async (id, { name, subject, period, room }) => {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase
+      .from('classroom_classes')
+      .update({ name, subject, period, room })
+      .eq('id', id);
+    await reloadClasses();
+  }, [reloadClasses]);
+
+  const deleteClass = useCallback(async (id) => {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from('classroom_classes').delete().eq('id', id);
+    await reloadClasses();
+  }, [reloadClasses]);
 
   const addStudentToClass = useCallback(async ({ classId, studentEmail, studentName, avatar }) => {
     if (!SUPABASE_READY || !supabase || !teacherEmail) return null;
@@ -291,6 +318,8 @@ export function useTeacherClassroom(teacherEmail) {
       completeTicket,
       pushNotification,
       addClass,
+      updateClass,
+      deleteClass,
       addStudentToClass,
       bulkProvisionStudents,
     },
@@ -309,6 +338,9 @@ export function useStudentClassroom(studentEmail) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [myAssignments, setMyAssignments] = useState([]);
+  const [myGrades, setMyGrades] = useState([]);
+  const [myGradeProfile, setMyGradeProfile] = useState(null);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase || !studentEmail) return;
@@ -365,6 +397,17 @@ export function useStudentClassroom(studentEmail) {
         setTickets((tkt || []).map(mapTicket));
         setRequests((req || []).map(mapRequest));
         setNotifications(notifMapped);
+
+        const [{ data: gAssignments }, { data: gGrades }, { data: gProfile }] =
+          await Promise.all([
+            supabase.from('gradebook_assignments').select('*').eq('teacher_email', stu.teacher_email),
+            supabase.from('gradebook_grades').select('*').eq('student_id', stu.id),
+            supabase.from('gradebook_profiles').select('*').eq('teacher_email', stu.teacher_email).eq('is_active', true).maybeSingle(),
+          ]);
+        if (!active) return;
+        setMyAssignments(gAssignments || []);
+        setMyGrades(gGrades || []);
+        setMyGradeProfile(gProfile || null);
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -440,6 +483,9 @@ export function useStudentClassroom(studentEmail) {
     tickets,
     requests,
     notifications,
+    myAssignments,
+    myGrades,
+    myGradeProfile,
     loading,
     notFound,
     actions: { submitTicket, submitMoleRequest, completeWizard, markNotificationsRead },
