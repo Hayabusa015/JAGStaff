@@ -54,7 +54,7 @@ export default function TopControlBar({ onMenu }) {
             <Metric icon={Trophy} label={`${currencySymbol} Approved`} value={metrics.approvedMoleDollars} />
             <Metric icon={CheckCircle2} label="Tasks Done" value={metrics.completedTasks} />
           </>
-        ) : (
+        ) : activeStudent ? (
           <>
             <Metric icon={Coins} label={currencySymbol} value={activeStudent.balance} />
             {activeStudent.lockedBalance > 0 && (
@@ -62,7 +62,7 @@ export default function TopControlBar({ onMenu }) {
             )}
             <NotificationFlag />
           </>
-        )}
+        ) : null}
       </div>
     </header>
   );

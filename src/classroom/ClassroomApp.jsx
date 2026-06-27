@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Component } from 'react';
 import { useApp } from './ClassroomContext.jsx';
 import ClassroomSetupWizard, { setupDone } from './views/ClassroomSetupWizard.jsx';
 import RoleSwitcherBanner from './components/RoleSwitcherBanner.jsx';
@@ -26,6 +26,33 @@ import Gradebook from '../components/Gradebook.jsx';
 import ClassroomThemeLayer from './ClassroomThemeLayer.jsx';
 import AIGrader from '../components/AIGrader.jsx';
 
+class ClassroomErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
+          <p className="text-lg font-semibold text-red-400">Something went wrong</p>
+          <p className="max-w-sm text-sm text-zinc-400">{this.state.error?.message || 'An unexpected error occurred.'}</p>
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="rounded-xl bg-gold-500 px-6 py-2 text-sm font-bold text-ink-950 hover:bg-gold-400"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Embedded inside the JAGStaff shell (below the school top nav) — so this no
 // longer owns the page backdrop; the school <div className="app-shell
 // app-backdrop"> provides it. The classroom keeps its own SideNav +
@@ -42,38 +69,40 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
   const wizardBlocking = role === 'student' && activeStudent && !activeStudent.wizardComplete;
 
   return (
-    <ClassroomThemeLayer>
-      {showSetup && (
-        <ClassroomSetupWizard
-          userEmail={user?.email}
-          onComplete={() => setShowSetup(false)}
-        />
-      )}
+    <ClassroomErrorBoundary>
+      <ClassroomThemeLayer>
+        {showSetup && (
+          <ClassroomSetupWizard
+            userEmail={user?.email}
+            onComplete={() => setShowSetup(false)}
+          />
+        )}
 
-      <RoleSwitcherBanner />
+        <RoleSwitcherBanner />
 
-      {wizardBlocking ? (
-        <WelcomeWizard key={activeStudent.id} />
-      ) : (
-        <div className="flex flex-1 overflow-hidden">
-          <SideNav open={navOpen} onClose={() => setNavOpen(false)} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <TopControlBar onMenu={() => setNavOpen(true)} />
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-              <div className="mx-auto max-w-7xl animate-fade-in">
-                <ViewRouter
-                  role={role}
-                  view={activeView}
-                  user={user}
-                  students={students}
-                  isAdmin={isAdmin}
-                />
-              </div>
-            </main>
+        {wizardBlocking ? (
+          <WelcomeWizard key={activeStudent.id} />
+        ) : (
+          <div className="flex flex-1 overflow-hidden">
+            <SideNav open={navOpen} onClose={() => setNavOpen(false)} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <TopControlBar onMenu={() => setNavOpen(true)} />
+              <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="mx-auto max-w-7xl animate-fade-in">
+                  <ViewRouter
+                    role={role}
+                    view={activeView}
+                    user={user}
+                    students={students}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              </main>
+            </div>
           </div>
-        </div>
-      )}
-    </ClassroomThemeLayer>
+        )}
+      </ClassroomThemeLayer>
+    </ClassroomErrorBoundary>
   );
 }
 
