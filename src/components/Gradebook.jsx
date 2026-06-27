@@ -144,12 +144,19 @@ export default function Gradebook({ students, user }) {
   }
 
   async function handleAddAssignment(data) {
-    await addAssignment({ ...data, section: data.section ?? activeSection ?? null });
+    const { selectedSections, ...rest } = data;
+    if (!selectedSections || selectedSections.length === 0) {
+      await addAssignment({ ...rest, section: null });
+    } else {
+      await Promise.all(selectedSections.map(sec => addAssignment({ ...rest, section: sec })));
+    }
     setShowForm(false);
   }
 
   async function handleUpdateAssignment(data) {
-    await updateAssignment(editingAssignment.id, data);
+    const { selectedSections, ...rest } = data;
+    const section = selectedSections?.length ? selectedSections[0] : null;
+    await updateAssignment(editingAssignment.id, { ...rest, section });
     setEditingAssignment(null);
   }
 
@@ -401,7 +408,7 @@ export default function Gradebook({ students, user }) {
       {/* ── GRADES tab ──────────────────────────────────────────────────── */}
       {subTab === "grades" && (
         <div>
-          {showForm && <div style={{ marginBottom: "1rem" }}><AssignmentForm categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} /></div>}
+          {showForm && <div style={{ marginBottom: "1rem" }}><AssignmentForm sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} /></div>}
 
           {/* Period selector + quick-entry toggle */}
           <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -673,9 +680,9 @@ export default function Gradebook({ students, user }) {
             Drag an assignment by its <strong>⠿</strong> handle to reorder it, or drop it on another category heading to move it there.
           </div>
 
-          {showForm && !editingAssignment && <AssignmentForm categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} />}
-          {editingAssignment && <AssignmentForm initial={editingAssignment} categories={categories} period={period} onSave={handleUpdateAssignment} onClose={() => setEditingAssignment(null)} />}
-          {cloneDraft && <AssignmentForm initial={cloneDraft} creating categories={categories} period={period} onSave={async d => { await handleAddAssignment(d); setCloneDraft(null); }} onClose={() => setCloneDraft(null)} />}
+          {showForm && !editingAssignment && <AssignmentForm sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} />}
+          {editingAssignment && <AssignmentForm initial={editingAssignment} sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={handleUpdateAssignment} onClose={() => setEditingAssignment(null)} />}
+          {cloneDraft && <AssignmentForm initial={cloneDraft} creating sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={async d => { await handleAddAssignment(d); setCloneDraft(null); }} onClose={() => setCloneDraft(null)} />}
 
           {categories.map(cat => {
             const catAssignments = assignments.filter(a => a.grading_period === period && a.category === cat.name)

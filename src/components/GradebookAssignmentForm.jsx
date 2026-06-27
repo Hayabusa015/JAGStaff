@@ -3,7 +3,7 @@ import { GOLD } from "../constants.js";
 import { PERIOD_LABELS } from "./gradebook-constants.js";
 
 // `creating` forces create-mode labels even when `initial` is prefilled (duplicates).
-export default function AssignmentForm({ initial, categories, period, onSave, onClose, creating }) {
+export default function AssignmentForm({ initial, categories, period, onSave, onClose, creating, sections = [], defaultSection = null }) {
   const isEdit = !!initial && !creating;
   const [form, setForm] = useState(initial || {
     name: "", category: categories[0]?.name || "Tests", grading_period: period,
@@ -11,6 +11,19 @@ export default function AssignmentForm({ initial, categories, period, onSave, on
     rubric: [],
   });
   const [rubricMode, setRubricMode] = useState(!!(initial?.rubric?.length));
+
+  // selectedSections: [] = All Classes; [...names] = specific sections
+  const [selectedSections, setSelectedSections] = useState(() => {
+    if (initial?.section) return [initial.section];
+    if (defaultSection) return [defaultSection];
+    return [];
+  });
+
+  function toggleSection(sec) {
+    setSelectedSections(prev =>
+      prev.includes(sec) ? prev.filter(s => s !== sec) : [...prev, sec]
+    );
+  }
 
   function updateRubric(i, key, val) {
     setForm(f => ({ ...f, rubric: f.rubric.map((r, idx) => idx === i ? { ...r, [key]: val } : r) }));
@@ -96,6 +109,46 @@ export default function AssignmentForm({ initial, categories, period, onSave, on
         </div>
       )}
 
+      {sections.length > 0 && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <label style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", display: "block", marginBottom: "0.4rem" }}>
+            {isEdit ? "Class" : "Add to Classes"}
+          </label>
+          <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => setSelectedSections([])}
+              style={{
+                background: selectedSections.length === 0 ? GOLD : "rgba(255,255,255,0.06)",
+                border: selectedSections.length === 0 ? "none" : "1px solid rgba(255,255,255,0.12)",
+                color: selectedSections.length === 0 ? "#000" : "rgba(255,255,255,0.6)",
+                borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: 700, fontSize: "0.76rem",
+              }}
+            >
+              All Classes
+            </button>
+            {sections.map(sec => {
+              const active = selectedSections.includes(sec);
+              return (
+                <button
+                  key={sec}
+                  type="button"
+                  onClick={() => toggleSection(sec)}
+                  style={{
+                    background: active ? GOLD : "rgba(255,255,255,0.06)",
+                    border: active ? "none" : "1px solid rgba(255,255,255,0.12)",
+                    color: active ? "#000" : "rgba(255,255,255,0.6)",
+                    borderRadius: 6, padding: "0.25rem 0.65rem", cursor: "pointer", fontWeight: active ? 700 : 400, fontSize: "0.76rem",
+                  }}
+                >
+                  {sec}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
         <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", borderRadius: 6, padding: "0.4rem 1rem", cursor: "pointer" }}>Cancel</button>
         <button
@@ -103,7 +156,7 @@ export default function AssignmentForm({ initial, categories, period, onSave, on
           onClick={() => {
             const final = { ...form };
             if (rubricMode && final.rubric?.length) final.max_points = rubricSum;
-            onSave(final);
+            onSave({ ...final, selectedSections });
           }}
           style={{ background: form.name ? GOLD : "rgba(255,255,255,0.1)", border: "none", color: form.name ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, borderRadius: 6, padding: "0.4rem 1.25rem", cursor: form.name ? "pointer" : "not-allowed" }}
         >
