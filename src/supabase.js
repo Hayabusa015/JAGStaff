@@ -1102,7 +1102,24 @@ export function useGmenEnrollments(period) {
     return enrollments.filter(e => e.class_id === classId).length;
   }
 
-  return { enrollments, enroll, unenroll, seatCount };
+  async function adminMoveStudent(studentEmail, toClassId, gradingPeriod) {
+    if (!SUPABASE_READY || !supabase) {
+      setEnrollments(prev => prev.map(e =>
+        e.student_email === studentEmail && e.grading_period === gradingPeriod
+          ? { ...e, class_id: toClassId } : e
+      ));
+      return { error: null };
+    }
+    const { data, error } = await supabase
+      .from("gmen_enrollments")
+      .update({ class_id: toClassId })
+      .eq("student_email", studentEmail)
+      .eq("grading_period", gradingPeriod)
+      .select().single();
+    return { data, error };
+  }
+
+  return { enrollments, enroll, unenroll, seatCount, adminMoveStudent };
 }
 
 export function useGmenChangeRequests() {
