@@ -414,7 +414,7 @@ export default function App() {
         />
 
         <div key={tab} className="page-enter">
-        {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
+        {tab === "dashboard"   && <Dashboard   {...sharedProps} messaging={messaging} staffList={staffList} onNavigate={setTab} />}
         {tab === "events"      && <WeeklyEvents weeklyEvents={weeklyEvents} addEvent={addEvent} removeEvent={removeEvent} />}
         {tab === "trips"       && <TripRoster   tripRosters={tripRosters} addRoster={addRoster} removeRoster={removeRoster} students={students} />}
         {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} isAdmin={isAdmin} />}

@@ -204,7 +204,120 @@ function EventTicker({ events, tripRosters }) {
   );
 }
 
-export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user }) {
+function fmtMsgTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function UnreadMessages({ messaging, staffList = [], user, onNavigate }) {
+  if (!messaging || messaging.totalUnread === 0) return null;
+
+  const { conversations = [], messages = {}, members = {}, getUnread } = messaging;
+  const staffByEmail = {};
+  staffList.forEach(s => { staffByEmail[s.email] = s; });
+
+  function convDisplayName(conv) {
+    if (conv.type === "group") return conv.name || "Group";
+    const others = (members[conv.id] || []).filter(m => m.user_email !== user?.email);
+    const other = others[0];
+    if (!other) return "Unknown";
+    return staffByEmail[other.user_email]?.name || other.user_email;
+  }
+
+  function convInitials(conv) {
+    const name = convDisplayName(conv);
+    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  }
+
+  const lastMsg = (convId) => {
+    const msgs = messages[convId] || [];
+    return msgs[msgs.length - 1] || null;
+  };
+
+  const unreadConvs = conversations
+    .filter(c => getUnread(c.id) > 0)
+    .sort((a, b) => {
+      const aLast = lastMsg(a.id)?.created_at || a.created_at;
+      const bLast = lastMsg(b.id)?.created_at || b.created_at;
+      return bLast.localeCompare(aLast);
+    })
+    .slice(0, 3);
+
+  return (
+    <div className="card mb2" style={{ borderLeft: `3px solid ${GOLD}`, background: "rgba(245,192,37,0.03)" }}>
+      <div className="flex items-center justify-between mb1">
+        <div className="flex items-center gap1">
+          <span className="pulse-dot" style={{ background: GOLD }} />
+          <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: GOLD }}>
+            💬 Unread Messages
+          </span>
+          <span style={{
+            background: GOLD, color: "#000", borderRadius: "50%",
+            minWidth: 18, height: 18, fontSize: "0.65rem", fontWeight: 800,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px",
+          }}>{messaging.totalUnread > 99 ? "99+" : messaging.totalUnread}</span>
+        </div>
+        <button
+          onClick={() => onNavigate?.("messages")}
+          style={{
+            background: "transparent", border: `1px solid rgba(245,192,37,0.3)`,
+            color: GOLD, borderRadius: 6, padding: "0.2rem 0.65rem",
+            fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
+          }}>Open →</button>
+      </div>
+      {unreadConvs.map(conv => {
+        const unread = getUnread(conv.id);
+        const last = lastMsg(conv.id);
+        const name = convDisplayName(conv);
+        const initials = convInitials(conv);
+        const preview = last?.body
+          ? (last.body.length > 45 ? last.body.slice(0, 45) + "…" : last.body)
+          : last?.staff_message_attachments?.length ? "📎 Attachment" : "";
+        return (
+          <div
+            key={conv.id}
+            onClick={() => onNavigate?.("messages")}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.65rem",
+              padding: "0.5rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+              background: "rgba(245,192,37,0.15)", border: `1px solid rgba(245,192,37,0.35)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 800, fontSize: "0.78rem", color: GOLD,
+            }}>{conv.type === "group" ? "👥" : initials}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#fff" }}>{name}</div>
+              {preview && (
+                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {preview}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+              {last && <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>{fmtMsgTime(last.created_at)}</span>}
+              <span style={{
+                background: GOLD, color: "#000", borderRadius: "50%",
+                minWidth: 18, height: 18, fontSize: "0.65rem", fontWeight: 800,
+                display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px",
+              }}>{unread}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user, messaging, staffList, onNavigate }) {
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
@@ -302,6 +415,8 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
       <TodaySchedule periods={periodsToday} />
 
       <EventTicker events={weeklyEvents} tripRosters={tripRosters} />
+
+      <UnreadMessages messaging={messaging} staffList={staffList} user={user} onNavigate={onNavigate} />
 
       {/* Intervention Alerts */}
       {alerts.length > 0 && (
