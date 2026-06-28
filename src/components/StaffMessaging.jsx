@@ -445,25 +445,25 @@ export default function StaffMessaging({
     return (
       <button
         onClick={() => handleOpenConv(conv.id)}
+        className={`msg-row${isActive ? " msg-row-active" : ""}`}
         style={{
           width: "100%", background: isActive ? "rgba(245,192,37,0.07)" : "transparent",
           border: "none", borderLeft: isActive ? `3px solid ${GOLD}` : "3px solid transparent",
           borderRadius: "0 8px 8px 0", padding: "0.65rem 0.85rem",
           cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.65rem",
-          transition: "all 0.12s",
         }}
-        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
       >
         {conv.type === "group" ? (
-          <div style={{
+          <div className="msg-avatar" style={{
             width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
             background: "rgba(245,192,37,0.1)", border: "1px solid rgba(245,192,37,0.25)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: "1rem",
           }}>👥</div>
         ) : (
-          <Avatar name={name} avatarUrl={avatarUrl} size={36} />
+          <div className="msg-avatar" style={{ borderRadius: "50%", flexShrink: 0 }}>
+            <Avatar name={name} avatarUrl={avatarUrl} size={36} />
+          </div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem" }}>
@@ -647,16 +647,17 @@ export default function StaffMessaging({
               <button
                 key={s.email}
                 onClick={() => handleStartDM(s.email)}
+                className="msg-row"
                 style={{
                   width: "100%", background: "transparent", border: "none",
                   borderLeft: "3px solid transparent", borderRadius: "0 8px 8px 0",
                   padding: "0.55rem 0.85rem", cursor: "pointer", textAlign: "left",
                   display: "flex", alignItems: "center", gap: "0.65rem",
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
-                <Avatar name={s.name || s.email} avatarUrl={s.avatarUrl} size={34} />
+                <div className="msg-avatar" style={{ borderRadius: "50%", flexShrink: 0 }}>
+                  <Avatar name={s.name || s.email} avatarUrl={s.avatarUrl} size={34} />
+                </div>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: "0.86rem", color: "rgba(255,255,255,0.75)" }}>{s.name || s.email}</div>
                   <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)" }}>{s.email}</div>
