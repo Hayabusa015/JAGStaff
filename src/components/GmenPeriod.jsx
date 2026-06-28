@@ -173,8 +173,8 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
   const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
-  const { enrollments, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
-  const { changeRequests, approveChange, denyChange } = useGmenChangeRequests();
+  const { enrollments, enroll, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
+  const { changeRequests, requestChange, approveChange, denyChange } = useGmenChangeRequests();
   const { schedules } = useBellSchedule();
 
   // G-Men is 4th period on Tue/Wed/Thu — pull its real time from the bell schedule
@@ -289,6 +289,14 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
       {/* ── TODAY tab ─────────────────────────────────────────────────────── */}
       {subTab === "today" && (
         <div>
+          {/* Remediation day — show where teacher's students are going */}
+          {isRequestDay && myClass && isGmenDay && (
+            <RemediationDayView
+              myStudents={enrollments.filter(e => e.class_id === myClass.id)}
+              gmenRequests={gmenRequests}
+            />
+          )}
+
           {/* Classes overview */}
           <div className="card mb2">
             <div className="section-title">Classes This Period</div>
@@ -390,6 +398,10 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           updateGmenClass={updateGmenClass}
           deleteGmenClass={deleteGmenClass}
           toggleOpen={toggleOpen}
+          students={students}
+          enroll={enroll}
+          requestChange={requestChange}
+          pendingChangeRequests={changeRequests}
         />
       )}
 
@@ -411,6 +423,39 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           students={students}
           isAdmin={isAdmin}
         />
+      )}
+    </div>
+  );
+}
+
+function RemediationDayView({ myStudents, gmenRequests }) {
+  return (
+    <div className="card mb2">
+      <div className="section-title">Your Students Today</div>
+      <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.75rem" }}>
+        Today is your Remediation Day — your class doesn't meet.
+        Students not pulled for remediation should report to the Commons.
+      </div>
+      {myStudents.length === 0 ? (
+        <div className="text-muted" style={{ fontSize: "0.85rem" }}>No students enrolled in your class yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {myStudents.map(s => {
+            const pull = gmenRequests.find(r => r.student?.name === s.student_name);
+            return (
+              <div key={s.id || s.student_email} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "0.5rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{s.student_name}</span>
+                {pull
+                  ? <span className="tag tag-amber">Pulled by {pull.requestedBy}</span>
+                  : <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.35)" }}>→ Commons</span>
+                }
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

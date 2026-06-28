@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGmenSettings, useGmenClasses, useGmenEnrollments, useGmenChangeRequests } from "../supabase";
+import { useGmenSettings, useGmenClasses, useGmenEnrollments, useGmenChangeRequests, useGmailSend } from "../supabase";
 
 const GOLD = "#F5C025";
 
@@ -8,6 +8,7 @@ export default function GmenEnrollmentView({ user, signOut }) {
   const { classes } = useGmenClasses();
   const { enrollments, enroll, seatCount } = useGmenEnrollments(settings.active_period);
   const { changeRequests, requestChange } = useGmenChangeRequests();
+  const { requestGmailToken, sendEmail } = useGmailSend();
 
   const [confirmClass, setConfirmClass] = useState(null); // class object to confirm enrollment
   const [changeTarget, setChangeTarget] = useState(null); // class to switch to
@@ -35,6 +36,27 @@ export default function GmenEnrollmentView({ user, signOut }) {
       else setMessage({ type: "error", text: "Enrollment failed. Please try again." });
     } else {
       setMessage({ type: "success", text: `Enrolled in ${cls.class_name}!` });
+      // best-effort confirmation email from student's own Gmail
+      (async () => {
+        try {
+          const token = await requestGmailToken();
+          await sendEmail(token, {
+            to: user.email,
+            from: user.email,
+            subject: `G-Men Enrollment Confirmed — ${cls.class_name}`,
+            body: [
+              `Hi ${user.user_metadata?.full_name || ""},`,
+              "",
+              `You're enrolled in ${cls.class_name} with ${cls.teacher_name}${cls.room ? ` in Room ${cls.room}` : ""}.`,
+              "",
+              "G-Men Period runs Tuesday, Wednesday, and Thursday during 4th Period.",
+              "If you need to change classes, visit the enrollment page and submit a change request.",
+              "",
+              "— James A. Garfield High School",
+            ].join("\n"),
+          });
+        } catch { /* silent — enrollment already succeeded */ }
+      })();
     }
   }
 
