@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  GraduationCap,
   Coins,
   LifeBuoy,
   Mail,
@@ -14,6 +15,7 @@ import { useApp } from '../ClassroomContext.jsx';
 
 const STUDENT_NAV = [
   { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+  { id: 'grades',    label: 'My Grades',    icon: GraduationCap },
   { id: 'materials', label: 'Materials', icon: Library },
   { id: 'mole', label: 'Cash-In Shop', icon: Coins },
   { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
