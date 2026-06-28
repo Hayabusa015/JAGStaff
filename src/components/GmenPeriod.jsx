@@ -173,7 +173,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
   const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
-  const { enrollments, seatCount } = useGmenEnrollments(settings.active_period || 1);
+  const { enrollments, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
   const { changeRequests, approveChange, denyChange } = useGmenChangeRequests();
   const { schedules } = useBellSchedule();
 
@@ -405,6 +405,8 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           setPeriodEndDate={setPeriodEndDate}
           approveChange={approveChange}
           denyChange={denyChange}
+          adminMoveStudent={adminMoveStudent}
+          addGmenClass={addGmenClass}
           user={user}
           students={students}
           isAdmin={isAdmin}
@@ -414,7 +416,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, user, students, isAdmin }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, user, students, isAdmin }) {
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
   const [pushProgress, setPushProgress] = useState({ sent: 0, total: 0 });
@@ -425,6 +427,9 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
     3: settings.period_3_end || "",
     4: settings.period_4_end || "",
   });
+  const [moveSelections, setMoveSelections] = useState({}); // studentEmail → classId
+  const [movingStudent, setMovingStudent] = useState(null);
+  const [seedingDemo, setSeedingDemo] = useState(false);
   const { requestGmailToken, sendEmail } = useGmailSend();
   const period = settings.active_period || 1;
   const appUrl = window.location.origin;
@@ -438,6 +443,29 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
       4: settings.period_4_end || "",
     });
   });
+
+  async function handleMoveStudent(studentEmail) {
+    const toClassId = moveSelections[studentEmail];
+    if (!toClassId) return;
+    setMovingStudent(studentEmail);
+    await adminMoveStudent(studentEmail, toClassId, period);
+    setMoveSelections(s => { const n = { ...s }; delete n[studentEmail]; return n; });
+    setMovingStudent(null);
+  }
+
+  async function handleSeedDemo() {
+    setSeedingDemo(true);
+    const demoClasses = [
+      { teacher_email: "ms.johnson@jagschools.org", teacher_name: "Ms. Johnson", room: "101", class_name: "Study Hall", description: "Quiet study time with direct teacher support for homework and test prep.", grading_period: period, request_day: "Tuesday", max_seats: 25, is_open: true },
+      { teacher_email: "mr.williams@jagschools.org", teacher_name: "Mr. Williams", room: "Gym", class_name: "Fitness & Wellness", description: "Physical activity, stretching, and mindfulness in the gym.", grading_period: period, request_day: "Wednesday", max_seats: 30, is_open: true },
+      { teacher_email: "ms.rodriguez@jagschools.org", teacher_name: "Ms. Rodriguez", room: "Library", class_name: "Reading Club", description: "Independent reading and literacy enrichment with librarian support.", grading_period: period, request_day: "Thursday", max_seats: 20, is_open: true },
+      { teacher_email: "mr.patel@jagschools.org", teacher_name: "Mr. Patel", room: "302", class_name: "STEM Exploration", description: "Hands-on science, coding, and engineering projects.", grading_period: period, request_day: "Tuesday", max_seats: 18, is_open: true },
+    ];
+    for (const cls of demoClasses) {
+      await addGmenClass(cls);
+    }
+    setSeedingDemo(false);
+  }
 
   async function handleApprove(id) {
     setWorking(id);
@@ -687,6 +715,72 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
         )}
       </div>
 
+      {/* ── Move Students (admin direct override) ───────────────────────── */}
+      <div className="card">
+        <div className="section-title">Move Students Between Classes</div>
+        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          Admin-only direct move — no change request required. Select a new class for any enrolled student and click Move.
+        </div>
+        {enrollments.length === 0 ? (
+          <div className="text-muted" style={{ fontSize: "0.85rem" }}>No students enrolled in Period {period} yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {enrollments.map(enr => {
+              const currentCls = classes.find(c => c.id === enr.class_id);
+              const availableClasses = classes.filter(c => c.grading_period === period && c.id !== enr.class_id);
+              const selectedClass = moveSelections[enr.student_email];
+              const isMoving = movingStudent === enr.student_email;
+              return (
+                <div key={enr.id || enr.student_email} style={{
+                  display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
+                  background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)",
+                  borderRadius: 8, padding: "0.6rem 0.9rem",
+                }}>
+                  <div style={{ minWidth: 160, flexGrow: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{enr.student_name}</div>
+                    <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.35)" }}>
+                      Currently: {currentCls?.class_name || "Unknown class"}
+                    </div>
+                  </div>
+                  {availableClasses.length > 0 ? (
+                    <>
+                      <select
+                        value={selectedClass || ""}
+                        onChange={e => setMoveSelections(s => ({ ...s, [enr.student_email]: e.target.value }))}
+                        style={{
+                          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 6, padding: "0.35rem 0.6rem", color: "#fff", fontSize: "0.82rem",
+                          outline: "none",
+                        }}
+                      >
+                        <option value="">Move to…</option>
+                        {availableClasses.map(c => (
+                          <option key={c.id} value={c.id}>{c.class_name} ({c.teacher_name})</option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!selectedClass || isMoving}
+                        onClick={() => handleMoveStudent(enr.student_email)}
+                        style={{
+                          background: selectedClass ? GOLD : "rgba(255,255,255,0.06)",
+                          border: "none", color: selectedClass ? "#000" : "rgba(255,255,255,0.3)",
+                          borderRadius: 6, padding: "0.35rem 0.85rem",
+                          cursor: selectedClass ? "pointer" : "default",
+                          fontWeight: 700, fontSize: "0.82rem",
+                          opacity: isMoving ? 0.5 : 1,
+                        }}
+                      >{isMoving ? "Moving…" : "Move"}</button>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)" }}>No other classes</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       </> /* end isAdmin block */
       )}
 
@@ -738,9 +832,23 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
 
       {/* ── All classes overview ─────────────────────────────────────────── */}
       <div className="card">
-        <div className="section-title">All Classes — Period {period}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div className="section-title" style={{ margin: 0 }}>All Classes — Period {period}</div>
+          {isAdmin && classes.filter(c => c.grading_period === period).length < 3 && (
+            <button
+              onClick={handleSeedDemo}
+              disabled={seedingDemo}
+              style={{
+                background: "transparent", border: `1px solid ${GOLD}50`,
+                color: GOLD, borderRadius: 6, padding: "0.3rem 0.85rem",
+                cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+                opacity: seedingDemo ? 0.5 : 1,
+              }}
+            >{seedingDemo ? "Seeding…" : "🌱 Seed Demo Classes"}</button>
+          )}
+        </div>
         {classes.filter(c => c.grading_period === period).length === 0 ? (
-          <div className="text-muted" style={{ fontSize: "0.85rem" }}>No classes created for this period.</div>
+          <div className="text-muted" style={{ fontSize: "0.85rem" }}>No classes created for this period. Use "Seed Demo Classes" to add sample data.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {classes.filter(c => c.grading_period === period).map(cls => {

@@ -12,13 +12,16 @@ export default function GmenClassManager({
     c => c.teacher_email === user.email && c.grading_period === period
   );
   const myStudents = enrollments.filter(e => e.class_id === myClass?.id);
+  const otherClasses = classes.filter(
+    c => c.grading_period === period && c.id !== myClass?.id
+  );
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     class_name: "", description: "", request_day: "Wednesday", max_seats: 20,
   });
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState(null); // null = not editing existing class
+  const [editForm, setEditForm] = useState(null);
 
   function startCreate() {
     setForm({ class_name: "", description: "", request_day: "Wednesday", max_seats: 20 });
@@ -71,7 +74,7 @@ export default function GmenClassManager({
   // ── No class yet ──────────────────────────────────────────────────────────
   if (!myClass && !editing) {
     return (
-      <div style={{ padding: "2rem 0" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "2rem 0" }}>
         <div style={{
           background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
           borderRadius: 12, padding: "2rem", textAlign: "center",
@@ -87,6 +90,7 @@ export default function GmenClassManager({
             cursor: "pointer", fontSize: "0.9rem",
           }}>+ Create Class</button>
         </div>
+        <MasterList classes={otherClasses} enrollments={enrollments} />
       </div>
     );
   }
@@ -151,13 +155,16 @@ export default function GmenClassManager({
   const ef = editForm || {};
 
   return (
-    <div style={{ padding: "1rem 0", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+    <div style={{ padding: "1rem 0", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       {/* Class card */}
       <div style={{
         background: myClass.is_open ? "rgba(245,192,37,0.05)" : "rgba(255,255,255,0.03)",
         border: myClass.is_open ? `1px solid ${GOLD}30` : "1px solid rgba(255,255,255,0.08)",
         borderRadius: 12, padding: "1.25rem",
       }}>
+        <div style={{ fontSize: "0.7rem", color: GOLD, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "0.75rem" }}>
+          Your Class — Period {period}
+        </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
           <div style={{ flexGrow: 1 }}>
             {isEditing ? (
@@ -212,7 +219,6 @@ export default function GmenClassManager({
           </div>
           {!isEditing && (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", minWidth: 120 }}>
-              {/* Open/Close toggle */}
               <button onClick={() => toggleOpen(myClass.id, !myClass.is_open)} style={{
                 background: myClass.is_open ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.06)",
                 border: myClass.is_open ? "1px solid rgba(34,197,94,0.4)" : "1px solid rgba(255,255,255,0.12)",
@@ -262,6 +268,54 @@ export default function GmenClassManager({
           </div>
         </div>
       )}
+
+      {/* School-wide master list */}
+      <MasterList classes={otherClasses} enrollments={enrollments} />
+    </div>
+  );
+}
+
+function MasterList({ classes, enrollments }) {
+  if (classes.length === 0) return null;
+  return (
+    <div>
+      <div style={{
+        fontSize: "0.72rem", color: "rgba(255,255,255,0.35)",
+        textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "0.75rem",
+      }}>
+        Other Classes This Period ({classes.length})
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {classes.map(cls => {
+          const seats = enrollments.filter(e => e.class_id === cls.id).length;
+          const pct = Math.min(100, Math.round((seats / cls.max_seats) * 100));
+          const full = seats >= cls.max_seats;
+          return (
+            <div key={cls.id} style={{
+              display: "flex", alignItems: "center", gap: "1rem",
+              background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)",
+              borderRadius: 8, padding: "0.65rem 1rem",
+            }}>
+              <div style={{ flexGrow: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>{cls.class_name}</div>
+                <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>
+                  {cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""} · Request day: {cls.request_day}
+                </div>
+              </div>
+              <div style={{ width: 90, flexShrink: 0 }}>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", textAlign: "right", marginBottom: 3 }}>{seats}/{cls.max_seats}</div>
+                <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
+                  <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: full ? "#ef4444" : "#F5C025" }} />
+                </div>
+              </div>
+              <div style={{
+                fontSize: "0.72rem", fontWeight: 700, minWidth: 42, textAlign: "right",
+                color: cls.is_open ? "#22c55e" : "rgba(255,255,255,0.25)",
+              }}>{cls.is_open ? "Open" : "Closed"}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
