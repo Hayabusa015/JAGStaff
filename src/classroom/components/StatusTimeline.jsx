@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Check } from 'lucide-react';
 import { TICKET_STATUS } from '../data/mockData.js';
 
@@ -12,7 +13,7 @@ export default function StatusTimeline({ status }) {
         const done = step.order < currentOrder;
         const active = step.order === currentOrder;
         return (
-          <React.Fragment key={step.key}>
+          <Fragment key={step.key}>
             <div className="flex flex-col items-center gap-1">
               <div
                 className={[
@@ -41,7 +42,7 @@ export default function StatusTimeline({ status }) {
                 }`}
               />
             )}
-          </React.Fragment>
+          </Fragment>
         );
       })}
     </div>
