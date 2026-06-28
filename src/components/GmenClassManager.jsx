@@ -12,9 +12,7 @@ export default function GmenClassManager({
     c => c.teacher_email === user.email && c.grading_period === period
   );
   const myStudents = enrollments.filter(e => e.class_id === myClass?.id);
-  const otherClasses = classes.filter(
-    c => c.grading_period === period && c.id !== myClass?.id
-  );
+  const allPeriodClasses = classes.filter(c => c.grading_period === period);
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -90,7 +88,7 @@ export default function GmenClassManager({
             cursor: "pointer", fontSize: "0.9rem",
           }}>+ Create Class</button>
         </div>
-        <MasterList classes={otherClasses} enrollments={enrollments} />
+        <MasterList classes={allPeriodClasses} enrollments={enrollments} myClassId={null} />
       </div>
     );
   }
@@ -269,49 +267,110 @@ export default function GmenClassManager({
         </div>
       )}
 
-      {/* School-wide master list */}
-      <MasterList classes={otherClasses} enrollments={enrollments} />
+      {/* School-wide master list — all classes including teacher's own */}
+      <MasterList classes={allPeriodClasses} enrollments={enrollments} myClassId={myClass?.id} />
     </div>
   );
 }
 
-function MasterList({ classes, enrollments }) {
+function MasterList({ classes, enrollments, myClassId }) {
+  const [expanded, setExpanded] = useState({});
   if (classes.length === 0) return null;
+
+  function toggle(id) {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }
+
   return (
     <div>
       <div style={{
         fontSize: "0.72rem", color: "rgba(255,255,255,0.35)",
         textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "0.75rem",
       }}>
-        Other Classes This Period ({classes.length})
+        All Classes This Period ({classes.length})
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
         {classes.map(cls => {
-          const seats = enrollments.filter(e => e.class_id === cls.id).length;
+          const students = enrollments.filter(e => e.class_id === cls.id);
+          const seats = students.length;
           const pct = Math.min(100, Math.round((seats / cls.max_seats) * 100));
           const full = seats >= cls.max_seats;
+          const isOpen = expanded[cls.id];
+          const isMine = cls.id === myClassId;
           return (
             <div key={cls.id} style={{
-              display: "flex", alignItems: "center", gap: "1rem",
-              background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 8, padding: "0.65rem 1rem",
+              background: isMine ? "rgba(245,192,37,0.04)" : "rgba(255,255,255,0.025)",
+              border: isMine ? `1px solid rgba(245,192,37,0.2)` : "1px solid rgba(255,255,255,0.07)",
+              borderRadius: 10, overflow: "hidden",
             }}>
-              <div style={{ flexGrow: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>{cls.class_name}</div>
-                <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>
-                  {cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""} · Request day: {cls.request_day}
+              {/* Class header row */}
+              <button
+                onClick={() => toggle(cls.id)}
+                style={{
+                  width: "100%", background: "none", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "0.85rem",
+                  padding: "0.7rem 1rem", textAlign: "left",
+                }}
+              >
+                <div style={{ flexGrow: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.92rem", color: "#fff" }}>{cls.class_name}</span>
+                    {isMine && (
+                      <span style={{
+                        fontSize: "0.65rem", fontWeight: 700, color: "#F5C025",
+                        background: "rgba(245,192,37,0.12)", border: "1px solid rgba(245,192,37,0.3)",
+                        borderRadius: 4, padding: "0.1rem 0.4rem", letterSpacing: "0.06em",
+                      }}>YOUR CLASS</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
+                    {cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""} · Request day: {cls.request_day}
+                  </div>
                 </div>
-              </div>
-              <div style={{ width: 90, flexShrink: 0 }}>
-                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", textAlign: "right", marginBottom: 3 }}>{seats}/{cls.max_seats}</div>
-                <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
-                  <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: full ? "#ef4444" : "#F5C025" }} />
+                <div style={{ width: 80, flexShrink: 0 }}>
+                  <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.35)", textAlign: "right", marginBottom: 3 }}>
+                    {seats}/{cls.max_seats}
+                  </div>
+                  <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
+                    <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: full ? "#ef4444" : "#F5C025" }} />
+                  </div>
                 </div>
-              </div>
-              <div style={{
-                fontSize: "0.72rem", fontWeight: 700, minWidth: 42, textAlign: "right",
-                color: cls.is_open ? "#22c55e" : "rgba(255,255,255,0.25)",
-              }}>{cls.is_open ? "Open" : "Closed"}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: "0.7rem", fontWeight: 700,
+                    color: cls.is_open ? "#22c55e" : "rgba(255,255,255,0.25)",
+                  }}>{cls.is_open ? "Open" : "Closed"}</span>
+                  <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.75rem" }}>
+                    {isOpen ? "▲" : "▼"}
+                  </span>
+                </div>
+              </button>
+
+              {/* Expanded student roster */}
+              {isOpen && (
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "0.5rem 1rem 0.75rem" }}>
+                  {students.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.28)", padding: "0.4rem 0" }}>
+                      No students enrolled yet.
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                      {students.map(s => (
+                        <div key={s.id || s.student_email} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          fontSize: "0.85rem", padding: "0.3rem 0",
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        }}>
+                          <span style={{ color: "rgba(255,255,255,0.8)" }}>{s.student_name}</span>
+                          <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.3)" }}>
+                            {s.enrolled_at ? new Date(s.enrolled_at).toLocaleDateString() : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
