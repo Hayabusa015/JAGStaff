@@ -1722,10 +1722,20 @@ export function useStaffMessaging(userEmail) {
     const { data: conv } = await supabase.from("staff_conversations")
       .insert({ type: "dm", created_by: userEmail }).select().single();
     if (!conv) return null;
+    const now = new Date().toISOString();
     await supabase.from("staff_conversation_members").insert([
       { conversation_id: conv.id, user_email: userEmail },
       { conversation_id: conv.id, user_email: otherEmail },
     ]);
+    // Optimistically update state so thread opens immediately without waiting for realtime
+    setConversations(prev => [...prev, conv]);
+    setMembers(prev => ({
+      ...prev,
+      [conv.id]: [
+        { conversation_id: conv.id, user_email: userEmail, last_read_at: now },
+        { conversation_id: conv.id, user_email: otherEmail, last_read_at: now },
+      ],
+    }));
     return conv.id;
   }
 
@@ -1735,9 +1745,16 @@ export function useStaffMessaging(userEmail) {
       .insert({ type: "group", name, description, created_by: userEmail }).select().single();
     if (!conv) return null;
     const all = [...new Set([userEmail, ...memberEmails])];
+    const now = new Date().toISOString();
     await supabase.from("staff_conversation_members").insert(
       all.map(email => ({ conversation_id: conv.id, user_email: email }))
     );
+    // Optimistically update state
+    setConversations(prev => [...prev, conv]);
+    setMembers(prev => ({
+      ...prev,
+      [conv.id]: all.map(email => ({ conversation_id: conv.id, user_email: email, last_read_at: now })),
+    }));
     return conv.id;
   }
 
