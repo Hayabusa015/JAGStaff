@@ -1,4 +1,3 @@
-import React from 'react';
 
 // Strict G-MEN palette: gold = active/positive/success, neutral = default/pending,
 // red = denied/error ONLY. No other hues.

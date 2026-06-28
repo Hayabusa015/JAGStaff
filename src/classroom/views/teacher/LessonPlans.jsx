@@ -1,4 +1,3 @@
-import React from 'react';
 import LessonBoard from '../../components/LessonBoard.jsx';
 
 // Teacher sees all three subject planbooks.

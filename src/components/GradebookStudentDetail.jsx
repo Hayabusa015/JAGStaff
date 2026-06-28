@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { GOLD } from "../constants.js";
+import { getApiKey } from "../apiKey.js";
 import {
   calcPeriodGrade, calcSemesterGrade, letterGrade, letterToGpa, gradePct,
-  effectivePoints, assignmentStats, gradeTrend, missingItemsFor, gpaFromPct,
+  effectivePoints, assignmentStats, gradeTrend, missingItemsFor,
   DEFAULT_SCALE, DEFAULT_PERIOD_WEIGHTS,
 } from "../gradebook.js";
 import { mean, tierColor, Kpi, HBar, LineChart, Card } from "./charts.jsx";
@@ -27,7 +28,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
   const [aiError, setAiError] = useState("");
 
   const activeProfile = profiles.find(p => p.is_active) || profiles[0] || null;
-  const categories = activeProfile?.categories || [];
+  const categories = useMemo(() => activeProfile?.categories || [], [activeProfile]);
   const scale = settings?.grading_scale || DEFAULT_SCALE;
   const periodWeights = settings?.period_weights || DEFAULT_PERIOD_WEIGHTS;
   const autoZeroOpts = useMemo(() => ({
@@ -125,7 +126,8 @@ export default function GradebookStudentDetail({ student, students = [], assignm
       return new Date(x.a.created_at || 0) - new Date(y.a.created_at || 0);
     });
     return rows;
-  }, [scopeAssignments, gmap, sortBy, autoZeroOpts]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeAssignments, gmap, sortBy, autoZeroOpts, categories]);
 
   // Feedback (notes + rubric comments) for the print sheet.
   const feedback = useMemo(() => history.map(r => {
@@ -172,6 +174,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
       if (v !== "" && v != null && !isNaN(Number(v))) clone[a.id] = { points_earned: (Number(v) / 100) * a.max_points };
     });
     return projectWith(clone);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hypo, whatIfAssignments, gmap, assignments, whatIfPeriod, categories, autoZeroOpts]);
   const neededUniform = useMemo(() => {
     if (!whatIfAssignments.length) return null;
@@ -180,6 +183,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
     let lo = 0, hi = 100;
     for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if ((projectWith(fillMap(mid)) ?? 0) >= target) hi = mid; else lo = mid; }
     return hi;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whatIfAssignments, target, gmap, assignments, whatIfPeriod, categories, autoZeroOpts]);
 
   function exportHistoryCSV() {
@@ -193,7 +197,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
   }
 
   async function generateAI() {
-    const apiKey = localStorage.getItem("anthropic_api_key");
+    const apiKey = getApiKey();
     if (!apiKey) { setAiState("error"); setAiError("No Anthropic API key saved. Add one in the AI Grader tab first."); return; }
     setAiState("loading"); setAiError("");
     const lines = [
@@ -418,7 +422,7 @@ export default function GradebookStudentDetail({ student, students = [], assignm
 }
 
 // ── Light-themed, ink-friendly single-page handout for conferences ───────────
-function PrintSheet({ student, user, today, periodsLabel, selectedAvg, selLetter, gpa, semesterPct, scale, overallTrend, missingCount, completion, rankInfo, selectedInfo, categoryStats, trendData, classTrend, feedback, aiText }) {
+function PrintSheet({ student, user, today, periodsLabel, selectedAvg, selLetter, gpa, semesterPct, scale, overallTrend, missingCount, _completion, rankInfo, selectedInfo, categoryStats, trendData, classTrend, feedback, aiText }) {
   const box = { border: "1px solid #ccc", borderRadius: 6, padding: "8px 10px" };
   const th = { textAlign: "left", borderBottom: "1px solid #999", padding: "3px 6px", fontSize: "10px", color: "#444" };
   const td = { borderBottom: "1px solid #eee", padding: "3px 6px", fontSize: "11px" };

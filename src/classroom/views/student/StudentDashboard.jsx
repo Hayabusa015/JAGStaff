@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Coins,
+  GraduationCap,
   KeyRound,
   Eye,
   EyeOff,
@@ -16,9 +17,20 @@ import Card, { CardHeader } from '../../components/Card.jsx';
 import ProgressBar from '../../components/ProgressBar.jsx';
 import Badge from '../../components/Badge.jsx';
 import { formatDateTime, timeAgo } from '../../utils/format.js';
+import SubjectFlair from '../../components/SubjectFlair.jsx';
+import { calcPeriodGrade, letterGrade } from '../../../gradebook.js';
+
+function pctToColor(pct) {
+  if (pct == null) return 'rgba(255,255,255,0.25)';
+  if (pct >= 90) return '#F5C025';
+  if (pct >= 80) return '#22c55e';
+  if (pct >= 70) return '#eab308';
+  if (pct >= 60) return '#f97316';
+  return '#ef4444';
+}
 
 export default function StudentDashboard() {
-  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView } =
+  const { activeStudent, getClass, getTheme, moleMilestone, tickets, moleRequests, setActiveView, teacherProfile, currencyName, currencySymbol, classroomDesign, myAssignments, myGrades, myGradeProfile } =
     useApp();
   const cls = getClass(activeStudent.classId);
   const theme = getTheme(activeStudent.classId);
@@ -38,7 +50,8 @@ export default function StudentDashboard() {
       <Card className="overflow-hidden" hairline>
         <div className={`relative flex items-center justify-between gap-4 bg-gradient-to-r ${theme.gradient} px-6 py-6`}>
           <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
-          <div className="relative text-ink-950">
+          <SubjectFlair subject={cls?.subject} color="#0a0500" opacity={0.11} />
+          <div className="relative" style={{ color: classroomDesign.heroText }}>
             <p className="font-display text-xs font-bold uppercase tracking-widest opacity-80">
               {cls?.name} · Period {cls?.period}
             </p>
@@ -46,23 +59,33 @@ export default function StudentDashboard() {
               Hey, {activeStudent.name.split(' ')[0]}!
             </h2>
           </div>
-          <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-ink-950/20 font-display text-2xl font-bold text-ink-950 ring-2 ring-ink-950/30">
+          <div className="relative z-10 grid h-16 w-16 shrink-0 place-items-center rounded-full bg-ink-950/20 font-display text-2xl font-bold text-ink-950 ring-2 ring-ink-950/30">
             {activeStudent.avatar}
           </div>
         </div>
       </Card>
 
+      {/* Compact grades summary — click to go to the full My Grades page */}
+      {myAssignments.length > 0 && (
+        <GradeSummaryCard
+          assignments={myAssignments}
+          grades={myGrades}
+          profile={myGradeProfile}
+          onViewGrades={() => setActiveView('grades')}
+        />
+      )}
+
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* Mole Dollar progress */}
+        {/* Currency progress */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Mole Dollar Tracker" subtitle="Earn toward a test-bonus milestone" icon={Coins} />
+          <CardHeader title={`${currencyName} Tracker`} subtitle="Earn toward a test-bonus milestone" icon={Coins} />
           <div className="space-y-4 p-5">
             <div className="flex items-end justify-between">
               <div>
                 <p className="font-display text-5xl font-bold text-gold-400 text-glow-gold">
                   {activeStudent.balance}
                 </p>
-                <p className="text-xs text-zinc-500">spendable Mole Dollars</p>
+                <p className="text-xs text-zinc-500">spendable {currencyName}s</p>
               </div>
               {activeStudent.lockedBalance > 0 && (
                 <Badge tone="neutral" icon={Lock}>
@@ -72,7 +95,7 @@ export default function StudentDashboard() {
             </div>
             <div>
               <div className="mb-1 flex items-center justify-between text-xs text-zinc-400">
-                <span>Milestone bonus at {moleMilestone} MD</span>
+                <span>Milestone bonus at {moleMilestone} {currencySymbol}</span>
                 <span className="font-bold text-zinc-50">
                   {Math.max(0, moleMilestone - activeStudent.balance)} to go
                 </span>
@@ -133,11 +156,11 @@ export default function StudentDashboard() {
 
         {/* Pending requests */}
         <Card className="lg:col-span-1" hover>
-          <CardHeader title="Pending Redemptions" subtitle="Awaiting Mr. Shull" icon={Coins} />
+          <CardHeader title="Pending Redemptions" subtitle={`Awaiting ${teacherProfile.name}`} icon={Coins} />
           <div className="p-5">
             <p className="font-display text-4xl font-bold text-zinc-50">{pendingMole.length}</p>
             <p className="text-xs text-zinc-500">
-              {pendingMole.reduce((sum, r) => sum + r.cost, 0)} MD locked
+              {pendingMole.reduce((sum, r) => sum + r.cost, 0)} {currencySymbol} locked
             </p>
           </div>
         </Card>
@@ -161,7 +184,7 @@ export default function StudentDashboard() {
       {/* Recent notifications */}
       {recentNotes.length > 0 && (
         <Card>
-          <CardHeader title="Recent Activity" subtitle="Flags from Mr. Shull" icon={Bell} />
+          <CardHeader title="Recent Activity" subtitle={`Flags from ${teacherProfile.name}`} icon={Bell} />
           <div className="divide-y divide-white/5">
             {recentNotes.map((n) => (
               <div key={n.id} className="flex items-center justify-between gap-3 px-5 py-3">
@@ -184,5 +207,57 @@ function LockField({ label, value, mono }) {
         <span className={`text-sm text-white ${mono ? 'font-mono' : ''}`}>{value || '—'}</span>
       </div>
     </div>
+  );
+}
+
+function GradeSummaryCard({ assignments, grades, profile, onViewGrades }) {
+  const categories = profile?.categories || [];
+  const gradeMap = useMemo(
+    () => Object.fromEntries(grades.map((g) => [g.assignment_id, g])),
+    [grades]
+  );
+  const periodsWithAssignments = useMemo(
+    () => [...new Set(assignments.map((a) => a.grading_period))].sort((a, b) => a - b),
+    [assignments]
+  );
+  const currentPeriod = periodsWithAssignments[0] ?? 1;
+  const periodAssignments = assignments.filter((a) => a.grading_period === currentPeriod);
+  const { pct } = calcPeriodGrade(periodAssignments, gradeMap, categories);
+  const letter = letterGrade(pct);
+  const gradeColor = pctToColor(pct);
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between p-5">
+        <div className="flex items-center gap-4">
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 12, background: `${gradeColor}18`, border: `1px solid ${gradeColor}38`,
+            padding: '10px 18px',
+          }}>
+            <span style={{ fontSize: '1.6rem', fontWeight: 900, lineHeight: 1, color: gradeColor }}>
+              {pct != null ? `${Math.round(pct)}%` : '—'}
+            </span>
+            <span style={{ fontSize: '1.15rem', fontWeight: 900, color: gradeColor, marginTop: 2 }}>
+              {letter}
+            </span>
+          </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gold-400">
+              <GraduationCap className="h-3.5 w-3.5" /> My Grades
+            </p>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              Period {currentPeriod} · {assignments.length} assignment{assignments.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onViewGrades}
+          className="font-display flex items-center gap-1.5 rounded-xl bg-gold-500/10 px-4 py-2 text-sm font-bold uppercase tracking-wide text-gold-300 ring-1 ring-gold-500/30 transition-all hover:bg-gold-500/20"
+        >
+          View My Grades <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </Card>
   );
 }

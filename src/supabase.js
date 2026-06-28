@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { SEED_EVENTS, SEED_TRIPS, SEED_CEU, SEED_STUDENTS, SEED_GRADEBOOK_PROFILE, SEED_GRADEBOOK_ASSIGNMENTS, SEED_GRADEBOOK_GRADES } from "./constants.js";
 
 // Supabase project URL + anon key. The anon key is safe to ship in the
 // client — row-level security (RLS) is what actually protects the data.
@@ -285,8 +286,8 @@ export function useInfractions() {
 // Table: students — shared school roster (last_name, first_name, grade).
 // Falls back to local state (empty) when Supabase is not configured.
 export function useStudents() {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState(() => !SUPABASE_READY ? SEED_STUDENTS : []);
+  const [loading, setLoading] = useState(SUPABASE_READY);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) { setLoading(false); return; }
@@ -303,6 +304,7 @@ export function useStudents() {
         firstName: r.first_name,
         lastName: r.last_name,
         grade: r.grade || "",
+        section: r.section || "",
         parentEmail: r.parent_email || "",
         studentEmail: r.student_email || "",
       })));
@@ -312,19 +314,26 @@ export function useStudents() {
     return () => { active = false; };
   }, []);
 
+  const rowToStudent = r => ({
+    id: r.id, firstName: r.first_name, lastName: r.last_name,
+    grade: r.grade || "", section: r.section || "",
+    parentEmail: r.parent_email || "", studentEmail: r.student_email || "",
+  });
+
+  // Inverse of rowToStudent: camelCase UI shape → snake_case DB columns.
+  const studentToRow = s => ({
+    first_name: s.firstName, last_name: s.lastName,
+    grade: s.grade || null, section: s.section || null,
+    parent_email: s.parentEmail || null, student_email: s.studentEmail || null,
+  });
+
   // Replace the entire roster (used on CSV import).
   async function importStudents(rows) {
-    if (!SUPABASE_READY || !supabase) {
-      setStudents(rows);
-      return;
-    }
-    // Delete all existing rows then insert fresh batch.
+    if (!SUPABASE_READY || !supabase) { setStudents(rows); return; }
     await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (rows.length === 0) { setStudents([]); return; }
-    const { data } = await supabase.from("students").insert(
-      rows.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: r.parentEmail || null, student_email: r.studentEmail || null }))
-    ).select("*");
-    setStudents((data || []).map(r => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade || "", parentEmail: r.parent_email || "", studentEmail: r.student_email || "" })));
+    const { data } = await supabase.from("students").insert(rows.map(studentToRow)).select("*");
+    setStudents((data || []).map(rowToStudent));
   }
 
   async function addStudent(s) {
@@ -333,9 +342,8 @@ export function useStudents() {
       return;
     }
     const { data } = await supabase.from("students")
-      .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null })
-      .select("*").single();
-    if (data) setStudents(prev => [...prev, { id: data.id, firstName: data.first_name, lastName: data.last_name, grade: data.grade || "", parentEmail: data.parent_email || "", studentEmail: data.student_email || "" }]);
+      .insert(studentToRow(s)).select("*").single();
+    if (data) setStudents(prev => [...prev, rowToStudent(data)]);
   }
 
   async function updateStudent(id, s) {
@@ -343,7 +351,7 @@ export function useStudents() {
       setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
       return;
     }
-    await supabase.from("students").update({ first_name: s.firstName, last_name: s.lastName, grade: s.grade || null, parent_email: s.parentEmail || null, student_email: s.studentEmail || null }).eq("id", id);
+    await supabase.from("students").update(studentToRow(s)).eq("id", id);
     setStudents(prev => prev.map(x => x.id === id ? { ...x, ...s } : x));
   }
 
@@ -359,24 +367,20 @@ export function useStudents() {
   async function syncClassroomStudents(incomingRows) {
     if (!SUPABASE_READY || !supabase) {
       setStudents(prev => {
-        const existing = new Set(prev.map(s => `${s.firstName}|${s.lastName}`));
-        const toAdd = incomingRows.filter(r => !existing.has(`${r.firstName}|${r.lastName}`));
+        const existing = new Set(prev.map(s => s.studentEmail).filter(Boolean));
+        const toAdd = incomingRows.filter(r => r.studentEmail && !existing.has(r.studentEmail));
         return [...prev, ...toAdd.map(r => ({ id: Date.now().toString() + Math.random(), ...r }))];
       });
       return { added: incomingRows.length, skipped: 0 };
     }
-    const { data: current } = await supabase.from("students").select("first_name, last_name");
-    const existingKeys = new Set((current || []).map(r => `${r.first_name}|${r.last_name}`));
-    const toInsert = incomingRows.filter(r => !existingKeys.has(`${r.firstName}|${r.lastName}`));
-    // For existing students, upsert their email if we now have it
-    const toUpdateEmail = incomingRows.filter(r =>
-      existingKeys.has(`${r.firstName}|${r.lastName}`) && r.studentEmail
-    );
-    for (const r of toUpdateEmail) {
-      await supabase.from("students")
-        .update({ student_email: r.studentEmail })
-        .eq("first_name", r.firstName).eq("last_name", r.lastName);
-    }
+    // Deduplicate by email — more reliable than name matching across multiple teachers.
+    const emailsToCheck = incomingRows.map(r => r.studentEmail).filter(Boolean);
+    const { data: current } = await supabase
+      .from("students")
+      .select("student_email")
+      .in("student_email", emailsToCheck);
+    const existingEmails = new Set((current || []).map(r => r.student_email));
+    const toInsert = incomingRows.filter(r => r.studentEmail && !existingEmails.has(r.studentEmail));
     if (toInsert.length > 0) {
       const { data } = await supabase.from("students").insert(
         toInsert.map(r => ({ first_name: r.firstName, last_name: r.lastName, grade: r.grade || null, parent_email: null, student_email: r.studentEmail || null }))
@@ -404,6 +408,12 @@ function loadGIS() {
   });
 }
 
+const GC_SCOPES = [
+  "https://www.googleapis.com/auth/classroom.courses.readonly",
+  "https://www.googleapis.com/auth/classroom.rosters.readonly",
+  "https://www.googleapis.com/auth/classroom.coursework.students",
+].join(" ");
+
 export function useClassroomSync() {
   async function requestToken() {
     await loadGIS();
@@ -412,7 +422,7 @@ export function useClassroomSync() {
     return new Promise((resolve, reject) => {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: "https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.rosters.readonly",
+        scope: GC_SCOPES,
         callback: response => {
           if (response.error) reject(new Error(response.error_description || response.error));
           else resolve(response.access_token);
@@ -440,11 +450,86 @@ export function useClassroomSync() {
         firstName: s.profile?.name?.givenName || "",
         lastName: s.profile?.name?.familyName || "",
         studentEmail: s.profile?.emailAddress || "",
+        gcUserId: s.userId || "",
       }))
       .filter(s => s.firstName || s.lastName);
   }
 
-  return { requestToken, listCourses, listStudents };
+  // Push grades for a set of assignments to a Google Classroom course.
+  // `assignments` — the local gradebook assignments for the current period
+  // `grades`      — flat grade rows from useGradebook
+  // `students`    — student roster (need studentEmail to match GC roster)
+  // Returns { synced, skipped, errors[] }
+  async function syncGradesToCourse(token, courseId, { assignments, grades, students, onProgress }) {
+    // 1. Fetch GC roster → Map<gcUserId, email> and Map<email, gcUserId>
+    const rosterRes = await fetch(
+      `https://classroom.googleapis.com/v1/courses/${courseId}/students?pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!rosterRes.ok) throw new Error(`Roster fetch failed: ${rosterRes.status}`);
+    const rosterData = await rosterRes.json();
+    const userIdToEmail = {};
+    const emailToUserId = {};
+    for (const s of rosterData.students || []) {
+      const email = s.profile?.emailAddress?.toLowerCase();
+      const uid = s.userId;
+      if (email && uid) { userIdToEmail[uid] = email; emailToUserId[email] = uid; }
+    }
+
+    // 2. Fetch GC courseWork
+    const cwRes = await fetch(
+      `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!cwRes.ok) throw new Error(`CourseWork fetch failed: ${cwRes.status}`);
+    const cwData = await cwRes.json();
+    const courseWork = cwData.courseWork || [];
+
+    let synced = 0, skipped = 0;
+    const errors = [];
+
+    for (const assignment of assignments) {
+      // Match local assignment to GC courseWork by title (case-insensitive)
+      const cw = courseWork.find(
+        c => c.title.trim().toLowerCase() === assignment.name.trim().toLowerCase()
+      );
+      if (!cw) { skipped++; continue; }
+
+      // Fetch submissions for this courseWork
+      const subRes = await fetch(
+        `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${cw.id}/studentSubmissions?pageSize=200`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!subRes.ok) { errors.push(`Submissions for "${assignment.name}": ${subRes.status}`); continue; }
+      const subData = await subRes.json();
+      const submissions = subData.studentSubmissions || [];
+
+      for (const sub of submissions) {
+        const email = userIdToEmail[sub.userId];
+        if (!email) continue;
+        const student = students.find(s => s.studentEmail?.toLowerCase() === email);
+        if (!student) continue;
+        const grade = grades.find(g => g.assignment_id === assignment.id && g.student_id === student.id);
+        if (!grade || grade.points_earned == null || grade.excused || grade.missing) continue;
+
+        const patchRes = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${cw.id}/studentSubmissions/${sub.id}?updateMask=assignedGrade,draftGrade`,
+          {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ assignedGrade: grade.points_earned, draftGrade: grade.points_earned }),
+          }
+        );
+        if (patchRes.ok) { synced++; }
+        else { errors.push(`${student.lastName}, ${student.firstName} / ${assignment.name}`); }
+      }
+      onProgress?.({ done: synced + skipped + errors.length, total: assignments.length });
+    }
+
+    return { synced, skipped, errors };
+  }
+
+  return { requestToken, listCourses, listStudents, syncGradesToCourse };
 }
 
 // ─── G-Men Requests (Supabase-backed) ────────────────────────────
@@ -533,23 +618,19 @@ export function useGmenRequests() {
 }
 
 // ─── Staff Directory ──────────────────────────────────────────────
-// Auto-registers each teacher when they open Hall Pass.
 // Powers the "Send to Teacher" dropdown for room passes.
+//
+// SECURITY: staff are NOT self-registered from the client. is_staff() requires
+// staff_directory membership, so a client-side self-upsert would let any
+// signed-in student promote themselves to staff. Staff are provisioned by an
+// admin (see the 20260627 migration). This hook is read-only.
 export function useStaffDirectory(user, room) {
   const [staff, setStaff] = useState([]);
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase || !user?.email) return;
 
-    // Upsert this teacher so others can see them in the dropdown.
-    supabase.from("staff_directory").upsert({
-      email: user.email,
-      name: user.name,
-      room: room || null,
-      last_seen: new Date().toISOString(),
-    }, { onConflict: "email" });
-
-    // Load all staff.
+    // Read-only: load the directory for the dropdown.
     supabase.from("staff_directory")
       .select("*")
       .order("name")
@@ -804,6 +885,12 @@ function daySchedule(schedules) {
     : (schedules?.mf || []);
 }
 
+// Which schedule key is active today: "twt" (Tue/Wed/Thu) or "mf" (Mon/Fri)
+export function todayScheduleKey() {
+  const dow = new Date().getDay();
+  return (dow === 2 || dow === 3 || dow === 4) ? "twt" : "mf";
+}
+
 // Pure helper: which period (if any) contains the given time?
 export function periodForTime(periods, at = new Date()) {
   if (!periods?.length) return null;
@@ -1021,7 +1108,24 @@ export function useGmenEnrollments(period) {
     return enrollments.filter(e => e.class_id === classId).length;
   }
 
-  return { enrollments, enroll, unenroll, seatCount };
+  async function adminMoveStudent(studentEmail, toClassId, gradingPeriod) {
+    if (!SUPABASE_READY || !supabase) {
+      setEnrollments(prev => prev.map(e =>
+        e.student_email === studentEmail && e.grading_period === gradingPeriod
+          ? { ...e, class_id: toClassId } : e
+      ));
+      return { error: null };
+    }
+    const { data, error } = await supabase
+      .from("gmen_enrollments")
+      .update({ class_id: toClassId })
+      .eq("student_email", studentEmail)
+      .eq("grading_period", gradingPeriod)
+      .select().single();
+    return { data, error };
+  }
+
+  return { enrollments, enroll, unenroll, seatCount, adminMoveStudent };
 }
 
 export function useGmenChangeRequests() {
@@ -1077,9 +1181,9 @@ export function useGmenChangeRequests() {
 
 // ─── Gradebook ───────────────────────────────────────────────────────────────
 export function useGradebook(teacherEmail) {
-  const [assignments, setAssignments] = useState([]);
-  const [grades, setGrades] = useState([]);        // flat array of all grade rows
-  const [profiles, setProfiles] = useState([]);
+  const [assignments, setAssignments] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_ASSIGNMENTS : []);
+  const [grades, setGrades] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_GRADES : []);
+  const [profiles, setProfiles] = useState(() => !SUPABASE_READY ? [SEED_GRADEBOOK_PROFILE] : []);
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {
@@ -1200,4 +1304,481 @@ export function useGradebook(teacherEmail) {
     saveGrade, saveProfile, setActiveProfile, deleteProfile,
     saveSettings,
   };
+}
+
+// ─── Weekly Events (shared, Supabase-backed) ─────────────────────
+// Table: weekly_events — school-wide list of drills, tests, trips, etc.
+// Shown on the Dashboard ticker and managed on the Weekly Events tab.
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useWeeklyEvents() {
+  const [events, setEvents] = useState(SUPABASE_READY ? [] : SEED_EVENTS);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("weekly_events")
+        .select("*")
+        .order("date", { ascending: true });
+      if (!active) return;
+      setEvents((data || []).map(r => ({
+        id: r.id, type: r.type, title: r.title,
+        date: r.date || "", time: r.time || "", details: r.details || "",
+      })));
+    }
+    load();
+
+    const ch = supabase.channel("weekly_events_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_events" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  async function addEvent(ev) {
+    if (!SUPABASE_READY || !supabase) {
+      setEvents(prev => [...prev, { id: Date.now().toString(), ...ev }]);
+      return;
+    }
+    await supabase.from("weekly_events").insert({
+      type: ev.type, title: ev.title,
+      date: ev.date || null, time: ev.time || null, details: ev.details || null,
+    });
+    // Realtime INSERT triggers load() above.
+  }
+
+  async function removeEvent(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setEvents(prev => prev.filter(e => e.id !== id));
+      return;
+    }
+    await supabase.from("weekly_events").delete().eq("id", id);
+  }
+
+  return { events, addEvent, removeEvent };
+}
+
+// ─── Trip Rosters (shared, Supabase-backed) ──────────────────────
+// Table: trip_rosters — field trips / early releases / athletic events with
+// their student lists (stored as JSONB). Shown on the Dashboard ticker.
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useTripRosters() {
+  const [rosters, setRosters] = useState(SUPABASE_READY ? [] : SEED_TRIPS);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase
+        .from("trip_rosters")
+        .select("*")
+        .order("date", { ascending: true });
+      if (!active) return;
+      setRosters((data || []).map(r => ({
+        id: r.id, type: r.type, title: r.title, teacher: r.teacher || "",
+        date: r.date || "", depart: r.depart || "", returnTime: r.return_time || "",
+        notes: r.notes || "", students: r.students || [],
+      })));
+    }
+    load();
+
+    const ch = supabase.channel("trip_rosters_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_rosters" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  async function addRoster(r) {
+    if (!SUPABASE_READY || !supabase) {
+      setRosters(prev => [...prev, { id: Date.now().toString(), ...r }]);
+      return;
+    }
+    await supabase.from("trip_rosters").insert({
+      type: r.type, title: r.title, teacher: r.teacher || null,
+      date: r.date || null, depart: r.depart || null, return_time: r.returnTime || null,
+      notes: r.notes || null, students: r.students || [],
+    });
+  }
+
+  async function removeRoster(id) {
+    if (!SUPABASE_READY || !supabase) {
+      setRosters(prev => prev.filter(t => t.id !== id));
+      return;
+    }
+    await supabase.from("trip_rosters").delete().eq("id", id);
+  }
+
+  return { rosters, addRoster, removeRoster };
+}
+
+// ─── CEU Tracker (per-teacher, Supabase-backed) ──────────────────
+// Two tables, both scoped to the signed-in teacher's email:
+//   ceu_entries        — logged CEU hours toward license renewal
+//   ceu_reimbursements — tuition reimbursement expenses
+// Falls back to seeded in-memory state when Supabase is not configured.
+export function useCeu(teacherEmail) {
+  const [entries, setEntries] = useState(SUPABASE_READY ? [] : SEED_CEU);
+  const [reimb, setReimb] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+
+    async function load() {
+      const [e, r] = await Promise.all([
+        supabase.from("ceu_entries").select("*").eq("teacher_email", teacherEmail).order("entry_date"),
+        supabase.from("ceu_reimbursements").select("*").eq("teacher_email", teacherEmail).order("created_at"),
+      ]);
+      if (!active) return;
+      setEntries((e.data || []).map(row => ({
+        id: row.id, name: row.name, hours: Number(row.hours), date: row.entry_date || "",
+      })));
+      setReimb((r.data || []).map(row => ({
+        id: row.id, name: row.name, cost: Number(row.cost),
+      })));
+    }
+    load();
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addEntry({ name, hours }) {
+    const entry_date = new Date().toISOString().slice(0, 7);
+    if (!SUPABASE_READY || !supabase) {
+      setEntries(prev => [...prev, { id: Date.now().toString(), name, hours: Number(hours), date: entry_date }]);
+      return;
+    }
+    const { data } = await supabase.from("ceu_entries")
+      .insert({ teacher_email: teacherEmail, name, hours: Number(hours), entry_date })
+      .select("*").single();
+    if (data) setEntries(prev => [...prev, { id: data.id, name: data.name, hours: Number(data.hours), date: data.entry_date || "" }]);
+  }
+
+  async function removeEntry(id) {
+    setEntries(prev => prev.filter(e => e.id !== id));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("ceu_entries").delete().eq("id", id);
+  }
+
+  async function addReimb({ name, cost }) {
+    if (!SUPABASE_READY || !supabase) {
+      setReimb(prev => [...prev, { id: Date.now().toString(), name, cost: Number(cost) }]);
+      return;
+    }
+    const { data } = await supabase.from("ceu_reimbursements")
+      .insert({ teacher_email: teacherEmail, name, cost: Number(cost) })
+      .select("*").single();
+    if (data) setReimb(prev => [...prev, { id: data.id, name: data.name, cost: Number(data.cost) }]);
+  }
+
+  async function removeReimb(id) {
+    setReimb(prev => prev.filter(r => r.id !== id));
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("ceu_reimbursements").delete().eq("id", id);
+  }
+
+  return { entries, reimb, addEntry, removeEntry, addReimb, removeReimb };
+}
+
+// ─── Field Trip Requests (per-teacher archive, Supabase-backed) ──
+// Table: field_trip_requests — keeps a record of every submitted request so
+// it survives a refresh and the teacher can see what they've sent.
+export function useFieldTrips(teacherEmail) {
+  const [trips, setTrips] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+    supabase.from("field_trip_requests")
+      .select("*").eq("teacher_email", teacherEmail)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (active) setTrips(data || []); });
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addTrip(form) {
+    const row = {
+      teacher_email: teacherEmail,
+      destination: form.destination, trip_date: form.date || null,
+      depart: form.depart || null, return_time: form.returnTime || null,
+      grade: form.grade || null, student_count: form.students ? Number(form.students) : null,
+      buses: form.buses === "Yes", needs_sub: form.sub === "Yes",
+      chaperones: form.chaperones || null,
+    };
+    if (!SUPABASE_READY || !supabase) {
+      setTrips(prev => [{ id: Date.now().toString(), ...row, created_at: new Date().toISOString() }, ...prev]);
+      return;
+    }
+    const { data } = await supabase.from("field_trip_requests").insert(row).select("*").single();
+    if (data) setTrips(prev => [data, ...prev]);
+  }
+
+  return { trips, addTrip };
+}
+
+// ─── Requisitions (per-teacher archive, Supabase-backed) ─────────
+// Table: requisitions — stores the submitted cart (vendors/items) as JSONB so
+// the request survives a refresh. Quote files are recorded by name only;
+// uploading the binaries would require Supabase Storage (see SUPABASE_SETUP.md).
+export function useRequisitions(teacherEmail) {
+  const [requisitions, setRequisitions] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    let active = true;
+    supabase.from("requisitions")
+      .select("*").eq("teacher_email", teacherEmail)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (active) setRequisitions(data || []); });
+    return () => { active = false; };
+  }, [teacherEmail]);
+
+  async function addRequisition({ cart, total }) {
+    // Strip the non-serializable File objects — keep only the quote metadata.
+    const safeCart = cart.map(v => ({
+      ...v,
+      quotes: (v.quotes || []).map(q => ({ id: q.id, name: q.name, size: q.size, type: q.type })),
+    }));
+    const row = { teacher_email: teacherEmail, cart: safeCart, total: Number(total) || 0 };
+    if (!SUPABASE_READY || !supabase) {
+      setRequisitions(prev => [{ id: Date.now().toString(), ...row, created_at: new Date().toISOString() }, ...prev]);
+      return;
+    }
+    const { data } = await supabase.from("requisitions").insert(row).select("*").single();
+    if (data) setRequisitions(prev => [data, ...prev]);
+  }
+
+  return { requisitions, addRequisition };
+}
+
+// ─── Mole Dollar Grade Actions ────────────────────────────────────────────────
+
+// Resolve the gradebook student (the `students` roster row) by email. Email is
+// the canonical key that bridges the classroom roster (stu-*) and the gradebook
+// roster (students.id). Returns { id, name } or null. NOTE: the gradebook's
+// notion of a "student" lives in public.students, NOT gradebook_profiles — that
+// table holds category-weight profiles and has no student columns.
+async function resolveGradebookStudent(studentEmail) {
+  const { data } = await supabase
+    .from('students')
+    .select('id, first_name, last_name')
+    .ilike('student_email', studentEmail)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id, name: `${data.first_name} ${data.last_name}`.trim() };
+}
+
+export async function applyMoleDropLowest(teacherEmail, studentEmail, gradeCategory, gradingPeriod) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
+  const student = await resolveGradebookStudent(studentEmail);
+  if (!student) return { ok: false, reason: 'no_student' };
+  const { data: assignments } = await supabase
+    .from('gradebook_assignments')
+    .select('id, name, max_points')
+    .eq('teacher_email', teacherEmail)
+    .ilike('category', gradeCategory)
+    .eq('grading_period', gradingPeriod)
+    .eq('extra_credit', false);
+  if (!assignments?.length) return { ok: false, reason: 'no_assignments' };
+  const { data: grades } = await supabase
+    .from('gradebook_grades')
+    .select('id, assignment_id, points_earned, retake_score, excused, missing')
+    .eq('teacher_email', teacherEmail)
+    .eq('student_id', student.id)
+    .in('assignment_id', assignments.map(a => a.id));
+  const gradeByAsgn = {};
+  (grades || []).forEach(g => { gradeByAsgn[g.assignment_id] = g; });
+
+  // Server-side enforcement of one-drop-per-category-per-period: if any
+  // assignment in this category/period is already excused, the student has
+  // already used their drop. This is the authoritative check (the client guard
+  // in CashInShop is only UX).
+  if ((grades || []).some(g => g.excused)) {
+    return { ok: false, reason: 'already_dropped' };
+  }
+
+  let lowestAsgn = null;
+  let lowestPct = Infinity;
+  for (const asgn of assignments) {
+    const g = gradeByAsgn[asgn.id];
+    // Use the effective (best) score — a passing retake means the raw low
+    // score isn't actually the grade dragging the average down.
+    const effective = g
+      ? Math.max(g.points_earned ?? 0, g.retake_score ?? 0)
+      : 0;
+    const pct = (!g || g.missing || (g.points_earned == null && g.retake_score == null))
+      ? 0 : effective / (asgn.max_points || 100);
+    if (pct < lowestPct) { lowestPct = pct; lowestAsgn = { asgn, grade: g }; }
+  }
+  if (!lowestAsgn) return { ok: false, reason: 'nothing_to_drop' };
+  const { asgn, grade } = lowestAsgn;
+  const row = {
+    teacher_email: teacherEmail, assignment_id: asgn.id,
+    student_id: student.id, student_name: student.name,
+    excused: true, missing: false, points_earned: null,
+    graded_at: new Date().toISOString(),
+  };
+  if (grade) { await supabase.from('gradebook_grades').update(row).eq('id', grade.id); }
+  else { await supabase.from('gradebook_grades').insert(row); }
+  return { ok: true, assignmentName: asgn.name };
+}
+
+export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints, gradingPeriod = 1) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, reason: 'no_supabase' };
+  const student = await resolveGradebookStudent(studentEmail);
+  if (!student) return { ok: false, reason: 'no_student' };
+  // The bonus assignment is per grading period so it affects the period the
+  // student is actually in.
+  let { data: asgn } = await supabase
+    .from('gradebook_assignments').select('id, max_points')
+    .eq('teacher_email', teacherEmail).eq('name', 'Mole Dollar Bonus')
+    .eq('grading_period', gradingPeriod).maybeSingle();
+  if (!asgn) {
+    const { data: created } = await supabase.from('gradebook_assignments').insert({
+      teacher_email: teacherEmail, name: 'Mole Dollar Bonus', category: 'Tests',
+      grading_period: gradingPeriod, max_points: 100, extra_credit: true,
+      description: 'Bonus points earned via Mole Dollar redemptions.',
+      created_at: new Date().toISOString(),
+    }).select('id, max_points').single();
+    asgn = created;
+  }
+  if (!asgn) return { ok: false, reason: 'could_not_create_assignment' };
+  const { data: existing } = await supabase.from('gradebook_grades').select('id, points_earned')
+    .eq('teacher_email', teacherEmail).eq('assignment_id', asgn.id)
+    .eq('student_id', student.id).maybeSingle();
+  const newPts = Math.min(asgn.max_points || 100, (existing?.points_earned ?? 0) + bonusPoints);
+  const row = {
+    teacher_email: teacherEmail, assignment_id: asgn.id,
+    student_id: student.id, student_name: student.name,
+    points_earned: newPts, missing: false, excused: false,
+    graded_at: new Date().toISOString(),
+  };
+  if (existing) { await supabase.from('gradebook_grades').update(row).eq('id', existing.id); }
+  else { await supabase.from('gradebook_grades').insert(row); }
+  return { ok: true, totalPoints: newPts };
+}
+
+// ─── Staff Messaging ──────────────────────────────────────────────────────────
+export function useStaffMessaging(userEmail) {
+  const [conversations, setConversations] = useState([]);
+  const [messages, setMessages] = useState({});   // { convId: Message[] }
+  const [members, setMembers]   = useState({});   // { convId: MemberRow[] }
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !userEmail) return;
+    let active = true;
+
+    async function load() {
+      const { data: myMemberships } = await supabase
+        .from("staff_conversation_members").select("conversation_id").eq("user_email", userEmail);
+      if (!active) return;
+      if (!myMemberships?.length) { setConversations([]); setMessages({}); setMembers({}); return; }
+      const ids = myMemberships.map(r => r.conversation_id);
+
+      const [{ data: convRows }, { data: memberRows }, { data: msgRows }] = await Promise.all([
+        supabase.from("staff_conversations").select("*").in("id", ids),
+        supabase.from("staff_conversation_members").select("*").in("conversation_id", ids),
+        supabase.from("staff_messages")
+          .select("*, staff_message_attachments(*)")
+          .in("conversation_id", ids)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (!active) return;
+      setConversations(convRows || []);
+
+      const membMap = {};
+      (memberRows || []).forEach(m => { (membMap[m.conversation_id] ||= []).push(m); });
+      setMembers(membMap);
+
+      const msgMap = {};
+      (msgRows || []).forEach(m => { (msgMap[m.conversation_id] ||= []).push(m); });
+      setMessages(msgMap);
+    }
+
+    load();
+    const ch = supabase.channel("staff_messaging_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_messages" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_conversation_members" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_conversations" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, [userEmail]);
+
+  function findDM(otherEmail) {
+    for (const conv of conversations) {
+      if (conv.type !== "dm") continue;
+      const emails = (members[conv.id] || []).map(m => m.user_email);
+      if (emails.includes(userEmail) && emails.includes(otherEmail)) return conv.id;
+    }
+    return null;
+  }
+
+  async function openOrCreateDM(otherEmail) {
+    const existing = findDM(otherEmail);
+    if (existing) return existing;
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data: conv } = await supabase.from("staff_conversations")
+      .insert({ type: "dm", created_by: userEmail }).select().single();
+    if (!conv) return null;
+    await supabase.from("staff_conversation_members").insert([
+      { conversation_id: conv.id, user_email: userEmail },
+      { conversation_id: conv.id, user_email: otherEmail },
+    ]);
+    return conv.id;
+  }
+
+  async function createGroup(name, description, memberEmails) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data: conv } = await supabase.from("staff_conversations")
+      .insert({ type: "group", name, description, created_by: userEmail }).select().single();
+    if (!conv) return null;
+    const all = [...new Set([userEmail, ...memberEmails])];
+    await supabase.from("staff_conversation_members").insert(
+      all.map(email => ({ conversation_id: conv.id, user_email: email }))
+    );
+    return conv.id;
+  }
+
+  async function sendMessage(conversationId, body, isAlert = false) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data } = await supabase.from("staff_messages")
+      .insert({ conversation_id: conversationId, sender_email: userEmail, body, is_alert: isAlert })
+      .select().single();
+    return data;
+  }
+
+  async function uploadAttachment(messageId, file) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const ext = file.name.split(".").pop();
+    const path = `${messageId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("staff-attachments").upload(path, file);
+    if (error) return null;
+    const { data: { publicUrl } } = supabase.storage.from("staff-attachments").getPublicUrl(path);
+    await supabase.from("staff_message_attachments").insert({
+      message_id: messageId, file_name: file.name, file_url: publicUrl,
+      file_type: file.type, file_size: file.size,
+    });
+    return publicUrl;
+  }
+
+  async function markRead(conversationId) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("staff_conversation_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId).eq("user_email", userEmail);
+  }
+
+  function getUnread(conversationId) {
+    const me = (members[conversationId] || []).find(m => m.user_email === userEmail);
+    const since = me?.last_read_at;
+    return (messages[conversationId] || []).filter(m =>
+      m.sender_email !== userEmail && (!since || new Date(m.created_at) > new Date(since))
+    ).length;
+  }
+
+  const totalUnread = conversations.reduce((n, c) => n + getUnread(c.id), 0);
+
+  return { conversations, messages, members, openOrCreateDM, createGroup, sendMessage, uploadAttachment, markRead, getUnread, totalUnread };
 }

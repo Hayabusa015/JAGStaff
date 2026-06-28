@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { UploadCloud, FileCheck2, X } from 'lucide-react';
 
 // Drag-and-drop + click file picker. Calls onFile(file|null).

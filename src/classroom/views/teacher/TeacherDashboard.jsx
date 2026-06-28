@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Trophy,
   CheckCircle2,
@@ -21,6 +21,7 @@ import Badge from '../../components/Badge.jsx';
 import MoleApprovalQueue from './MoleApprovalQueue.jsx';
 import HelpDeskKanban from './HelpDeskKanban.jsx';
 import ParentMailer from './ParentMailer.jsx';
+import SubjectFlair from '../../components/SubjectFlair.jsx';
 
 const SPAN_CLASS = {
   1: 'lg:col-span-1',
@@ -29,7 +30,7 @@ const SPAN_CLASS = {
 };
 
 export default function TeacherDashboard() {
-  const { dashboardLayout, toggleWidget, moveWidget, cycleWidgetSpan, resetLayout } = useApp();
+  const { dashboardLayout, toggleWidget, moveWidget, cycleWidgetSpan, resetLayout, teacherProfile } = useApp();
   const [showConfig, setShowConfig] = useState(false);
 
   const ordered = [...dashboardLayout].sort((a, b) => a.order - b.order);
@@ -48,10 +49,10 @@ export default function TeacherDashboard() {
           />
           <div className="relative">
             <p className="font-display text-xs font-bold uppercase tracking-[0.25em] text-gold-500">
-              G-MEN · Command Center
+              {teacherProfile.tagline}
             </p>
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-50">
-              Welcome back, Mr. Shull
+              Welcome back, {teacherProfile.name}
             </h2>
             <p className="text-xs text-zinc-400">Here's your room at a glance.</p>
           </div>
@@ -150,11 +151,11 @@ function WidgetRenderer({ widget }) {
 }
 
 function MetricsWidget() {
-  const { metrics, moleRequests, tickets, students } = useApp();
+  const { metrics, moleRequests, tickets, students, currencySymbol } = useApp();
   const pendingMole = moleRequests.filter((r) => r.status === 'pending').length;
   const openTickets = tickets.filter((t) => t.status !== 'completed').length;
   const stats = [
-    { icon: Trophy, label: 'Mole $ Approved', value: metrics.approvedMoleDollars },
+    { icon: Trophy, label: `${currencySymbol} Approved`, value: metrics.approvedMoleDollars },
     { icon: CheckCircle2, label: 'Tasks Completed', value: metrics.completedTasks },
     { icon: Bell, label: 'Pending Redemptions', value: pendingMole },
     { icon: LifeBuoy, label: 'Open Tickets', value: openTickets },
@@ -189,19 +190,21 @@ function RosterWidget() {
   return (
     <Card>
       <CardHeader title="Class Roster Snapshot" subtitle="Balances & lab status" icon={Users} />
-      <div className="space-y-4 p-4">
+      <div className="space-y-3 p-4">
         {classes.map((cls) => {
           const theme = getTheme(cls.id);
           const roster = students.filter((s) => s.classId === cls.id);
           return (
-            <div key={cls.id}>
-              <div className="mb-2 flex items-center gap-2">
+            <div key={cls.id} className="relative overflow-hidden rounded-xl bg-ink-950/30 p-3">
+              {/* Subject-specific decorative background for this class section */}
+              <SubjectFlair subject={cls.subject} color={theme.hex} opacity={0.07} />
+              <div className="relative mb-2 flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${theme.bg}`} />
                 <p className="font-display text-xs font-bold uppercase tracking-wide text-zinc-200">
                   {cls.name} · P{cls.period}
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="relative space-y-1.5">
                 {roster.map((s) => (
                   <div
                     key={s.id}

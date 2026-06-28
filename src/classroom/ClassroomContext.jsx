@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
 import {
-  MOCK_MODE,
   CLASSES,
   STUDENTS,
   MOLE_REQUESTS,
   HELP_TICKETS,
   MOLE_MILESTONE,
+  CASH_IN_SHOP,
   DEFAULT_DASHBOARD_LAYOUT,
   BEHAVIOR_SCENARIOS,
   SUBJECT_THEME,
@@ -13,6 +13,8 @@ import {
 } from './data/mockData.js';
 import { putBlob, getBlob, deleteBlob } from './utils/idb.js';
 import { extractText } from './utils/fileText.js';
+import { SUPABASE_READY, applyMoleDropLowest, applyMoleBonus } from '../supabase.js';
+import { useTeacherClassroom, useStudentClassroom } from '../classroomData.js';
 
 const AppContext = createContext(null);
 
@@ -23,6 +25,92 @@ const nextId = (prefix) => `${prefix}-${++idCounter}`;
 const clone = (data) => JSON.parse(JSON.stringify(data));
 
 const UNITS_STORAGE_KEY = 'gmen-units-v1';
+const MOLE_EC_KEY = 'gmen-mole-ec-v1';
+const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
+const CLASSROOM_DESIGN_KEY = 'gmen-classroom-design-v1';
+const QUICK_LINKS_KEY = 'gmen-quick-links-v1';
+const MOLE_CREDITS_KEY = 'gmen-mole-credits-v1';
+
+function loadMoleGradeCredits() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(MOLE_CREDITS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return [];
+}
+
+const DEFAULT_QUICK_LINKS = [
+  { id: 'dl', label: 'Delta Math',     url: 'https://deltamath.com',  icon: '📐' },
+  { id: 'qz', label: 'Quizizz',        url: 'https://quizizz.com',    icon: '🧠' },
+  { id: 'vc', label: 'Vocabulary.com', url: 'https://vocabulary.com', icon: '📚' },
+];
+
+function loadQuickLinks() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(QUICK_LINKS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return [...DEFAULT_QUICK_LINKS];
+}
+
+export const DEFAULT_CLASSROOM_DESIGN = {
+  preset: 'gold',
+  accentColor: '#F5C025',
+  accentAlt: '#c98f00',
+  heroText: '#0a0700',
+  bgColor: '#08080A',
+  bgType: 'solid',
+  bgGradientFrom: '#080600',
+  bgGradientTo: '#150f00',
+  bgImageUrl: '',
+  bgImageOpacity: 0.15,
+  pattern: 'none',
+  patternOpacity: 0.04,
+};
+
+function loadClassroomDesign() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(CLASSROOM_DESIGN_KEY);
+      if (saved) return { ...DEFAULT_CLASSROOM_DESIGN, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+  }
+  return { ...DEFAULT_CLASSROOM_DESIGN };
+}
+
+const DEFAULT_TEACHER_PROFILE = {
+  name: 'Mr. Shull',
+  classroom: 'Shull Science',
+  tagline: 'G-MEN Command',
+  currencyName: 'Mole Dollar',
+  currencySymbol: 'MD',
+  commonCurriculumApiKey: '',
+  currentGradingPeriod: 1,
+};
+
+function loadTeacherProfile() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(TEACHER_PROFILE_KEY);
+      if (saved) return { ...DEFAULT_TEACHER_PROFILE, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+  }
+  return { ...DEFAULT_TEACHER_PROFILE };
+}
+
+function loadMoleEconomy() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(MOLE_EC_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+  }
+  return { milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) };
+}
 
 // Units + materials persist locally (file blobs live in IndexedDB). Browser-only;
 // falls back to the seed during SSR / first run.
@@ -38,14 +126,36 @@ function loadUnits() {
   return clone(SEED_UNITS);
 }
 
-export function AppProvider({ children }) {
+// user: the logged-in Supabase user object (or null in mock/dev mode)
+// isStaff: true for teachers, false for real student logins
+export function AppProvider({ children, user = null, isStaff = true }) {
+  const liveMode = SUPABASE_READY && !!user;
+  const teacherEmail = (liveMode && isStaff) ? user.email : null;
+  const studentEmail = (liveMode && !isStaff) ? user.email : null;
+
+  // ---- Supabase hooks (no-op when email is null) ---------------------------
+  const {
+    classes: liveClasses, students: liveStudents,
+    tickets: liveTeacherTickets, requests: liveTeacherRequests,
+    loading: teacherLoading, actions: teacherActions,
+  } = useTeacherClassroom(teacherEmail);
+
+  const {
+    profile: liveProfile, myClass: liveMyClass,
+    tickets: liveStudentTickets, requests: liveStudentRequests,
+    notifications: liveNotifications,
+    myAssignments, myGrades, myGradeProfile,
+    loading: studentLoading, notFound: studentNotFound,
+    actions: studentActions,
+  } = useStudentClassroom(studentEmail);
+
   // ---- Global UI state ------------------------------------------------------
-  const [role, setRole] = useState('teacher'); // 'teacher' | 'student'
+  const [role, setRole] = useState(() => isStaff ? 'teacher' : 'student');
   const [activeStudentId, setActiveStudentId] = useState('stu-chem-demo');
   const [activeView, setActiveView] = useState('dashboard');
   const [activeClassId, setActiveClassId] = useState('cls-chem');
 
-  // ---- Mock "database" ------------------------------------------------------
+  // ---- Mock "database" (used when liveMode = false) -------------------------
   const [students, setStudents] = useState(() => clone(STUDENTS));
   const [moleRequests, setMoleRequests] = useState(() => clone(MOLE_REQUESTS));
   const [tickets, setTickets] = useState(() => clone(HELP_TICKETS));
@@ -53,51 +163,173 @@ export function AppProvider({ children }) {
   const [metrics, setMetrics] = useState({ approvedMoleDollars: 30, completedTasks: 1 });
   const [dashboardLayout, setDashboardLayout] = useState(() => clone(DEFAULT_DASHBOARD_LAYOUT));
   const [units, setUnits] = useState(loadUnits);
+  const [moleEconomy, setMoleEconomy] = useState(loadMoleEconomy);
+  const [teacherProfile, setTeacherProfile] = useState(loadTeacherProfile);
+  const [moleGradeCredits, setMoleGradeCredits] = useState(loadMoleGradeCredits);
+  const [classroomDesign, setClassroomDesign] = useState(loadClassroomDesign);
+  const [quickLinks, setQuickLinks] = useState(loadQuickLinks);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(UNITS_STORAGE_KEY, JSON.stringify(units));
-    } catch {
-      /* storage full / unavailable — non-fatal */
-    }
+    } catch { /* storage full / unavailable — non-fatal */ }
   }, [units]);
 
-  // ---- Derived helpers ------------------------------------------------------
-  const activeStudent = useMemo(
-    () => students.find((s) => s.id === activeStudentId) || students[0],
-    [students, activeStudentId]
-  );
+  // Persist mole economy config.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(MOLE_EC_KEY, JSON.stringify(moleEconomy));
+    } catch { /* ignore */ }
+  }, [moleEconomy]);
 
-  const getClass = useCallback((classId) => CLASSES.find((c) => c.id === classId), []);
+  // Persist teacher profile.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(TEACHER_PROFILE_KEY, JSON.stringify(teacherProfile));
+    } catch { /* ignore */ }
+  }, [teacherProfile]);
+
+  // Persist mole grade credits.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem(MOLE_CREDITS_KEY, JSON.stringify(moleGradeCredits)); } catch { /* ignore */ }
+  }, [moleGradeCredits]);
+
+  // Persist classroom visual design.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(CLASSROOM_DESIGN_KEY, JSON.stringify(classroomDesign));
+    } catch { /* ignore */ }
+  }, [classroomDesign]);
+
+  // Persist quick links.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(QUICK_LINKS_KEY, JSON.stringify(quickLinks));
+    } catch { /* ignore */ }
+  }, [quickLinks]);
+
+  // ---- Supabase → local state sync -----------------------------------------
+  // Teacher side: sync live data into local state once it arrives.
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveStudents.length === 0) return;
+    setStudents(liveStudents);
+  }, [liveStudents, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveTeacherTickets.length === 0) return;
+    setTickets(liveTeacherTickets);
+  }, [liveTeacherTickets, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || !isStaff || liveTeacherRequests.length === 0) return;
+    setMoleRequests(liveTeacherRequests);
+  }, [liveTeacherRequests, liveMode, isStaff]);
+
+  // Student side: load the real student's profile into local state.
+  useEffect(() => {
+    if (!liveMode || isStaff || !liveProfile) return;
+    setStudents([liveProfile]);
+    setActiveStudentId(liveProfile.id);
+    setActiveClassId(liveProfile.classId);
+  }, [liveProfile, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || isStaff) return;
+    setTickets(liveStudentTickets);
+  }, [liveStudentTickets, liveMode, isStaff]);
+
+  useEffect(() => {
+    if (!liveMode || isStaff) return;
+    setMoleRequests(liveStudentRequests);
+  }, [liveStudentRequests, liveMode, isStaff]);
+
+  // ---- Derived helpers ------------------------------------------------------
+  // allClasses: live Supabase classes in live mode, mock CLASSES otherwise.
+  // managedClasses: same as allClasses — exposed separately so ClassManager
+  //   can use it without pulling in mock CLASSES that may linger in `students`.
+  const allClasses = useMemo(() => {
+    if (liveMode && isStaff && liveClasses.length > 0) return liveClasses;
+    if (liveMode && !isStaff && liveMyClass) return [liveMyClass];
+    return CLASSES;
+  }, [liveMode, isStaff, liveClasses, liveMyClass]);
+
+  const managedClasses = allClasses;
+
+  const activeStudent = useMemo(() => {
+    const base = students.find((s) => s.id === activeStudentId) || students[0];
+    // Merge live notifications into the active student in student mode.
+    if (liveMode && !isStaff && base && liveNotifications.length > 0) {
+      return { ...base, notifications: liveNotifications };
+    }
+    return base;
+  }, [students, activeStudentId, liveMode, isStaff, liveNotifications]);
+
+  const getClass = useCallback(
+    (classId) =>
+      allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId),
+    [allClasses]
+  );
   const getStudent = useCallback((id) => students.find((s) => s.id === id), [students]);
-  const getTheme = useCallback((classId) => {
-    const cls = CLASSES.find((c) => c.id === classId);
-    return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.physics;
-  }, []);
+  const getTheme = useCallback(
+    (classId) => {
+      const cls =
+        allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId);
+      return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.chemistry;
+    },
+    [allClasses]
+  );
 
   // ===========================================================================
   //  WIZARD
   // ===========================================================================
-  const completeWizard = useCallback((studentId, payload) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? {
-              ...s,
-              wizardComplete: true,
-              gizmo: { ...payload.gizmo },
-              guardian: { ...payload.guardian },
-              safety: {
-                signedName: payload.safety.signedName,
-                signedAt: payload.safety.signedAt, // exact timestamp logged
-              },
-            }
-          : s
-      )
-    );
-  }, []);
+  const completeWizard = useCallback(
+    (studentId, payload) => {
+      // Live student mode → persist via RPC (balance mutations are server-side).
+      if (liveMode && !isStaff && studentActions) {
+        studentActions.completeWizard(studentId, payload);
+        // Optimistic UI update (realtime will confirm).
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.id === studentId
+              ? {
+                  ...s,
+                  wizardComplete: true,
+                  gizmo: { ...payload.gizmo },
+                  guardian: { ...payload.guardian },
+                  safety: { signedName: payload.safety.signedName, signedAt: payload.safety.signedAt },
+                }
+              : s
+          )
+        );
+        return;
+      }
+      // Mock fallback.
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? {
+                ...s,
+                wizardComplete: true,
+                gizmo: { ...payload.gizmo },
+                guardian: { ...payload.guardian },
+                safety: {
+                  signedName: payload.safety.signedName,
+                  signedAt: payload.safety.signedAt,
+                },
+              }
+            : s
+        )
+      );
+    },
+    [liveMode, isStaff, studentActions]
+  );
 
   // ===========================================================================
   //  MOLE DOLLAR ECONOMY
@@ -109,9 +341,36 @@ export function AppProvider({ children }) {
   // (never nested inside another setter's updater) so they stay correct under
   // React StrictMode's double-invocation of updater functions.
   const submitMoleRequest = useCallback(
-    (studentId, item) => {
+    async (studentId, item) => {
+      const rewardMeta = {
+        rewardType: item.rewardType || null,
+        gradeCategory: item.gradeCategory || null,
+        gradingPeriod: item.rewardType ? (teacherProfile.currentGradingPeriod || 1) : null,
+      };
+      // Live student mode → anti-cheat RPC; balance update comes back via realtime.
+      if (liveMode && !isStaff && studentActions) {
+        const ok = await studentActions.submitMoleRequest(studentId, item.label, item.cost);
+        if (ok) {
+          // Optimistic local insert so per-period checks work immediately.
+          setMoleRequests((prev) => [
+            {
+              id: nextId('req'),
+              studentId,
+              item: item.label,
+              cost: item.cost,
+              status: 'pending',
+              note: '',
+              createdAt: new Date().toISOString(),
+              ...rewardMeta,
+            },
+            ...prev,
+          ]);
+        }
+        return ok;
+      }
+      // Mock fallback.
       const student = students.find((s) => s.id === studentId);
-      if (!student || student.balance < item.cost) return false; // insufficient funds — no-op
+      if (!student || student.balance < item.cost) return false;
       setStudents((prev) =>
         prev.map((s) =>
           s.id === studentId
@@ -128,19 +387,24 @@ export function AppProvider({ children }) {
           status: 'pending',
           note: '',
           createdAt: new Date().toISOString(),
+          ...rewardMeta,
         },
         ...prev,
       ]);
       return true;
     },
-    [students]
+    [liveMode, isStaff, studentActions, students, teacherProfile]
   );
 
   const approveMoleRequest = useCallback(
     (requestId) => {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
-      // Permanently deduct locked tokens (they were already removed from balance).
+      // Live teacher mode → RPC (server moves tokens + sends notification).
+      // Also do optimistic local update so UI responds immediately.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.approveRequest(requestId);
+      }
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -157,15 +421,51 @@ export function AppProvider({ children }) {
         tone: 'success',
         text: `Your "${req.item}" redemption was approved! 🎉`,
       });
+
+      // Auto-apply grade reward if the request carries a rewardType.
+      const grantRewardType = req.rewardType
+        || moleEconomy.shopItems.find(i => i.label === req.item)?.rewardType;
+      const grantCategory = req.gradeCategory
+        || moleEconomy.shopItems.find(i => i.label === req.item)?.gradeCategory;
+      const grantPeriod = req.gradingPeriod || teacherProfile.currentGradingPeriod || 1;
+      const studentForGrant = students.find(s => s.id === req.studentId);
+
+      if (grantRewardType && teacherEmail && studentForGrant?.studentEmail) {
+        const creditBase = {
+          requestId: req.id, studentId: req.studentId,
+          studentName: studentForGrant.name, type: grantRewardType,
+          gradeCategory: grantCategory, gradingPeriod: grantPeriod,
+          appliedAt: new Date().toISOString(),
+        };
+        if (grantRewardType === 'dropLowest') {
+          applyMoleDropLowest(teacherEmail, studentForGrant.studentEmail, grantCategory, grantPeriod)
+            .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
+        } else if (grantRewardType === 'moleDollarBonus') {
+          applyMoleBonus(teacherEmail, studentForGrant.studentEmail, req.cost, grantPeriod)
+            .then(result => setMoleGradeCredits(prev => [...prev, { ...creditBase, result }]));
+        }
+      } else if (grantRewardType) {
+        // Mock mode / no student email — still record the credit for display.
+        setMoleGradeCredits(prev => [...prev, {
+          requestId: req.id, studentId: req.studentId,
+          studentName: studentForGrant?.name || req.studentId,
+          type: grantRewardType, gradeCategory: grantCategory,
+          gradingPeriod: grantPeriod, appliedAt: new Date().toISOString(),
+          result: { ok: false, reason: 'no_supabase' },
+        }]);
+      }
     },
-    [moleRequests]
+    [moleRequests, liveMode, isStaff, teacherActions, moleEconomy, teacherEmail, teacherProfile, students]
   );
 
   const denyMoleRequest = useCallback(
     (requestId, note) => {
       const req = moleRequests.find((r) => r.id === requestId);
       if (!req || req.status !== 'pending') return;
-      // Return the locked funds to the student's spendable balance.
+      // Live teacher mode → RPC. Also optimistic local update.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.denyRequest(requestId, note);
+      }
       setStudents((prev) =>
         prev.map((s) =>
           s.id === req.studentId
@@ -186,39 +486,67 @@ export function AppProvider({ children }) {
         text: `Your "${req.item}" redemption was denied. ${note ? `Note: ${note}` : ''}`.trim(),
       });
     },
-    [moleRequests]
+    [moleRequests, liveMode, isStaff, teacherActions]
   );
 
   // ===========================================================================
   //  HELP DESK
   // ===========================================================================
-  const submitTicket = useCallback((studentId, category, details) => {
-    setTickets((prev) => [
-      {
-        id: nextId('tkt'),
-        studentId,
-        category,
-        details,
-        status: 'submitted',
-        createdAt: new Date().toISOString(),
-        archived: false,
-      },
-      ...prev,
-    ]);
-  }, []);
+  const submitTicket = useCallback(
+    (studentId, category, details) => {
+      // Live student mode → direct INSERT (allowed by student RLS policy).
+      if (liveMode && !isStaff && studentActions && activeStudent) {
+        studentActions.submitTicket({
+          studentId,
+          teacherEmail: activeStudent.teacherEmail,
+          classId: activeStudent.classId,
+          studentEm: activeStudent.studentEmail,
+          studentName: activeStudent.name,
+          category,
+          details,
+        });
+        return;
+      }
+      // Mock fallback.
+      setTickets((prev) => [
+        {
+          id: nextId('tkt'),
+          studentId,
+          category,
+          details,
+          status: 'submitted',
+          createdAt: new Date().toISOString(),
+          archived: false,
+        },
+        ...prev,
+      ]);
+    },
+    [liveMode, isStaff, studentActions, activeStudent]
+  );
 
-  const advanceTicket = useCallback((ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId && t.status === 'submitted' ? { ...t, status: 'in_progress' } : t
-      )
-    );
-  }, []);
+  const advanceTicket = useCallback(
+    (ticketId) => {
+      // Live mode → RPC. Also optimistic local update.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.advanceTicket(ticketId);
+      }
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId && t.status === 'submitted' ? { ...t, status: 'in_progress' } : t
+        )
+      );
+    },
+    [liveMode, isStaff, teacherActions]
+  );
 
   const completeTicket = useCallback(
     (ticketId) => {
       const t = tickets.find((x) => x.id === ticketId);
       if (!t || t.status === 'completed') return;
+      // Live teacher mode → Supabase update. Also optimistic local update.
+      if (liveMode && isStaff && teacherActions) {
+        teacherActions.completeTicket(ticketId);
+      }
       setTickets((prev) =>
         prev.map((x) => (x.id === ticketId ? { ...x, status: 'completed', archived: true } : x))
       );
@@ -226,10 +554,10 @@ export function AppProvider({ children }) {
       pushNotification(t.studentId, {
         kind: 'ticket',
         tone: 'success',
-        text: `Your "${t.category}" request was marked complete by Mr. Shull. ✅`,
+        text: `Your "${t.category}" request was marked complete by ${teacherProfile.name}. ✅`,
       });
     },
-    [tickets]
+    [tickets, liveMode, isStaff, teacherActions, teacherProfile]
   );
 
   // ===========================================================================
@@ -251,15 +579,23 @@ export function AppProvider({ children }) {
     );
   }
 
-  const markNotificationsRead = useCallback((studentId) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }
-          : s
-      )
-    );
-  }, []);
+  const markNotificationsRead = useCallback(
+    (studentId) => {
+      // Live student mode → mark in Supabase (by email, since that's the RLS column).
+      if (liveMode && !isStaff && studentActions && activeStudent) {
+        studentActions.markNotificationsRead(activeStudent.studentEmail);
+        return;
+      }
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }
+            : s
+        )
+      );
+    },
+    [liveMode, isStaff, studentActions, activeStudent]
+  );
 
   // ===========================================================================
   //  PARENT COMMUNICATION ENGINE
@@ -268,7 +604,7 @@ export function AppProvider({ children }) {
     (studentId, tone, scenario, notes) => {
       const student = students.find((s) => s.id === studentId);
       if (!student) return null;
-      const cls = CLASSES.find((c) => c.id === student.classId);
+      const cls = allClasses.find((c) => c.id === student.classId) || CLASSES.find((c) => c.id === student.classId);
       const guardianName = student.guardian.name || 'Parent/Guardian';
       const firstName = student.name.split(' ')[0];
       const positive = tone === 'positive';
@@ -289,10 +625,10 @@ export function AppProvider({ children }) {
         to: student.guardian.email || '(no guardian email on file)',
         guardianName,
         subject,
-        body: `Dear ${guardianName},\n\n${opener}\n\n${body}${notesBlock}\n\n${closing}\n\nWarm regards,\nMr. Shull\nScience Department · Jag Schools`,
+        body: `Dear ${guardianName},\n\n${opener}\n\n${body}${notesBlock}\n\n${closing}\n\nWarm regards,\n${teacherProfile.name}\n${teacherProfile.classroom} · Jag Schools`,
       };
     },
-    [students]
+    [students, teacherProfile, allClasses]
   );
 
   const sendParentEmail = useCallback((draft, meta) => {
@@ -408,6 +744,52 @@ export function AppProvider({ children }) {
   const resetMaterials = useCallback(() => setUnits(clone(SEED_UNITS)), []);
 
   // ===========================================================================
+  //  TEACHER PROFILE  (teacher-configurable, localStorage-persisted)
+  // ===========================================================================
+  const updateTeacherProfile = useCallback((patch) => {
+    setTeacherProfile((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const updateClassroomDesign = useCallback((patch) => {
+    setClassroomDesign((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const updateQuickLinks = useCallback((links) => setQuickLinks(links), []);
+
+  // ===========================================================================
+  //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
+  // ===========================================================================
+  const updateMoleMilestone = useCallback((val) => {
+    const n = Math.max(1, Math.round(Number(val) || 1));
+    setMoleEconomy((prev) => ({ ...prev, milestone: n }));
+  }, []);
+
+  const addShopItem = useCallback((item) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: [...prev.shopItems, { id: nextId('shop'), icon: 'sparkles', ...item }],
+    }));
+  }, []);
+
+  const updateShopItem = useCallback((id, patch) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: prev.shopItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+    }));
+  }, []);
+
+  const removeShopItem = useCallback((id) => {
+    setMoleEconomy((prev) => ({
+      ...prev,
+      shopItems: prev.shopItems.filter((i) => i.id !== id),
+    }));
+  }, []);
+
+  const resetMoleEconomy = useCallback(() => {
+    setMoleEconomy({ milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) });
+  }, []);
+
+  // ===========================================================================
   //  DASHBOARD LAYOUT SCHEMA (req #6 — dynamic widget configuration)
   // ===========================================================================
   const toggleWidget = useCallback((widgetId) => {
@@ -442,10 +824,26 @@ export function AppProvider({ children }) {
 
   // ---- Context value --------------------------------------------------------
   const value = {
-    MOCK_MODE,
-    classes: CLASSES,
+    MOCK_MODE: !liveMode,
+    liveMode,
+    studentNotFound,    // true if student logged in but has no classroom profile yet
+    teacherLoading,
+    studentLoading,
+    myAssignments,
+    myGrades,
+    myGradeProfile,
+    classes: allClasses,
+    managedClasses,
     behaviorScenarios: BEHAVIOR_SCENARIOS,
-    moleMilestone: MOLE_MILESTONE,
+    moleMilestone: moleEconomy.milestone,
+    shopItems: moleEconomy.shopItems,
+
+    teacherProfile,
+    updateTeacherProfile,
+    classroomDesign,
+    updateClassroomDesign,
+    currencyName: teacherProfile.currencyName || 'Mole Dollar',
+    currencySymbol: teacherProfile.currencySymbol || 'MD',
 
     role,
     setRole,
@@ -488,10 +886,27 @@ export function AppProvider({ children }) {
     generateEmailDraft,
     sendParentEmail,
 
+    updateMoleMilestone,
+    addShopItem,
+    updateShopItem,
+    removeShopItem,
+    resetMoleEconomy,
+
     toggleWidget,
     moveWidget,
     cycleWidgetSpan,
     resetLayout,
+
+    bulkProvisionStudents: teacherActions?.bulkProvisionStudents || (() => Promise.resolve({ added: 0, skipped: 0 })),
+    addClass:    teacherActions?.addClass    || (() => Promise.resolve(null)),
+    updateClass: teacherActions?.updateClass || (() => Promise.resolve()),
+    deleteClass: teacherActions?.deleteClass || (() => Promise.resolve()),
+
+    quickLinks,
+    updateQuickLinks,
+
+    moleGradeCredits,
+    currentGradingPeriod: teacherProfile.currentGradingPeriod || 1,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

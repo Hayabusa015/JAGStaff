@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { GOLD } from "../constants.js";
 import { useStudents } from "../supabase.js";
 import ClassroomSyncModal from "./ClassroomSyncModal.jsx";
 

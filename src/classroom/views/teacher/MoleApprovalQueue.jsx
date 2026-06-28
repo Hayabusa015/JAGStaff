@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { Coins, Check, X, Bell, Trophy, History } from 'lucide-react';
+import { useState } from 'react';
+import { Coins, Check, X, Bell, Trophy, History, Settings2 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import Badge, { StatusBadge } from '../../components/Badge.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
 import { timeAgo } from '../../utils/format.js';
+import MoleEconSettings from './MoleEconSettings.jsx';
 
 export default function MoleApprovalQueue({ embedded = false }) {
-  const { moleRequests, approveMoleRequest, denyMoleRequest, getStudent, getClass, getTheme, metrics } =
+  const { moleRequests, approveMoleRequest, denyMoleRequest, getStudent, getClass, getTheme, metrics, currencyName, currencySymbol } =
     useApp();
   const [denyingId, setDenyingId] = useState(null);
   const [denyNote, setDenyNote] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   const pending = moleRequests
     .filter((r) => r.status === 'pending')
@@ -49,7 +51,7 @@ export default function MoleApprovalQueue({ embedded = false }) {
             </div>
           </div>
           <Badge tone="gold" icon={Coins}>
-            {r.cost} MD
+            {r.cost} {currencySymbol}
           </Badge>
         </div>
         <p className="mt-3 text-sm text-zinc-200">
@@ -105,7 +107,7 @@ export default function MoleApprovalQueue({ embedded = false }) {
     <Card>
       <CardHeader
         title="Redemption Requests"
-        subtitle="Approve or deny incoming Mole Dollar spends"
+        subtitle={`Approve or deny incoming ${currencyName} spends`}
         icon={Bell}
         action={
           pending.length > 0 ? (
@@ -117,7 +119,7 @@ export default function MoleApprovalQueue({ embedded = false }) {
       />
       <div className="space-y-3 p-5">
         {pending.length === 0 ? (
-          <EmptyState icon={Bell} title="No pending requests" subtitle="New Mole Dollar redemptions appear here in real time." />
+          <EmptyState icon={Bell} title="No pending requests" subtitle={`New ${currencyName} redemptions appear here in real time.`} />
         ) : (
           pending.map((r) => <RequestCard key={r.id} r={r} />)
         )}
@@ -137,7 +139,7 @@ export default function MoleApprovalQueue({ embedded = false }) {
               <Trophy className="h-6 w-6 text-gold-400" />
             </div>
             <div>
-              <p className="font-display text-2xl font-bold text-zinc-50">{metrics.approvedMoleDollars} MD</p>
+              <p className="font-display text-2xl font-bold text-zinc-50">{metrics.approvedMoleDollars} {currencySymbol}</p>
               <p className="text-xs text-zinc-500">total approved & cashed into the Vault</p>
             </div>
           </div>
@@ -146,9 +148,21 @@ export default function MoleApprovalQueue({ embedded = false }) {
               <p className="font-display text-xl font-bold text-gold-300">{pending.length}</p>
               <p className="text-[10px] uppercase tracking-wider text-zinc-500">Pending</p>
             </div>
+            <button
+              onClick={() => setShowSettings((s) => !s)}
+              className={`font-display flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-wide transition-all ${
+                showSettings
+                  ? 'border-gold-500/40 bg-gold-500/15 text-gold-300'
+                  : 'border-white/10 text-zinc-300 hover:border-white/20'
+              }`}
+            >
+              <Settings2 className="h-4 w-4" /> Economy Settings
+            </button>
           </div>
         </div>
       </Card>
+
+      {showSettings && <MoleEconSettings />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {queue}
@@ -169,7 +183,7 @@ export default function MoleApprovalQueue({ embedded = false }) {
                         {student?.name} · {r.item}
                       </p>
                       <p className="text-[11px] text-zinc-500">
-                        {r.cost} MD · {timeAgo(r.createdAt)}
+                        {r.cost} {currencySymbol} · {timeAgo(r.createdAt)}
                       </p>
                       {r.status === 'denied' && r.note && (
                         <p className="text-[11px] italic text-red-300/80">“{r.note}”</p>

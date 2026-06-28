@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { Lock } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
-import { useAuth, useStudents, SUPABASE_READY, isStaffEmail } from "./supabase.js";
+import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
+import StaffMessaging from "./components/StaffMessaging.jsx";
 import AdminSettings from "./components/AdminSettings.jsx";
-import GmenEnrollmentView from "./components/GmenEnrollmentView.jsx";
+import StudentClassroomPortal from "./components/StudentClassroomPortal.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import WeeklyEvents from "./components/WeeklyEvents.jsx";
 import TripRoster from "./components/TripRoster.jsx";
@@ -17,6 +19,7 @@ import Infractions from "./components/Infractions.jsx";
 // Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
 import { AppProvider as ClassroomProvider } from "./classroom/ClassroomContext.jsx";
 import ClassroomApp from "./classroom/ClassroomApp.jsx";
+import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -26,6 +29,7 @@ const TABS = [
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
   { key: "resources",   label: "Teacher Resources"},
+  { key: "messages",    label: "Messages"          },
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
 
@@ -51,11 +55,11 @@ function SchoolLogo({ size = 42 }) {
   );
 }
 
-function ZoneToggle({ zone, setZone }) {
-  const opts = [
-    { key: "school",    label: "School" },
-    { key: "classroom", label: "My Classroom" },
-  ];
+// When VITE_CLASSROOM_OWNER_EMAIL is set, only that address can access the Classroom zone.
+// Leave it unset (or empty) to allow all staff in — useful during dev / initial rollout.
+const CLASSROOM_OWNER_EMAIL = import.meta.env.VITE_CLASSROOM_OWNER_EMAIL || "";
+
+function ZoneToggle({ zone, setZone, isClassroomOwner }) {
   return (
     <div
       role="tablist"
@@ -69,34 +73,59 @@ function ZoneToggle({ zone, setZone }) {
         border: `1px solid ${GOLD}33`,
       }}
     >
-      {opts.map(o => {
-        const active = zone === o.key;
-        return (
-          <button
-            key={o.key}
-            role="tab"
-            aria-selected={active}
-            onClick={() => setZone(o.key)}
-            style={{
-              padding: "0.3rem 0.85rem",
-              borderRadius: 999,
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s",
-              background: active ? GOLD : "transparent",
-              color: active ? "#0a0700" : "rgba(255,255,255,0.6)",
-              boxShadow: active ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
+      {/* School tab */}
+      <button
+        role="tab"
+        aria-selected={zone === "school"}
+        onClick={() => setZone("school")}
+        style={{
+          padding: "0.3rem 0.85rem",
+          borderRadius: 999,
+          border: "none",
+          cursor: "pointer",
+          fontSize: "0.68rem",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          transition: "all 0.15s",
+          background: zone === "school" ? GOLD : "transparent",
+          color: zone === "school" ? "#0a0700" : "rgba(255,255,255,0.6)",
+          boxShadow: zone === "school" ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
+        }}
+      >
+        School
+      </button>
+
+      {/* Classroom tab — locked for non-owners */}
+      <button
+        role="tab"
+        aria-selected={zone === "classroom"}
+        onClick={() => setZone("classroom")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.35rem",
+          padding: "0.3rem 0.85rem",
+          borderRadius: 999,
+          border: "none",
+          cursor: isClassroomOwner ? "pointer" : "default",
+          fontSize: "0.68rem",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          transition: "all 0.15s",
+          background: zone === "classroom" ? (isClassroomOwner ? GOLD : "rgba(255,255,255,0.07)") : "transparent",
+          color: zone === "classroom"
+            ? (isClassroomOwner ? "#0a0700" : "rgba(255,255,255,0.45)")
+            : (isClassroomOwner ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"),
+          boxShadow: zone === "classroom" && isClassroomOwner ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
+        }}
+      >
+        {!isClassroomOwner && <Lock style={{ width: 10, height: 10, flexShrink: 0 }} />}
+        My Classroom
+      </button>
     </div>
   );
 }
@@ -104,33 +133,57 @@ function ZoneToggle({ zone, setZone }) {
 function LoginScreen({ signInWithGoogle, loading, error }) {
   return (
     <div className="login-bg">
-      <div className="login-mascot" aria-hidden="true" />
-      <div className="login-card">
+      {/* Breathing background orbs */}
+      <div className="login-orb login-orb-1" aria-hidden="true" />
+      <div className="login-orb login-orb-2" aria-hidden="true" />
+      <div className="login-orb login-orb-3" aria-hidden="true" />
 
+      <div className="login-mascot" aria-hidden="true" />
+
+      <div className="login-card">
+        {/* Logo with pulse ring */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
-          <SchoolLogo size={84} />
+          <div className="login-logo">
+            <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
         </div>
 
-        <h1 style={{
-          fontSize: "1.5rem", fontWeight: 900, letterSpacing: "0.1em",
-          color: GOLD, marginBottom: "0.2rem", textTransform: "uppercase",
+        <h1 className="login-enter-1" style={{
+          fontSize: "2rem", fontWeight: 900, letterSpacing: "0.1em",
+          color: GOLD, marginBottom: "0.45rem", textTransform: "uppercase",
         }}>
           James A. Garfield
         </h1>
-        <p style={{
-          color: "rgba(240,234,216,0.45)", fontSize: "0.72rem",
-          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.75rem",
+
+        {/* Gold divider */}
+        <div className="login-enter-1" style={{
+          height: 1,
+          background: "linear-gradient(90deg, transparent, rgba(245,192,37,0.3), transparent)",
+          margin: "0 auto 0.6rem",
+          width: "65%",
+        }} />
+
+        <p className="login-enter-2" style={{
+          color: "rgba(240,234,216,0.5)", fontSize: "0.72rem",
+          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.25rem",
         }}>
-          Staff Portal
+          G-Men Portal
         </p>
-        <div style={{
+        <p className="login-enter-2" style={{
+          color: "rgba(255,255,255,0.2)", fontSize: "0.58rem",
+          letterSpacing: "0.22em", textTransform: "uppercase", marginBottom: "0.7rem",
+        }}>
+          powered by G-MEN COMMAND
+        </p>
+
+        <div className="login-enter-3" style={{
           display: "inline-block",
           border: "1px solid rgba(245,192,37,0.25)",
           borderRadius: "999px", padding: "0.22rem 0.9rem",
           fontSize: "0.65rem", color: "rgba(245,192,37,0.5)",
           letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2.25rem",
         }}>
-          Internal Staff Access Only
+          Students &amp; Staff
         </div>
 
         {error && (
@@ -144,29 +197,31 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
         )}
 
         {SUPABASE_READY ? (
-          <button
-            className="btn w-full"
-            style={{
-              justifyContent: "center", gap: "0.75rem",
-              background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-              color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
-              padding: "0.9rem 1rem", borderRadius: "10px",
-              boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
-              opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
-            }}
-            onClick={signInWithGoogle}
-            disabled={loading}
-          >
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
-              <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
-              <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
-            </svg>
-            {loading ? "Signing in…" : "Sign in with School Google Account"}
-          </button>
+          <div className="login-btn-shimmer login-enter-4">
+            <button
+              className="btn w-full"
+              style={{
+                justifyContent: "center", gap: "0.75rem",
+                background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
+                color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
+                padding: "0.9rem 1rem", borderRadius: "10px",
+                boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
+                opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
+              }}
+              onClick={signInWithGoogle}
+              disabled={loading}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
+                <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
+                <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
+              </svg>
+              {loading ? "Signing in…" : "Sign in with School Google Account"}
+            </button>
+          </div>
         ) : (
-          <div style={{
+          <div className="login-enter-4" style={{
             background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
             borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem",
             color: "rgba(245,192,37,0.8)", textAlign: "left",
@@ -177,8 +232,8 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           </div>
         )}
 
-        <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
-          Only <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> accounts are permitted.<br />
+        <p className="login-enter-5" style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
+          Use your <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> school Google account.<br />
           Sessions expire after 7 hours of inactivity.
         </p>
       </div>
@@ -193,12 +248,14 @@ export default function App() {
 
   useEffect(() => {
     if (!user) { setIsStaff(null); setIsAdmin(false); return; }
-    isStaffEmail(user.email).then(({ isStaff, isAdmin }) => {
-      setIsStaff(isStaff);
-      setIsAdmin(isAdmin);
+    isStaffEmail(user.email).then(({ isStaff: staff, isAdmin: admin }) => {
+      setIsStaff(staff);
+      setIsAdmin(admin);
+      if (staff && !tourDone(user.email)) setShowTour(true);
     });
   }, [user]);
 
+  const [showTour, setShowTour] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
   // Top-level zone: building-wide "school" vs the teacher's own "classroom".
@@ -210,20 +267,11 @@ export default function App() {
     try { localStorage.setItem("jag-zone", z); } catch { /* ignore */ }
   }, []);
   const { students } = useStudents();
-  const [weeklyEvents, setWeeklyEvents] = useState([
-    { id: "ev1", type: "Fire Drill", title: "Scheduled Fire Drill", date: "2026-06-03", time: "10:15", details: "All teachers escort students to designated areas." },
-    { id: "ev2", type: "State Test", title: "ELA State Assessment", date: "2026-06-04", time: "08:00", details: "Grades 10 & 11 — quiet corridors after 7:55 AM." },
-    { id: "ev3", type: "Field Trip", title: "Varsity Golf @ Pine Hills", date: "2026-06-05", time: "13:30", details: "Coach Davis. Students leave 1:30 PM." },
-  ]);
-  const [tripRosters, setTripRosters] = useState([
-    {
-      id: "tr1", type: "Athletic Event", title: "Varsity Golf @ Pine Hills",
-      teacher: "Coach Davis", date: "2026-06-05", depart: "13:30", returnTime: "17:30",
-      notes: "Transportation provided.",
-      students: [{ name: "Marcus Thompson", grade: "10" }, { name: "Jordan Garcia", grade: "10" }],
-    },
-  ]);
+  const { events: weeklyEvents, addEvent, removeEvent } = useWeeklyEvents();
+  const { rosters: tripRosters, addRoster, removeRoster } = useTripRosters();
   const [alerts, setAlerts] = useState([]);
+  const { staffList } = useAdminStaff();
+  const messaging = useStaffMessaging(user?.email);
 
   const resetTimer = useCallback(() => {
     clearTimeout(window._jagTimeout);
@@ -264,13 +312,23 @@ export default function App() {
     </div>
   );
 
-  // Non-staff @jagschools.org account → student enrollment view
-  if (isStaff === false) return <GmenEnrollmentView user={user} signOut={signOut} />;
+  // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
+  if (isStaff === false) return <StudentClassroomPortal user={user} signOut={signOut} />;
 
-  const sharedProps = { user, students, weeklyEvents, setWeeklyEvents, tripRosters, setTripRosters, alerts, setAlerts };
+  const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email.toLowerCase() === CLASSROOM_OWNER_EMAIL.toLowerCase();
+
+  const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
   return (
     <div className="app-shell app-backdrop">
+      {showTour && (
+        <StaffWelcomeTour
+          userEmail={user.email}
+          onClose={() => setShowTour(false)}
+          onGoToClassroom={() => { setZone("classroom"); setShowTour(false); }}
+        />
+      )}
+
       {/* Top nav — two rows */}
       <nav className="top-nav">
         {/* Row 1: brand + zone toggle + user */}
@@ -283,7 +341,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ marginLeft: "1rem" }}>
-            <ZoneToggle zone={zone} setZone={setZone} />
+            <ZoneToggle zone={zone} setZone={setZone} isClassroomOwner={isClassroomOwner} />
           </div>
           <div className="nav-user">
             {user.avatarUrl && (
@@ -304,16 +362,42 @@ export default function App() {
                 onClick={() => setTab(t.key)}
               >
                 {t.label}
+                {t.key === "messages" && messaging.totalUnread > 0 && (
+                  <span style={{
+                    marginLeft: 5, background: GOLD, color: "#000",
+                    borderRadius: "50%", minWidth: 17, height: 17,
+                    fontSize: "0.65rem", fontWeight: 800,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 3px", verticalAlign: "middle",
+                  }}>{messaging.totalUnread > 99 ? "99+" : messaging.totalUnread}</span>
+                )}
               </button>
             ))}
           </div>
         )}
       </nav>
 
-      {zone === "classroom" ? (
-        <ClassroomProvider>
+      {zone === "classroom" && isClassroomOwner ? (
+        <ClassroomProvider user={user} isStaff={true}>
           <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
         </ClassroomProvider>
+      ) : zone === "classroom" ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+          <div style={{
+            textAlign: "center", maxWidth: 400,
+            background: "rgba(255,255,255,0.03)",
+            border: `1px solid ${GOLD}22`,
+            borderRadius: 20, padding: "3rem 2.5rem",
+          }}>
+            <Lock style={{ width: 44, height: 44, color: `${GOLD}55`, margin: "0 auto 1.25rem" }} />
+            <h2 style={{ color: GOLD, fontWeight: 900, fontSize: "1.05rem", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              My Classroom
+            </h2>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.65 }}>
+              This zone is currently set up for one teacher. It'll open up to the rest of the staff when it's ready.
+            </p>
+          </div>
+        </div>
       ) : (
       /* Page content */
       <div className="content-area">
@@ -331,12 +415,13 @@ export default function App() {
 
         <div key={tab} className="page-enter">
         {tab === "dashboard"   && <Dashboard   {...sharedProps} />}
-        {tab === "events"      && <WeeklyEvents {...sharedProps} />}
-        {tab === "trips"       && <TripRoster   {...sharedProps} />}
+        {tab === "events"      && <WeeklyEvents weeklyEvents={weeklyEvents} addEvent={addEvent} removeEvent={removeEvent} />}
+        {tab === "trips"       && <TripRoster   tripRosters={tripRosters} addRoster={addRoster} removeRoster={removeRoster} students={students} />}
         {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} isAdmin={isAdmin} />}
         {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
+        {tab === "messages"    && <StaffMessaging user={user} staffList={staffList} {...messaging} />}
 
         {tab === "resources" && (
           <>

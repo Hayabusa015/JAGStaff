@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -24,7 +24,7 @@ const STEPS = [
 ];
 
 export default function WelcomeWizard() {
-  const { activeStudent, getClass, completeWizard } = useApp();
+  const { activeStudent, getClass, completeWizard, teacherProfile } = useApp();
   const cls = getClass(activeStudent.classId);
 
   const [step, setStep] = useState(1);
@@ -66,7 +66,7 @@ export default function WelcomeWizard() {
             <img src="/gmen-logo.png" alt="G-MEN" className="h-[4.5rem] w-[4.5rem] object-contain" />
           </div>
           <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-gold-500">
-            G-MEN · Shull Science
+            G-MEN · {teacherProfile.classroom}
           </p>
           <h1 className="font-display mt-1 text-3xl font-bold uppercase tracking-wide text-zinc-50 sm:text-4xl">
             Welcome to {cls?.name}
@@ -83,7 +83,7 @@ export default function WelcomeWizard() {
             const done = s.id < step;
             const active = s.id === step;
             return (
-              <React.Fragment key={s.id}>
+              <Fragment key={s.id}>
                 <div className="flex flex-col items-center gap-1.5">
                   <div
                     className={[
@@ -112,7 +112,7 @@ export default function WelcomeWizard() {
                     }`}
                   />
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>
@@ -138,7 +138,7 @@ export default function WelcomeWizard() {
               setShowPw={setShowPw}
             />
           )}
-          {step === 4 && <StepGuardian guardian={guardian} setGuardian={setGuardian} />}
+          {step === 4 && <StepGuardian guardian={guardian} setGuardian={setGuardian} teacherName={teacherProfile.name} />}
         </div>
 
         {/* Footer nav */}
@@ -298,13 +298,13 @@ function StepGizmo({ gizmo, setGizmo, showPw, setShowPw }) {
 }
 
 // --- Step 4: Guardian Contact Intake -----------------------------------------
-function StepGuardian({ guardian, setGuardian }) {
+function StepGuardian({ guardian, setGuardian, teacherName }) {
   return (
     <div className="space-y-4">
       <StepHeading
         icon={Users}
         title="Guardian Contact Intake"
-        subtitle="So Mr. Shull can share great news (and the occasional heads-up) with your family."
+        subtitle={`So ${teacherName} can share great news (and the occasional heads-up) with your family.`}
       />
       <Field
         label="Parent / Guardian Full Name"

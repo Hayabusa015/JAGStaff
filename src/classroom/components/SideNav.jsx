@@ -1,6 +1,6 @@
-import React from 'react';
 import {
   LayoutDashboard,
+  GraduationCap,
   Coins,
   LifeBuoy,
   Mail,
@@ -8,23 +8,14 @@ import {
   Library,
   BookOpenCheck,
   Sparkles,
+  Settings2,
   X,
 } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 
-const TEACHER_NAV = [
-  { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
-  { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
-  { id: 'aigrader', label: 'AI Grader', icon: Sparkles },
-  { id: 'materials', label: 'Class Materials', icon: Library },
-  { id: 'mole', label: 'Mole Dollar Vault', icon: Coins },
-  { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
-  { id: 'mailer', label: 'Parent Mailer', icon: Mail },
-  { id: 'lessons', label: 'Lesson Plans', icon: CalendarRange },
-];
-
 const STUDENT_NAV = [
   { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+  { id: 'grades',    label: 'My Grades',    icon: GraduationCap },
   { id: 'materials', label: 'Materials', icon: Library },
   { id: 'mole', label: 'Cash-In Shop', icon: Coins },
   { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
@@ -32,8 +23,19 @@ const STUDENT_NAV = [
 ];
 
 export default function SideNav({ open, onClose }) {
-  const { role, activeView, setActiveView } = useApp();
-  const nav = role === 'teacher' ? TEACHER_NAV : STUDENT_NAV;
+  const { role, activeView, setActiveView, teacherProfile, currencyName } = useApp();
+  const teacherNav = [
+    { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
+    { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
+    { id: 'aigrader', label: 'AI Grader', icon: Sparkles },
+    { id: 'materials', label: 'Class Materials', icon: Library },
+    { id: 'mole', label: `${currencyName} Vault`, icon: Coins },
+    { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
+    { id: 'mailer', label: 'Parent Mailer', icon: Mail },
+    { id: 'lessons', label: 'Lesson Plans', icon: CalendarRange },
+    { id: 'settings', label: 'Settings', icon: Settings2 },
+  ];
+  const nav = role === 'teacher' ? teacherNav : STUDENT_NAV;
 
   const go = (id) => {
     setActiveView(id);
@@ -63,10 +65,10 @@ export default function SideNav({ open, onClose }) {
             </div>
             <div className="leading-tight">
               <p className="font-display text-lg font-bold uppercase tracking-wide text-zinc-50">
-                Shull Science
+                {teacherProfile.classroom}
               </p>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold-500">
-                G-MEN Command
+                {teacherProfile.tagline}
               </p>
             </div>
           </div>

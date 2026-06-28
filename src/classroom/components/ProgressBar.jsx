@@ -1,4 +1,3 @@
-import React from 'react';
 
 // Gamified gold progress bar.
 export default function ProgressBar({
