@@ -131,26 +131,50 @@ function ZoneToggle({ zone, setZone, isClassroomOwner }) {
 function LoginScreen({ signInWithGoogle, loading, error }) {
   return (
     <div className="login-bg">
-      <div className="login-mascot" aria-hidden="true" />
-      <div className="login-card">
+      {/* Breathing background orbs */}
+      <div className="login-orb login-orb-1" aria-hidden="true" />
+      <div className="login-orb login-orb-2" aria-hidden="true" />
+      <div className="login-orb login-orb-3" aria-hidden="true" />
 
+      <div className="login-mascot" aria-hidden="true" />
+
+      <div className="login-card">
+        {/* Logo with pulse ring */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
-          <SchoolLogo size={84} />
+          <div className="login-logo">
+            <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
         </div>
 
-        <h1 style={{
-          fontSize: "1.5rem", fontWeight: 900, letterSpacing: "0.1em",
-          color: GOLD, marginBottom: "0.2rem", textTransform: "uppercase",
+        <h1 className="login-enter-1" style={{
+          fontSize: "2rem", fontWeight: 900, letterSpacing: "0.1em",
+          color: GOLD, marginBottom: "0.45rem", textTransform: "uppercase",
         }}>
           James A. Garfield
         </h1>
-        <p style={{
-          color: "rgba(240,234,216,0.45)", fontSize: "0.72rem",
-          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.75rem",
+
+        {/* Gold divider */}
+        <div className="login-enter-1" style={{
+          height: 1,
+          background: "linear-gradient(90deg, transparent, rgba(245,192,37,0.3), transparent)",
+          margin: "0 auto 0.6rem",
+          width: "65%",
+        }} />
+
+        <p className="login-enter-2" style={{
+          color: "rgba(240,234,216,0.5)", fontSize: "0.72rem",
+          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.25rem",
         }}>
           G-Men Portal
         </p>
-        <div style={{
+        <p className="login-enter-2" style={{
+          color: "rgba(255,255,255,0.2)", fontSize: "0.58rem",
+          letterSpacing: "0.22em", textTransform: "uppercase", marginBottom: "0.7rem",
+        }}>
+          powered by G-MEN COMMAND
+        </p>
+
+        <div className="login-enter-3" style={{
           display: "inline-block",
           border: "1px solid rgba(245,192,37,0.25)",
           borderRadius: "999px", padding: "0.22rem 0.9rem",
@@ -171,29 +195,31 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
         )}
 
         {SUPABASE_READY ? (
-          <button
-            className="btn w-full"
-            style={{
-              justifyContent: "center", gap: "0.75rem",
-              background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-              color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
-              padding: "0.9rem 1rem", borderRadius: "10px",
-              boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
-              opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
-            }}
-            onClick={signInWithGoogle}
-            disabled={loading}
-          >
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
-              <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
-              <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
-            </svg>
-            {loading ? "Signing in…" : "Sign in with School Google Account"}
-          </button>
+          <div className="login-btn-shimmer login-enter-4">
+            <button
+              className="btn w-full"
+              style={{
+                justifyContent: "center", gap: "0.75rem",
+                background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
+                color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
+                padding: "0.9rem 1rem", borderRadius: "10px",
+                boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
+                opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
+              }}
+              onClick={signInWithGoogle}
+              disabled={loading}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
+                <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
+                <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
+              </svg>
+              {loading ? "Signing in…" : "Sign in with School Google Account"}
+            </button>
+          </div>
         ) : (
-          <div style={{
+          <div className="login-enter-4" style={{
             background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
             borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem",
             color: "rgba(245,192,37,0.8)", textAlign: "left",
@@ -204,7 +230,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
           </div>
         )}
 
-        <p style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
+        <p className="login-enter-5" style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
           Use your <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> school Google account.<br />
           Sessions expire after 7 hours of inactivity.
         </p>
