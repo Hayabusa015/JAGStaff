@@ -885,6 +885,12 @@ function daySchedule(schedules) {
     : (schedules?.mf || []);
 }
 
+// Which schedule key is active today: "twt" (Tue/Wed/Thu) or "mf" (Mon/Fri)
+export function todayScheduleKey() {
+  const dow = new Date().getDay();
+  return (dow === 2 || dow === 3 || dow === 4) ? "twt" : "mf";
+}
+
 // Pure helper: which period (if any) contains the given time?
 export function periodForTime(periods, at = new Date()) {
   if (!periods?.length) return null;

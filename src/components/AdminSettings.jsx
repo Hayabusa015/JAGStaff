@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GOLD, ALLOWED_DOMAIN, SESSION_TIMEOUT_MS } from "../constants.js";
-import { useAdminStaff, useBellSchedule } from "../supabase.js";
+import { useAdminStaff, useBellSchedule, todayScheduleKey } from "../supabase.js";
 
 function fmt12(hhmm) {
   if (!hhmm || !hhmm.includes(":")) return "—";
@@ -145,14 +145,28 @@ export default function AdminSettings({ user }) {
         </div>
         {/* Schedule type tabs */}
         <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.85rem" }}>
-          {[{ key: "twt", label: "Tue / Wed / Thu  (G-Men)" }, { key: "mf", label: "Mon / Fri" }].map(t => (
-            <button key={t.key} onClick={() => { cancelEdit(); setSchedTab(t.key); }} style={{
-              background: schedTab === t.key ? GOLD : "rgba(255,255,255,0.06)",
-              border: schedTab === t.key ? "none" : "1px solid rgba(255,255,255,0.12)",
-              color: schedTab === t.key ? "#000" : "rgba(255,255,255,0.55)",
-              borderRadius: 6, padding: "0.3rem 0.85rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem",
-            }}>{t.label}</button>
-          ))}
+          {[{ key: "twt", label: "Tue / Wed / Thu  (G-Men)" }, { key: "mf", label: "Mon / Fri" }].map(t => {
+            const isToday = todayScheduleKey() === t.key;
+            return (
+              <button key={t.key} onClick={() => { cancelEdit(); setSchedTab(t.key); }} style={{
+                background: schedTab === t.key ? GOLD : "rgba(255,255,255,0.06)",
+                border: schedTab === t.key ? "none" : "1px solid rgba(255,255,255,0.12)",
+                color: schedTab === t.key ? "#000" : "rgba(255,255,255,0.55)",
+                borderRadius: 6, padding: "0.3rem 0.85rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem",
+                display: "flex", alignItems: "center", gap: "0.4rem",
+              }}>
+                {t.label}
+                {isToday && (
+                  <span style={{
+                    fontSize: "0.6rem", fontWeight: 800, letterSpacing: "0.06em",
+                    background: schedTab === t.key ? "rgba(0,0,0,0.2)" : "rgba(245,192,37,0.15)",
+                    color: schedTab === t.key ? "#000" : GOLD,
+                    borderRadius: 3, padding: "0.05rem 0.35rem",
+                  }}>TODAY</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {!editing && rows.length === 0 && (

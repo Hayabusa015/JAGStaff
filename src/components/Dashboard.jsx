@@ -1,12 +1,92 @@
 import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo } from "../supabase.js";
+import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo, todayScheduleKey } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 }
 function fmtTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+function toMin(hhmm) {
+  if (!hhmm || !hhmm.includes(":")) return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+function fmt12(hhmm) {
+  if (!hhmm || !hhmm.includes(":")) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  const ap = h >= 12 ? "PM" : "AM";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
+function TodaySchedule({ periods }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const dow = new Date().getDay();
+  const key = todayScheduleKey();
+  const scheduleLabel = key === "twt" ? "Tue · Wed · Thu" : "Mon · Fri";
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  if (!periods?.length) return null;
+
+  return (
+    <div className="card mb2" style={{ padding: "0.75rem 1rem" }}>
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          width: "100%", background: "none", border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.4)" }}>
+            Today's Bell Schedule
+          </span>
+          <span style={{
+            fontSize: "0.65rem", fontWeight: 700, color: GOLD,
+            background: "rgba(245,192,37,0.12)", border: "1px solid rgba(245,192,37,0.3)",
+            borderRadius: 4, padding: "0.1rem 0.45rem", letterSpacing: "0.06em",
+          }}>{scheduleLabel}</span>
+        </div>
+        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.72rem" }}>{collapsed ? "▼" : "▲"}</span>
+      </button>
+
+      {!collapsed && (
+        <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {periods.map((p, i) => {
+            const start = toMin(p.start);
+            const end = toMin(p.end);
+            const isCurrent = start != null && end != null && nowMins >= start && nowMins < end;
+            const isPast = end != null && nowMins >= end;
+            const isGmen = /g-?men/i.test(p.name);
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "0.28rem 0.5rem",
+                borderRadius: 6,
+                borderLeft: isCurrent ? `3px solid ${GOLD}` : "3px solid transparent",
+                background: isCurrent ? "rgba(245,192,37,0.07)" : "transparent",
+                opacity: isPast ? 0.38 : 1,
+              }}>
+                <span style={{
+                  fontSize: "0.82rem", fontWeight: isCurrent ? 700 : 500,
+                  color: isCurrent ? GOLD : isGmen ? "rgba(245,192,37,0.75)" : "rgba(255,255,255,0.8)",
+                }}>
+                  {p.name}{isCurrent ? " ◀ NOW" : ""}
+                </span>
+                <span style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.38)", fontVariantNumeric: "tabular-nums" }}>
+                  {fmt12(p.start)} – {fmt12(p.end)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DashTripCard({ trip }) {
@@ -218,6 +298,8 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
           </div>
         </div>
       </div>
+
+      <TodaySchedule periods={periodsToday} />
 
       <EventTicker events={weeklyEvents} tripRosters={tripRosters} />
 
