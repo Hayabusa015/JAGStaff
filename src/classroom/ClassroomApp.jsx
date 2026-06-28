@@ -17,6 +17,7 @@ import ClassroomSettings from './views/teacher/ClassroomSettings.jsx';
 
 // Student views
 import StudentDashboard from './views/student/StudentDashboard.jsx';
+import StudentGradesView from './views/student/StudentGradesView.jsx';
 import CashInShop from './views/student/CashInShop.jsx';
 import StudentHelpDesk from './views/student/StudentHelpDesk.jsx';
 import StudentLessonPlans from './views/student/StudentLessonPlans.jsx';
@@ -141,6 +142,8 @@ function ViewRouter({ role, view, user, students }) {
       return <CashInShop />;
     case 'helpdesk':
       return <StudentHelpDesk />;
+    case 'grades':
+      return <StudentGradesView />;
     case 'lessons':
       return <StudentLessonPlans />;
     default:
