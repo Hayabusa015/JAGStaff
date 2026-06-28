@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Lock } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
-import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail } from "./supabase.js";
+import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
+import StaffMessaging from "./components/StaffMessaging.jsx";
 import AdminSettings from "./components/AdminSettings.jsx";
 import StudentClassroomPortal from "./components/StudentClassroomPortal.jsx";
 import Dashboard from "./components/Dashboard.jsx";
@@ -28,6 +29,7 @@ const TABS = [
   { key: "hallpass",    label: "Hall Pass"        },
   { key: "infractions", label: "Infractions"      },
   { key: "resources",   label: "Teacher Resources"},
+  { key: "messages",    label: "Messages"          },
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
 
@@ -268,6 +270,8 @@ export default function App() {
   const { events: weeklyEvents, addEvent, removeEvent } = useWeeklyEvents();
   const { rosters: tripRosters, addRoster, removeRoster } = useTripRosters();
   const [alerts, setAlerts] = useState([]);
+  const { staffList } = useAdminStaff();
+  const messaging = useStaffMessaging(user?.email);
 
   const resetTimer = useCallback(() => {
     clearTimeout(window._jagTimeout);
@@ -358,6 +362,15 @@ export default function App() {
                 onClick={() => setTab(t.key)}
               >
                 {t.label}
+                {t.key === "messages" && messaging.totalUnread > 0 && (
+                  <span style={{
+                    marginLeft: 5, background: GOLD, color: "#000",
+                    borderRadius: "50%", minWidth: 17, height: 17,
+                    fontSize: "0.65rem", fontWeight: 800,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 3px", verticalAlign: "middle",
+                  }}>{messaging.totalUnread > 99 ? "99+" : messaging.totalUnread}</span>
+                )}
               </button>
             ))}
           </div>
@@ -408,6 +421,7 @@ export default function App() {
         {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && <Infractions  students={students} user={user} />}
+        {tab === "messages"    && <StaffMessaging user={user} staffList={staffList} {...messaging} />}
 
         {tab === "resources" && (
           <>

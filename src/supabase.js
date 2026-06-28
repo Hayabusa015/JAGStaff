@@ -1658,3 +1658,127 @@ export async function applyMoleBonus(teacherEmail, studentEmail, bonusPoints, gr
   else { await supabase.from('gradebook_grades').insert(row); }
   return { ok: true, totalPoints: newPts };
 }
+
+// ─── Staff Messaging ──────────────────────────────────────────────────────────
+export function useStaffMessaging(userEmail) {
+  const [conversations, setConversations] = useState([]);
+  const [messages, setMessages] = useState({});   // { convId: Message[] }
+  const [members, setMembers]   = useState({});   // { convId: MemberRow[] }
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !userEmail) return;
+    let active = true;
+
+    async function load() {
+      const { data: myMemberships } = await supabase
+        .from("staff_conversation_members").select("conversation_id").eq("user_email", userEmail);
+      if (!active) return;
+      if (!myMemberships?.length) { setConversations([]); setMessages({}); setMembers({}); return; }
+      const ids = myMemberships.map(r => r.conversation_id);
+
+      const [{ data: convRows }, { data: memberRows }, { data: msgRows }] = await Promise.all([
+        supabase.from("staff_conversations").select("*").in("id", ids),
+        supabase.from("staff_conversation_members").select("*").in("conversation_id", ids),
+        supabase.from("staff_messages")
+          .select("*, staff_message_attachments(*)")
+          .in("conversation_id", ids)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (!active) return;
+      setConversations(convRows || []);
+
+      const membMap = {};
+      (memberRows || []).forEach(m => { (membMap[m.conversation_id] ||= []).push(m); });
+      setMembers(membMap);
+
+      const msgMap = {};
+      (msgRows || []).forEach(m => { (msgMap[m.conversation_id] ||= []).push(m); });
+      setMessages(msgMap);
+    }
+
+    load();
+    const ch = supabase.channel("staff_messaging_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_messages" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_conversation_members" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_conversations" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, [userEmail]);
+
+  function findDM(otherEmail) {
+    for (const conv of conversations) {
+      if (conv.type !== "dm") continue;
+      const emails = (members[conv.id] || []).map(m => m.user_email);
+      if (emails.includes(userEmail) && emails.includes(otherEmail)) return conv.id;
+    }
+    return null;
+  }
+
+  async function openOrCreateDM(otherEmail) {
+    const existing = findDM(otherEmail);
+    if (existing) return existing;
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data: conv } = await supabase.from("staff_conversations")
+      .insert({ type: "dm", created_by: userEmail }).select().single();
+    if (!conv) return null;
+    await supabase.from("staff_conversation_members").insert([
+      { conversation_id: conv.id, user_email: userEmail },
+      { conversation_id: conv.id, user_email: otherEmail },
+    ]);
+    return conv.id;
+  }
+
+  async function createGroup(name, description, memberEmails) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data: conv } = await supabase.from("staff_conversations")
+      .insert({ type: "group", name, description, created_by: userEmail }).select().single();
+    if (!conv) return null;
+    const all = [...new Set([userEmail, ...memberEmails])];
+    await supabase.from("staff_conversation_members").insert(
+      all.map(email => ({ conversation_id: conv.id, user_email: email }))
+    );
+    return conv.id;
+  }
+
+  async function sendMessage(conversationId, body, isAlert = false) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const { data } = await supabase.from("staff_messages")
+      .insert({ conversation_id: conversationId, sender_email: userEmail, body, is_alert: isAlert })
+      .select().single();
+    return data;
+  }
+
+  async function uploadAttachment(messageId, file) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const ext = file.name.split(".").pop();
+    const path = `${messageId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("staff-attachments").upload(path, file);
+    if (error) return null;
+    const { data: { publicUrl } } = supabase.storage.from("staff-attachments").getPublicUrl(path);
+    await supabase.from("staff_message_attachments").insert({
+      message_id: messageId, file_name: file.name, file_url: publicUrl,
+      file_type: file.type, file_size: file.size,
+    });
+    return publicUrl;
+  }
+
+  async function markRead(conversationId) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("staff_conversation_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId).eq("user_email", userEmail);
+  }
+
+  function getUnread(conversationId) {
+    const me = (members[conversationId] || []).find(m => m.user_email === userEmail);
+    const since = me?.last_read_at;
+    return (messages[conversationId] || []).filter(m =>
+      m.sender_email !== userEmail && (!since || new Date(m.created_at) > new Date(since))
+    ).length;
+  }
+
+  const totalUnread = conversations.reduce((n, c) => n + getUnread(c.id), 0);
+
+  return { conversations, messages, members, openOrCreateDM, createGroup, sendMessage, uploadAttachment, markRead, getUnread, totalUnread };
+}
