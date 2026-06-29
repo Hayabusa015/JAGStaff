@@ -845,6 +845,7 @@ export function useGmenSettings() {
   }, []);
 
   async function setEnrollmentOpen(open, userEmail) {
+    setSettings(s => ({ ...s, enrollment_open: open }));
     if (!SUPABASE_READY || !supabase) return;
     await supabase.from("gmen_settings").update({
       enrollment_open: open, updated_at: new Date().toISOString(), updated_by: userEmail,
@@ -852,6 +853,7 @@ export function useGmenSettings() {
   }
 
   async function setActivePeriod(period, userEmail) {
+    setSettings(s => ({ ...s, active_period: period }));
     if (!SUPABASE_READY || !supabase) return;
     await supabase.from("gmen_settings").update({
       active_period: period, updated_at: new Date().toISOString(), updated_by: userEmail,
@@ -859,6 +861,7 @@ export function useGmenSettings() {
   }
 
   async function setPeriodEndDate(period, date, userEmail) {
+    setSettings(s => ({ ...s, [`period_${period}_end`]: date || null }));
     if (!SUPABASE_READY || !supabase) return;
     await supabase.from("gmen_settings").update({
       [`period_${period}_end`]: date || null,

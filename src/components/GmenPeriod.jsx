@@ -461,7 +461,35 @@ function RemediationDayView({ myStudents, gmenRequests }) {
   );
 }
 
+function EnrollmentLinkBox({ appUrl }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(appUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div style={{
+        flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8, padding: "0.5rem 0.85rem",
+        fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", fontFamily: "monospace",
+        wordBreak: "break-all", minWidth: 0,
+      }}>{appUrl}</div>
+      <button onClick={copy} style={{
+        background: copied ? "rgba(34,197,94,0.15)" : GOLD,
+        border: copied ? "1px solid rgba(34,197,94,0.4)" : "none",
+        color: copied ? "#22c55e" : "#000",
+        fontWeight: 700, borderRadius: 8, padding: "0.5rem 1.1rem",
+        cursor: "pointer", fontSize: "0.88rem", flexShrink: 0,
+        transition: "all 0.15s",
+      }}>{copied ? "✓ Copied!" : "Copy Link"}</button>
+    </div>
+  );
+}
+
 function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, user, students, isAdmin }) {
+  const [expandedClass, setExpandedClass] = useState(null);
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
   const [pushProgress, setPushProgress] = useState({ sent: 0, total: 0 });
@@ -661,6 +689,15 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Enrollment Link ──────────────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Enrollment Link</div>
+        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.85rem" }}>
+          Share this link with students. They sign in with their school Google account and pick a class.
+        </div>
+        <EnrollmentLinkBox appUrl={appUrl} />
       </div>
 
       {/* ── Push Signup to Students ──────────────────────────────────────── */}
@@ -897,29 +934,69 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {classes.filter(c => c.grading_period === period).map(cls => {
-              const seats = enrollments.filter(e => e.class_id === cls.id).length;
+              const classEnrollments = enrollments.filter(e => e.class_id === cls.id);
+              const seats = classEnrollments.length;
               const pct = Math.min(100, Math.round((seats / cls.max_seats) * 100));
+              const isExpanded = expandedClass === cls.id;
               return (
                 <div key={cls.id} style={{
-                  display: "flex", alignItems: "center", gap: "1rem",
-                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
-                  borderRadius: 8, padding: "0.65rem 1rem",
+                  background: "rgba(255,255,255,0.03)", border: `1px solid ${isExpanded ? "rgba(245,192,37,0.25)" : "rgba(255,255,255,0.07)"}`,
+                  borderRadius: 8, overflow: "hidden",
+                  transition: "border-color 0.15s",
                 }}>
-                  <div style={{ flexGrow: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>{cls.class_name}</div>
-                    <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>{cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""}</div>
-                  </div>
-                  <div style={{ width: 100 }}>
-                    <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", textAlign: "right", marginBottom: 3 }}>{seats}/{cls.max_seats}</div>
-                    <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
-                      <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: pct >= 100 ? "#ef4444" : GOLD }} />
+                  <button
+                    onClick={() => setExpandedClass(isExpanded ? null : cls.id)}
+                    style={{
+                      width: "100%", background: "none", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "1rem",
+                      padding: "0.65rem 1rem", textAlign: "left",
+                    }}
+                  >
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.92rem", color: "#fff" }}>{cls.class_name}</div>
+                      <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>{cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""}</div>
                     </div>
-                  </div>
-                  <div style={{
-                    fontSize: "0.72rem", fontWeight: 700,
-                    color: cls.is_open ? "#22c55e" : "rgba(255,255,255,0.3)",
-                    minWidth: 45, textAlign: "right",
-                  }}>{cls.is_open ? "Open" : "Closed"}</div>
+                    <div style={{ width: 100 }}>
+                      <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.35)", textAlign: "right", marginBottom: 3 }}>{seats}/{cls.max_seats}</div>
+                      <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
+                        <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: pct >= 100 ? "#ef4444" : GOLD }} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: cls.is_open ? "#22c55e" : "rgba(255,255,255,0.3)", minWidth: 45, textAlign: "right" }}>
+                      {cls.is_open ? "Open" : "Closed"}
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", marginLeft: 4 }}>{isExpanded ? "▲" : "▼"}</div>
+                  </button>
+                  {isExpanded && (
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "0.6rem 1rem 0.85rem" }}>
+                      {classEnrollments.length === 0 ? (
+                        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>No students enrolled yet.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                          {classEnrollments.map((enr, i) => (
+                            <div key={enr.id || enr.student_email} style={{
+                              display: "flex", alignItems: "center", gap: "0.6rem",
+                              padding: "0.3rem 0",
+                              borderBottom: i < classEnrollments.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                            }}>
+                              <div style={{
+                                width: 26, height: 26, borderRadius: "50%",
+                                background: "rgba(245,192,37,0.15)", border: "1px solid rgba(245,192,37,0.3)",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: "0.65rem", fontWeight: 800, color: GOLD, flexShrink: 0,
+                              }}>
+                                {(enr.student_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                              </div>
+                              <span style={{ fontSize: "0.85rem", fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>{enr.student_name}</span>
+                              {enr.student_email && (
+                                <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>{enr.student_email}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
