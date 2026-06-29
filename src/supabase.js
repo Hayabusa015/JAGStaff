@@ -1802,3 +1802,56 @@ export function useStaffMessaging(userEmail) {
 
   return { conversations, messages, members, openOrCreateDM, createGroup, sendMessage, uploadAttachment, markRead, getUnread, totalUnread };
 }
+
+// ─── CEU Opportunities ────────────────────────────────────────────────────────
+// ceu_opportunities: shared board of external links and school-based PD entries
+export function useCeuOpportunities(userEmail) {
+  const [opportunities, setOpportunities] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+    async function load() {
+      const { data } = await supabase
+        .from("ceu_opportunities")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (active) setOpportunities(data || []);
+    }
+    load();
+    const ch = supabase.channel("ceu_opps_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ceu_opportunities" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  async function addOpportunity(fields) {
+    if (!SUPABASE_READY || !supabase || !userEmail) return null;
+    const { data, error } = await supabase
+      .from("ceu_opportunities")
+      .insert({ ...fields, created_by: userEmail })
+      .select()
+      .single();
+    if (!error && data) setOpportunities(prev => [...prev, data]);
+    return data;
+  }
+
+  async function removeOpportunity(id) {
+    if (!SUPABASE_READY || !supabase) return;
+    setOpportunities(prev => prev.filter(o => o.id !== id));
+    await supabase.from("ceu_opportunities").delete().eq("id", id);
+  }
+
+  async function uploadFlyer(file) {
+    if (!SUPABASE_READY || !supabase) return null;
+    const ext = file.name.split(".").pop();
+    const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error } = await supabase.storage.from("ceu-flyers").upload(path, file);
+    if (error) return null;
+    const { data: { publicUrl } } = supabase.storage.from("ceu-flyers").getPublicUrl(path);
+    return { url: publicUrl, name: file.name };
+  }
+
+  return { opportunities, addOpportunity, removeOpportunity, uploadFlyer };
+}
