@@ -343,7 +343,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
     <div>
       {/* Header */}
       <div className="card mb2" style={{
-        background: "linear-gradient(135deg, #0d0900 0%, #0a0700 60%, #080500 100%)",
+        background: "linear-gradient(135deg, #000000 0%, #0a0a0a 60%, #050505 100%)",
         borderColor: "rgba(245,192,37,0.28)",
         boxShadow: "0 4px 32px rgba(0,0,0,0.55), 0 0 40px rgba(245,192,37,0.07), inset 0 1px 0 rgba(245,192,37,0.08)",
         overflow: "hidden",
@@ -379,7 +379,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
             {periodInfo?.status === "in" ? (
               <div style={{
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-                color: "#0a0700", borderRadius: 12, padding: "0.5rem 1rem",
+                color: "#000", borderRadius: 12, padding: "0.5rem 1rem",
                 fontFamily: "'Oswald', 'Inter', sans-serif",
                 boxShadow: "0 4px 16px rgba(245,192,37,0.35)",
               }}>
@@ -400,7 +400,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
             ) : (
               <div style={{
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-                color: "#0a0700", borderRadius: "999px", padding: "0.35rem 1.1rem",
+                color: "#000", borderRadius: "999px", padding: "0.35rem 1.1rem",
                 fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.1em",
                 fontFamily: "'Oswald', 'Inter', sans-serif",
                 boxShadow: "0 2px 12px rgba(245,192,37,0.3)",
@@ -471,14 +471,14 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
 
       {/* G-Men Requests */}
       {gmenRequests.length > 0 && (
-        <div className="card mb2" style={{ background: "rgba(20,12,0,0.85)", borderColor: "rgba(245,192,37,0.25)" }}>
+        <div className="card mb2" style={{ background: "rgba(0,0,0,0.7)", borderColor: "rgba(245,192,37,0.25)" }}>
           <div className="section-title section-title-gold">G-Men Period · Today's Requests</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
             {pending.slice(0, 4).map(r => (
               <div key={r.id} style={{
                 width: 44, height: 44, borderRadius: "50%", background: GOLD,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 800, fontSize: "0.85rem", color: "#1a1200",
+                fontWeight: 800, fontSize: "0.85rem", color: "#000",
               }}>
                 {r.student.firstName[0]}{r.student.lastName[0]}
               </div>

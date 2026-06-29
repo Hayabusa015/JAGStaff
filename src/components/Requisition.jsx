@@ -46,9 +46,9 @@ function ReqPreview({ cart, user, onClose, onSubmit }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem 1rem" }}>
       <div className="card card-raised" style={{ width: "100%", maxWidth: 760, position: "relative" }} onClick={e => e.stopPropagation()}>
-        <div style={{ background: "#1a1200", borderRadius: "10px 10px 0 0", padding: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", margin: "-1.25rem -1.25rem 1.25rem" }}>
+        <div style={{ background: "#000", borderRadius: "10px 10px 0 0", padding: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", margin: "-1.25rem -1.25rem 1.25rem" }}>
           <div className="flex items-center gap2">
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#1a1200" }}>G</div>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#000" }}>G</div>
             <div style={{ color: "#fff" }}>
               <div style={{ fontWeight: 900, letterSpacing: "0.05em" }}>JAMES A. GARFIELD / HIGH SCHOOL</div>
               <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)" }}>REQUISITION REQUEST</div>
@@ -68,7 +68,7 @@ function ReqPreview({ cart, user, onClose, onSubmit }) {
 
         {cart.map((v, vi) => (
           <div key={v.id} style={{ marginBottom: "1.5rem" }}>
-            <div style={{ background: "#1a1200", color: GOLD, fontWeight: 800, padding: "0.5rem 0.75rem", borderRadius: "6px 6px 0 0", display: "flex", justifyContent: "space-between" }}>
+            <div style={{ background: "#000", color: GOLD, fontWeight: 800, padding: "0.5rem 0.75rem", borderRadius: "6px 6px 0 0", display: "flex", justifyContent: "space-between" }}>
               <span>VENDOR {vi + 1} — {v.vendor || "(unnamed)"}</span>
               <span>{fmt$(vendorTotal(v))}</span>
             </div>
@@ -188,11 +188,11 @@ export default function Requisition({ user }) {
         <div key={v.id} className="card mb2">
           <div style={{ background: GOLD, borderRadius: "7px", padding: "0.6rem 0.85rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div className="flex items-center gap2">
-              <span style={{ fontWeight: 800, color: "#1a1200" }}>VENDOR {vi + 1}</span>
+              <span style={{ fontWeight: 800, color: "#000" }}>VENDOR {vi + 1}</span>
               <input value={v.vendor} onChange={e => setVendorField(v.id, "vendor", e.target.value)} placeholder="Vendor name" style={{ background: "rgba(0,0,0,0.1)", border: "none", width: 200, fontWeight: 600 }} />
             </div>
             <div className="flex items-center gap1">
-              <span style={{ fontWeight: 800, color: "#1a1200" }}>{fmt$(vendorTotal(v))}</span>
+              <span style={{ fontWeight: 800, color: "#000" }}>{fmt$(vendorTotal(v))}</span>
               {cart.length > 1 && <button className="btn btn-sm" style={{ background: "rgba(220,38,38,0.2)", color: "#dc2626", border: "none" }} onClick={() => removeVendor(v.id)}>✕</button>}
             </div>
           </div>

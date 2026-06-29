@@ -90,7 +90,7 @@ function ZoneToggle({ zone, setZone, isClassroomOwner }) {
           whiteSpace: "nowrap",
           transition: "all 0.15s",
           background: zone === "school" ? GOLD : "transparent",
-          color: zone === "school" ? "#0a0700" : "rgba(255,255,255,0.6)",
+          color: zone === "school" ? "#000" : "rgba(255,255,255,0.6)",
           boxShadow: zone === "school" ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
         }}
       >
@@ -118,7 +118,7 @@ function ZoneToggle({ zone, setZone, isClassroomOwner }) {
           transition: "all 0.15s",
           background: zone === "classroom" ? (isClassroomOwner ? GOLD : "rgba(255,255,255,0.07)") : "transparent",
           color: zone === "classroom"
-            ? (isClassroomOwner ? "#0a0700" : "rgba(255,255,255,0.45)")
+            ? (isClassroomOwner ? "#000" : "rgba(255,255,255,0.45)")
             : (isClassroomOwner ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"),
           boxShadow: zone === "classroom" && isClassroomOwner ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
         }}
@@ -203,7 +203,7 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
               style={{
                 justifyContent: "center", gap: "0.75rem",
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-                color: "#0a0700", fontSize: "0.92rem", fontWeight: 700,
+                color: "#000", fontSize: "0.92rem", fontWeight: 700,
                 padding: "0.9rem 1rem", borderRadius: "10px",
                 boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
                 opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",

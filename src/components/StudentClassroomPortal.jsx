@@ -49,7 +49,7 @@ function ZoneTab({ active, onClick, children }) {
         whiteSpace: "nowrap",
         transition: "all 0.15s",
         background: active ? GOLD : "transparent",
-        color: active ? "#0a0700" : "rgba(255,255,255,0.6)",
+        color: active ? "#000" : "rgba(255,255,255,0.6)",
         boxShadow: active ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
       }}
     >

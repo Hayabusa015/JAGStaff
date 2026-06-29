@@ -510,7 +510,7 @@ export default function StaffWelcomeTour({ userEmail, onClose, onGoToClassroom }
                 </button>
                 <button
                   onClick={() => finish(false)}
-                  style={{ flex: 2, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#0a0700", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)" }}
+                  style={{ flex: 2, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#000", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)" }}
                 >
                   Got it — done ✓
                 </button>
@@ -528,7 +528,7 @@ export default function StaffWelcomeTour({ userEmail, onClose, onGoToClassroom }
               )}
               <button
                 onClick={() => navigate(1)}
-                style={{ flex: 3, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#0a0700", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)" }}
+                style={{ flex: 3, background: `linear-gradient(135deg, ${GOLD}, #e8b020)`, border: "none", color: "#000", fontWeight: 900, fontSize: "0.85rem", borderRadius: 10, padding: "0.65rem 1rem", cursor: "pointer", boxShadow: "0 4px 20px rgba(245,192,37,0.4)" }}
               >
                 {step === 0 ? "Start Tour →" : "Next →"}
               </button>
