@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { GOLD } from "../constants.js";
 import { useRequisitions } from "../supabase.js";
+import { openGmailCompose } from "../email.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function blankItem() { return { id: uid(), url: "", budget: "", description: "", qty: 1, unitPrice: "" }; }
@@ -11,6 +12,40 @@ function vendorSubtotal(v) { return v.items.reduce((s, i) => s + lineTotal(i), 0
 function vendorTotal(v) { return vendorSubtotal(v) + (Number(v.shipping) || 0); }
 function grandTotal(cart) { return cart.reduce((s, v) => s + vendorTotal(v), 0); }
 function fmt$(n) { return n.toLocaleString("en-US", { style: "currency", currency: "USD" }); }
+
+// ── Gmail body builder ────────────────────────────────────────────────────────
+function buildReqEmail(cart, user) {
+  const date = new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+  const subject = `[PURCHASE ORDER REQUEST] ${user?.name || "Staff"} · ${date} · ${fmt$(grandTotal(cart))}`;
+  const lines = [
+    `📎 A PDF requisition form is being generated — please attach it to this email before sending.`,
+    ``,
+    `────────────────────────────────────────`,
+    `PURCHASE ORDER REQUEST`,
+    `James A. Garfield High School`,
+    `────────────────────────────────────────`,
+    ``,
+    `Requested by: ${user?.name || "Staff"}${user?.email ? ` (${user.email})` : ""}`,
+    `Date: ${date}`,
+    ``,
+  ];
+  cart.forEach((v, vi) => {
+    lines.push(`VENDOR ${vi + 1}: ${v.vendor || "(unnamed)"} — ${fmt$(vendorTotal(v))}`);
+    v.items.forEach((item, ii) => {
+      lines.push(`  ${ii + 1}. ${item.description || "(no description)"}${item.url ? `\n     ${item.url}` : ""}`);
+      lines.push(`     Qty ${item.qty} × ${item.unitPrice ? fmt$(Number(item.unitPrice)) : "$0.00"} = ${fmt$(lineTotal(item))}${item.budget ? `  |  Budget: ${item.budget}` : ""}`);
+    });
+    if (Number(v.shipping)) lines.push(`  Shipping: ${fmt$(Number(v.shipping))}`);
+    if (v.quotes?.length) lines.push(`  Quotes: ${v.quotes.map(q => q.name).join(", ")}`);
+    lines.push(``);
+  });
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`GRAND TOTAL — ALL VENDORS: ${fmt$(grandTotal(cart))}`);
+  lines.push(`────────────────────────────────────────`);
+  lines.push(``);
+  lines.push(`— Sent from the JAG Staff Portal`);
+  return { subject, body: lines.join("\n") };
+}
 
 // ── PDF generation — opens a new print-ready window ─────────────────────────
 function generateRequisitionPDF(cart, user) {
@@ -267,16 +302,19 @@ function ReqPreview({ cart, user, onClose, onDownload }) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-between" style={{ gap: "0.75rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
           <button className="btn btn-ghost" onClick={onClose}>← Edit Request</button>
           <button
             className="btn btn-primary"
-            style={{ gap: "0.5rem" }}
+            style={{ gap: "0.6rem", fontSize: "0.95rem", padding: "0.65rem 1.4rem" }}
             onClick={onDownload}
           >
-            📄 Download PDF
+            📄 Save PDF &amp; Open Gmail
           </button>
         </div>
+        <p style={{ marginTop: "0.65rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.35)", textAlign: "right" }}>
+          A print dialog opens to save the PDF · Gmail opens pre-filled · attach the PDF before sending
+        </p>
       </div>
     </div>
   );
@@ -306,14 +344,20 @@ export default function Requisition({ user }) {
   const itemCount = cart.reduce((s, v) => s + v.items.length, 0);
 
   if (submitted) return (
-    <div style={{ textAlign: "center", padding: "4rem 1rem" }}>
-      <div style={{ fontSize: "3rem" }}>📄</div>
-      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>PDF Generated</h2>
-      <p className="text-muted mt1">
-        A print dialog opened — choose <strong>Save as PDF</strong> to download.<br />
-        Hand the PDF to your building secretary.
-      </p>
-      <button className="btn btn-primary mt2" onClick={() => { setCart([blankVendor()]); setSubmitted(false); }}>New Request</button>
+    <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
+      <div style={{ fontSize: "3rem" }}>✅</div>
+      <h2 style={{ marginTop: "1rem", fontWeight: 800 }}>Almost done — two quick steps</h2>
+      <div style={{ marginTop: "1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 400, margin: "1.25rem auto 0" }}>
+        <div style={{ background: "rgba(245,192,37,0.07)", border: "1px solid rgba(245,192,37,0.2)", borderRadius: 10, padding: "0.85rem 1.1rem", textAlign: "left" }}>
+          <div style={{ fontWeight: 800, color: GOLD, fontSize: "0.82rem", marginBottom: 4 }}>Step 1 — Save the PDF</div>
+          <div className="text-muted" style={{ fontSize: "0.82rem" }}>In the print dialog that opened, choose <strong style={{ color: "#fff" }}>Save as PDF</strong> and note where it saves.</div>
+        </div>
+        <div style={{ background: "rgba(245,192,37,0.07)", border: "1px solid rgba(245,192,37,0.2)", borderRadius: 10, padding: "0.85rem 1.1rem", textAlign: "left" }}>
+          <div style={{ fontWeight: 800, color: GOLD, fontSize: "0.82rem", marginBottom: 4 }}>Step 2 — Attach &amp; Send in Gmail</div>
+          <div className="text-muted" style={{ fontSize: "0.82rem" }}>The Gmail tab is pre-filled with the request details. Click the paperclip 📎, attach the PDF you just saved, add the secretary's email, and send.</div>
+        </div>
+      </div>
+      <button className="btn btn-primary mt2" style={{ marginTop: "1.5rem" }} onClick={() => { setCart([blankVendor()]); setSubmitted(false); }}>New Request</button>
     </div>
   );
 
@@ -326,7 +370,9 @@ export default function Requisition({ user }) {
           onClose={() => setShowPreview(false)}
           onDownload={() => {
             addRequisition({ cart, total });
+            // Open PDF print window first, then Gmail (slight delay so both pop-up blockers behave)
             generateRequisitionPDF(cart, user);
+            setTimeout(() => openGmailCompose(buildReqEmail(cart, user)), 400);
             setShowPreview(false);
             setSubmitted(true);
           }}
@@ -428,7 +474,7 @@ export default function Requisition({ user }) {
           <div className="text-muted" style={{ fontSize: "0.75rem" }}>GRAND TOTAL — ALL VENDORS</div>
           <div style={{ fontSize: "1.8rem", fontWeight: 900, color: GOLD }}>{fmt$(total)}</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowPreview(true)}>Preview &amp; Download PDF →</button>
+        <button className="btn btn-primary" onClick={() => setShowPreview(true)}>Preview &amp; Send →</button>
       </div>
 
       {requisitions.length > 0 && (
