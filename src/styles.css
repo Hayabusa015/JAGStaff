@@ -556,6 +556,142 @@ label {
   .msg-sidebar-hidden { display: none !important; }
   .msg-thread-hidden  { display: none !important; }
   .msg-thread { width: 100% !important; }
+
+  /* Messaging panel height: top-row1 (~60px) + bottom-nav (~62px) */
+  .msg-panel-root {
+    height: calc(100vh - 122px - env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* ── Hide the desktop tab bar ── */
+  .nav-row2 { display: none !important; }
+
+  /* ── Content area: pad bottom so bottom nav doesn't overlap ── */
+  .content-area {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* ── Bottom navigation ── */
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(8, 8, 12, 0.97);
+    border-top: 1px solid rgba(245, 192, 37, 0.15);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0.55rem 0.2rem 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.38);
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-btn.active {
+    color: #F5C025;
+  }
+
+  .bottom-nav-icon {
+    font-size: 1.35rem;
+    line-height: 1;
+    display: block;
+    position: relative;
+  }
+
+  .bottom-nav-badge {
+    position: absolute;
+    top: -3px;
+    right: -8px;
+    background: #F5C025;
+    color: #000;
+    border-radius: 9999px;
+    min-width: 15px;
+    height: 15px;
+    font-size: 0.52rem;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .bottom-nav-label {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1;
+  }
+
+  /* ── More sheet ── */
+  .more-sheet-overlay {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 49;
+    align-items: flex-end;
+  }
+
+  .more-sheet {
+    width: 100%;
+    background: #0d0d12;
+    border-top: 1px solid rgba(245, 192, 37, 0.18);
+    border-radius: 20px 20px 0 0;
+    padding: 0.75rem 1rem calc(72px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    animation: sheet-slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @keyframes sheet-slide-up {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+
+  .more-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    margin: 0 auto 0.75rem;
+  }
+
+  .more-sheet-btn {
+    width: 100%;
+    padding: 0.9rem 1.1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 11px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .more-sheet-btn.active {
+    background: rgba(245, 192, 37, 0.09);
+    border-color: rgba(245, 192, 37, 0.28);
+    color: #F5C025;
+  }
 }
 
 /* ── Utility ── */
@@ -765,6 +901,12 @@ label {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(245,192,37,0.25); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(245,192,37,0.45); }
+
+/* ── Bottom navigation (mobile only) ─────────────────────────────────── */
+.bottom-nav { display: none; } /* hidden on desktop */
+
+/* ── More drawer (mobile only) ───────────────────────────────────────── */
+.more-sheet-overlay { display: none; }
 
 /* ── Messaging layout ─────────────────────────────────────────────────── */
 /* Back button — only shown on mobile (defined in the media block above) */

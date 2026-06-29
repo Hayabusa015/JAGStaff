@@ -882,7 +882,7 @@ export default function StaffMessaging({
   const threadHidden  =  showMobileSidebar;   // mobile: hide thread when sidebar showing
 
   return (
-    <div style={{
+    <div className="msg-panel-root" style={{
       display: "flex", height: "calc(100vh - 110px)", minHeight: 500,
       background: "rgba(255,255,255,0.01)", borderRadius: 14,
       border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden",

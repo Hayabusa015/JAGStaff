@@ -33,6 +33,15 @@ const TABS = [
   { key: "admin",       label: "⚙ Admin", adminOnly: true },
 ];
 
+// Primary tabs shown in the mobile bottom bar (4 + "More")
+const BOTTOM_NAV_TABS = [
+  { key: "dashboard", label: "Home",      icon: "🏠" },
+  { key: "gmen",      label: "G-Men",     icon: "🗓️" },
+  { key: "hallpass",  label: "Hall Pass", icon: "🎫" },
+  { key: "messages",  label: "Messages",  icon: "💬" },
+  { key: "__more__",  label: "More",      icon: "···" },
+];
+
 const RESOURCE_TABS = [
   { key: "ceu",         label: "CEU Tracker"         },
   { key: "requisition", label: "Requisitions"         },
@@ -258,6 +267,10 @@ export default function App() {
   const [showTour, setShowTour] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [resourceTab, setResourceTab] = useState("ceu");
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+
+  // Wrap setTab so opening any tab also closes the More sheet
+  const goToTab = useCallback((key) => { setTab(key); setShowMoreSheet(false); }, []);
   // Top-level zone: building-wide "school" vs the teacher's own "classroom".
   const [zone, setZoneState] = useState(() => {
     try { return localStorage.getItem("jag-zone") || "school"; } catch { return "school"; }
@@ -359,7 +372,7 @@ export default function App() {
               <button
                 key={t.key}
                 className={`tab-btn${tab === t.key ? " active" : ""}`}
-                onClick={() => setTab(t.key)}
+                onClick={() => goToTab(t.key)}
               >
                 {t.label}
                 {t.key === "messages" && messaging.totalUnread > 0 && (
@@ -456,6 +469,82 @@ export default function App() {
         )}
         </div>
       </div>
+      )}
+
+      {/* ── Mobile bottom navigation (school zone, staff only) ─────────── */}
+      {zone === "school" && isStaff && (
+        <>
+          <nav className="bottom-nav" aria-label="Main navigation">
+            {BOTTOM_NAV_TABS.map(t => {
+              if (t.key === "__more__") {
+                const moreActive = showMoreSheet ||
+                  !BOTTOM_NAV_TABS.some(b => b.key === tab);
+                return (
+                  <button
+                    key="__more__"
+                    className={`bottom-nav-btn${moreActive ? " active" : ""}`}
+                    onClick={() => setShowMoreSheet(s => !s)}
+                    aria-label="More tabs"
+                  >
+                    <span className="bottom-nav-icon">{t.icon}</span>
+                    <span className="bottom-nav-label">{t.label}</span>
+                  </button>
+                );
+              }
+              const isActive = tab === t.key && !showMoreSheet;
+              const unread = t.key === "messages" ? messaging.totalUnread : 0;
+              return (
+                <button
+                  key={t.key}
+                  className={`bottom-nav-btn${isActive ? " active" : ""}`}
+                  onClick={() => goToTab(t.key)}
+                  aria-label={t.label}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <span className="bottom-nav-icon">
+                    {t.icon}
+                    {unread > 0 && (
+                      <span className="bottom-nav-badge">
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </span>
+                  <span className="bottom-nav-label">{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* More sheet — slide-up drawer for secondary tabs */}
+          {showMoreSheet && (
+            <div
+              className="more-sheet-overlay"
+              onClick={() => setShowMoreSheet(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label="More tabs"
+            >
+              <div className="more-sheet" onClick={e => e.stopPropagation()}>
+                <div className="more-sheet-handle" aria-hidden="true" />
+                {TABS
+                  .filter(t =>
+                    !BOTTOM_NAV_TABS.some(b => b.key === t.key) &&
+                    (!t.adminOnly || isAdmin)
+                  )
+                  .map(t => (
+                    <button
+                      key={t.key}
+                      className={`more-sheet-btn${tab === t.key ? " active" : ""}`}
+                      onClick={() => goToTab(t.key)}
+                    >
+                      {t.label}
+                    </button>
+                  ))
+                }
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
