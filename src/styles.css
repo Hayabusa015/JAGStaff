@@ -546,6 +546,16 @@ label {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* ── Staff Messaging — mobile panel toggle ── */
+  .hide-desktop { display: block !important; }
+  .msg-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+  }
+  .msg-sidebar-hidden { display: none !important; }
+  .msg-thread-hidden  { display: none !important; }
+  .msg-thread { width: 100% !important; }
 }
 
 /* ── Utility ── */
@@ -755,6 +765,10 @@ label {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(245,192,37,0.25); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(245,192,37,0.45); }
+
+/* ── Messaging layout ─────────────────────────────────────────────────── */
+/* Back button — only shown on mobile (defined in the media block above) */
+.hide-desktop { display: none; }
 
 /* ── Messaging sidebar row hover ──────────────────────────────────────── */
 .msg-row {

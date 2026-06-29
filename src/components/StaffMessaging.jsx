@@ -581,7 +581,7 @@ export default function StaffMessaging({
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const sidebar = (
     <div style={{
-      width: 282, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: "100%", flexShrink: 0, display: "flex", flexDirection: "column",
       borderRight: "1px solid rgba(255,255,255,0.07)",
       background: "rgba(255,255,255,0.015)",
       height: "100%", overflow: "hidden",
@@ -876,6 +876,11 @@ export default function StaffMessaging({
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  // Mobile (≤640px): sidebar OR thread — never both. CSS hides the inactive panel.
+  // Desktop: both panels always visible side-by-side. CSS classes are no-ops there.
+  const sidebarHidden = !showMobileSidebar;   // mobile: hide sidebar when thread showing
+  const threadHidden  =  showMobileSidebar;   // mobile: hide thread when sidebar showing
+
   return (
     <div style={{
       display: "flex", height: "calc(100vh - 110px)", minHeight: 500,
@@ -883,22 +888,17 @@ export default function StaffMessaging({
       border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden",
       position: "relative",
     }}>
-      {/* Sidebar — hidden on mobile when conversation open */}
-      <div style={{
-        display: "flex", flexDirection: "column", height: "100%",
-        width: showMobileSidebar || !activeConv ? "auto" : 0,
-        overflow: showMobileSidebar || !activeConv ? "visible" : "hidden",
-        flexShrink: 0,
-      }}>
+      {/* Sidebar — 282px on desktop, full-width on mobile (CSS overrides width) */}
+      <div className={`msg-sidebar${sidebarHidden ? " msg-sidebar-hidden" : ""}`}
+        style={{ width: 282, display: "flex", flexDirection: "column", height: "100%", flexShrink: 0 }}>
         {sidebar}
       </div>
 
-      {/* Thread panel — hidden on mobile when sidebar showing */}
-      {(!showMobileSidebar || !activeConv || window.innerWidth >= 700) && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%", overflow: "hidden" }}>
-          {threadPanel}
-        </div>
-      )}
+      {/* Thread panel */}
+      <div className={`msg-thread${threadHidden ? " msg-thread-hidden" : ""}`}
+        style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%", overflow: "hidden" }}>
+        {threadPanel}
+      </div>
 
       {/* Modals */}
       {showCreateGroup && (
