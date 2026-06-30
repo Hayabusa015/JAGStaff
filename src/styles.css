@@ -557,7 +557,16 @@ label {
   .msg-thread-hidden  { display: none !important; }
   .msg-thread { width: 100% !important; }
 
-  /* Messaging panel height: top-row1 (~60px) + bottom-nav (~62px) */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABLET + MOBILE  (≤ 1024px)
+   Bottom navigation, tab-bar hide, and related layout — wider
+   breakpoint covers phones at any DPR (1x, 2x, 3x).
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+
+  /* ── Messaging panel height: top-row1 (~60px) + bottom-nav (~62px) ── */
   .msg-panel-root {
     height: calc(100vh - 122px - env(safe-area-inset-bottom, 0px)) !important;
   }
@@ -902,8 +911,8 @@ label {
 ::-webkit-scrollbar-thumb { background: rgba(245,192,37,0.25); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(245,192,37,0.45); }
 
-/* ── Bottom navigation — hidden on desktop, shown on mobile via @media ── */
-@media (min-width: 641px) {
+/* ── Bottom navigation — hidden on desktop (> 1024px CSS width) ── */
+@media (min-width: 1025px) {
   .bottom-nav { display: none; }
   .more-sheet-overlay { display: none; }
 }
