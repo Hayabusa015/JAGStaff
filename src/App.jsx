@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Lock } from "lucide-react";
+import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
@@ -35,11 +35,11 @@ const TABS = [
 
 // Primary tabs shown in the mobile bottom bar (4 + "More")
 const BOTTOM_NAV_TABS = [
-  { key: "dashboard", label: "Home",      icon: "🏠" },
-  { key: "gmen",      label: "G-Men",     icon: "🗓️" },
-  { key: "hallpass",  label: "Hall Pass", icon: "🎫" },
-  { key: "messages",  label: "Messages",  icon: "💬" },
-  { key: "__more__",  label: "More",      icon: "···" },
+  { key: "dashboard", label: "Home",      Icon: Home           },
+  { key: "gmen",      label: "G-Men",     Icon: Calendar       },
+  { key: "hallpass",  label: "Hall Pass", Icon: DoorOpen       },
+  { key: "messages",  label: "Messages",  Icon: MessageSquare  },
+  { key: "__more__",  label: "More",      Icon: MoreHorizontal },
 ];
 
 const RESOURCE_TABS = [
@@ -486,7 +486,7 @@ export default function App() {
                     onClick={() => setShowMoreSheet(s => !s)}
                     aria-label="More tabs"
                   >
-                    <span className="bottom-nav-icon">{t.icon}</span>
+                    <span className="bottom-nav-icon"><t.Icon size={22} strokeWidth={1.75} /></span>
                     <span className="bottom-nav-label">{t.label}</span>
                   </button>
                 );
@@ -502,7 +502,7 @@ export default function App() {
                   aria-current={isActive ? "page" : undefined}
                 >
                   <span className="bottom-nav-icon">
-                    {t.icon}
+                    <t.Icon size={22} strokeWidth={1.75} />
                     {unread > 0 && (
                       <span className="bottom-nav-badge">
                         {unread > 99 ? "99+" : unread}
