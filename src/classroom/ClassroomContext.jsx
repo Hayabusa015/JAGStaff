@@ -102,14 +102,20 @@ function loadTeacherProfile() {
   return { ...DEFAULT_TEACHER_PROFILE };
 }
 
+const DEFAULT_AWARD_DENOMINATIONS = [5, 10, 25, 50];
+
 function loadMoleEconomy() {
   if (typeof window !== 'undefined') {
     try {
       const saved = window.localStorage.getItem(MOLE_EC_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.awardDenominations) parsed.awardDenominations = [...DEFAULT_AWARD_DENOMINATIONS];
+        return parsed;
+      }
     } catch { /* ignore */ }
   }
-  return { milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) };
+  return { milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP), awardDenominations: [...DEFAULT_AWARD_DENOMINATIONS] };
 }
 
 // Units + materials persist locally (file blobs live in IndexedDB). Browser-only;
@@ -786,8 +792,23 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   }, []);
 
   const resetMoleEconomy = useCallback(() => {
-    setMoleEconomy({ milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP) });
+    setMoleEconomy({ milestone: MOLE_MILESTONE, shopItems: clone(CASH_IN_SHOP), awardDenominations: [...DEFAULT_AWARD_DENOMINATIONS] });
   }, []);
+
+  const updateAwardDenominations = useCallback((denoms) => {
+    setMoleEconomy((prev) => ({ ...prev, awardDenominations: denoms }));
+  }, []);
+
+  const grantMoleDollars = useCallback((studentId, amount) => {
+    const n = Math.max(1, Math.round(Number(amount) || 1));
+    if (liveMode && isStaff && teacherActions?.grantMoleDollars) {
+      teacherActions.grantMoleDollars(studentId, n);
+    }
+    setStudents((prev) =>
+      prev.map((s) => (s.id === studentId ? { ...s, balance: s.balance + n } : s))
+    );
+    setMetrics((prev) => ({ ...prev, approvedMoleDollars: prev.approvedMoleDollars + n }));
+  }, [liveMode, isStaff, teacherActions]);
 
   // ===========================================================================
   //  DASHBOARD LAYOUT SCHEMA (req #6 — dynamic widget configuration)
@@ -837,6 +858,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     behaviorScenarios: BEHAVIOR_SCENARIOS,
     moleMilestone: moleEconomy.milestone,
     shopItems: moleEconomy.shopItems,
+    awardDenominations: moleEconomy.awardDenominations ?? [...DEFAULT_AWARD_DENOMINATIONS],
 
     teacherProfile,
     updateTeacherProfile,
@@ -891,6 +913,8 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     updateShopItem,
     removeShopItem,
     resetMoleEconomy,
+    updateAwardDenominations,
+    grantMoleDollars,
 
     toggleWidget,
     moveWidget,

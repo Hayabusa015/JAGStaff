@@ -186,7 +186,22 @@ function MetricsWidget() {
 }
 
 function RosterWidget() {
-  const { classes, students, getTheme } = useApp();
+  const { classes, students, getTheme, grantMoleDollars, awardDenominations, currencySymbol } = useApp();
+  const [grantingId, setGrantingId] = useState(null);
+  const [customAmt, setCustomAmt] = useState('');
+
+  const handleGrant = (studentId, amount) => {
+    grantMoleDollars(studentId, amount);
+    setGrantingId(null);
+    setCustomAmt('');
+  };
+
+  const handleCustomGrant = (studentId) => {
+    const n = Math.max(1, parseInt(customAmt, 10) || 0);
+    if (!n) return;
+    handleGrant(studentId, n);
+  };
+
   return (
     <Card>
       <CardHeader title="Class Roster Snapshot" subtitle="Balances & lab status" icon={Users} />
@@ -206,21 +221,68 @@ function RosterWidget() {
               </div>
               <div className="relative space-y-1.5">
                 {roster.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between rounded-lg border border-white/5 bg-ink-950/40 px-3 py-1.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`grid h-7 w-7 place-items-center rounded-full font-display text-[10px] font-bold ${theme.bgSoft} ${theme.text} ring-1 ${theme.ring}`}>
-                        {s.avatar}
+                  <div key={s.id} className="rounded-lg border border-white/5 bg-ink-950/40">
+                    <div className="flex items-center justify-between px-3 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className={`grid h-7 w-7 place-items-center rounded-full font-display text-[10px] font-bold ${theme.bgSoft} ${theme.text} ring-1 ${theme.ring}`}>
+                          {s.avatar}
+                        </div>
+                        <span className="text-xs font-semibold text-zinc-200">{s.name}</span>
+                        {s.isDemo && <Badge tone="neutral">Demo</Badge>}
+                        {!s.wizardComplete && <Badge tone="gold">Onboarding</Badge>}
                       </div>
-                      <span className="text-xs font-semibold text-zinc-200">{s.name}</span>
-                      {s.isDemo && <Badge tone="neutral">Demo</Badge>}
-                      {!s.wizardComplete && <Badge tone="gold">Onboarding</Badge>}
+                      <div className="flex items-center gap-2">
+                        <Badge tone="gold" icon={Coins}>{s.balance}</Badge>
+                        {grantingId === s.id ? (
+                          <button
+                            onClick={() => { setGrantingId(null); setCustomAmt(''); }}
+                            className="rounded-lg px-2 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-300"
+                          >
+                            ✕
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { setGrantingId(s.id); setCustomAmt(''); }}
+                            className="rounded-lg bg-gold-500/10 px-2 py-1 text-[10px] font-bold text-gold-300 ring-1 ring-gold-500/30 transition-colors hover:bg-gold-500/20"
+                          >
+                            + Award
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <Badge tone="gold" icon={Coins}>
-                      {s.balance}
-                    </Badge>
+                    {grantingId === s.id && (
+                      <div className="border-t border-white/5 px-3 pb-2.5 pt-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {(awardDenominations || [5, 10, 25, 50]).map((amt) => (
+                            <button
+                              key={amt}
+                              onClick={() => handleGrant(s.id, amt)}
+                              className="rounded-lg bg-gold-500/15 px-2.5 py-1 text-xs font-bold text-gold-300 ring-1 ring-gold-500/30 transition-colors hover:bg-gold-500/25"
+                            >
+                              +{amt} {currencySymbol}
+                            </button>
+                          ))}
+                          <div className="flex items-center gap-1 ml-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={customAmt}
+                              onChange={(e) => setCustomAmt(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleCustomGrant(s.id); }}
+                              placeholder="##"
+                              className="w-14 rounded-lg border border-white/10 bg-ink-900 px-2 py-1 text-center text-xs font-bold text-zinc-200 placeholder:text-zinc-600 focus:border-gold-500/50 focus:outline-none"
+                            />
+                            <button
+                              onClick={() => handleCustomGrant(s.id)}
+                              disabled={!parseInt(customAmt, 10)}
+                              className="rounded-lg bg-gold-500 px-2 py-1 text-xs font-bold text-ink-950 transition-colors hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              ✓
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

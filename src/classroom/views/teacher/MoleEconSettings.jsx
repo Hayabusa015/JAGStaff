@@ -8,6 +8,7 @@ import {
   ShoppingBag,
   Check,
   BarChart2,
+  Coins,
 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
@@ -52,6 +53,39 @@ function ItemRow({ item, onUpdate, onRemove }) {
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function SystemItemRow({ item, onUpdate }) {
+  const [cost, setCost] = useState(String(item.cost));
+
+  const flush = () => {
+    const parsed = Math.max(1, parseInt(cost, 10) || 1);
+    if (parsed !== item.cost) onUpdate(item.id, { cost: parsed });
+    setCost(String(parsed));
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-ink-950/50 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-zinc-200">{item.label}</p>
+        {item.gradeCategory && (
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">{item.gradeCategory}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <input
+          type="number"
+          min="1"
+          value={cost}
+          onChange={(e) => setCost(e.target.value)}
+          onBlur={flush}
+          onKeyDown={(e) => { if (e.key === 'Enter') flush(); }}
+          className="w-16 rounded-lg border border-white/10 bg-ink-900 px-2 py-1 text-center text-xs font-bold text-gold-300 focus:border-gold-500/50 focus:outline-none"
+        />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">MD</span>
       </div>
     </div>
   );
@@ -111,11 +145,13 @@ export default function MoleEconSettings() {
   const {
     moleMilestone,
     shopItems,
+    awardDenominations,
     updateMoleMilestone,
     addShopItem,
     updateShopItem,
     removeShopItem,
     resetMoleEconomy,
+    updateAwardDenominations,
     currencyName,
   } = useApp();
 
@@ -163,6 +199,46 @@ export default function MoleEconSettings() {
       />
 
       <div className="space-y-6 p-5">
+        {/* ── Award Amounts ── */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Coins className="h-4 w-4 text-gold-400" />
+            <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+              Award Amounts
+            </p>
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            Quick-grant presets that appear on the roster when you award {currencyName}s to a student. Edit any value — changes apply instantly.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {awardDenominations.map((amt, idx) => (
+              <div key={idx} className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-gold-500">+</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={amt}
+                  onChange={(e) => {
+                    const n = Math.max(1, parseInt(e.target.value, 10) || amt);
+                    const next = [...awardDenominations];
+                    next[idx] = n;
+                    updateAwardDenominations(next);
+                  }}
+                  className="w-16 rounded-xl border border-gold-500/30 bg-ink-900 px-2 py-1.5 text-center text-sm font-bold text-gold-300 focus:border-gold-500 focus:outline-none"
+                />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+                  {currencyName === 'Mole Dollar' ? 'MD' : currencyName.slice(0, 3).toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-zinc-600">
+            These are the buttons students see when you tap "+ Award" on the roster card.
+          </p>
+        </div>
+
+        <hr className="border-white/8" />
+
         {/* ── Milestone target ── */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -190,7 +266,7 @@ export default function MoleEconSettings() {
 
         <hr className="border-white/8" />
 
-        {/* ── Grade Automation Items (read-only system items) ── */}
+        {/* ── Grade Automation Items (cost now editable) ── */}
         {shopItems.some(i => i.rewardType) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -201,26 +277,11 @@ export default function MoleEconSettings() {
               <Badge tone="neutral">System</Badge>
             </div>
             <p className="text-[11px] text-zinc-500">
-              These items automatically apply grade changes in the Gradebook when approved. They are read-only — costs are fixed and they cannot be deleted.
+              These items automatically apply grade changes when approved. Edit costs inline — the label and effect cannot be changed.
             </p>
             <div className="space-y-2">
               {shopItems.filter(i => i.rewardType).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <BarChart2 className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                    <span className="text-sm font-semibold text-zinc-50">{item.label}</span>
-                    {item.gradeCategory && (
-                      <Badge tone="neutral">{item.gradeCategory}</Badge>
-                    )}
-                    {item.limitPerPeriod && (
-                      <Badge tone="neutral">1×/period</Badge>
-                    )}
-                  </div>
-                  <Badge tone="gold">{item.cost} MD</Badge>
-                </div>
+                <SystemItemRow key={item.id} item={item} onUpdate={updateShopItem} />
               ))}
             </div>
           </div>
