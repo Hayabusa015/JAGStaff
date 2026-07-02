@@ -61,7 +61,7 @@ export default function FieldTrip({ user }) {
   return (
     <div>
       <div className="flex items-center justify-between mb2">
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Field Trip Submission</h2>
+        <h2 className="page-title">Field Trip Submission</h2>
       </div>
 
       <div className="card" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", marginBottom: "1.25rem" }}>

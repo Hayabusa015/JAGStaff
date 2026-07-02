@@ -58,7 +58,7 @@ export default function AdminSettings({ user }) {
 
       {/* Header */}
       <div>
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem", marginBottom: "0.25rem" }}>Admin Settings</h2>
+        <h2 className="page-title" style={{ marginBottom: "0.25rem" }}>Admin Settings</h2>
         <div className="text-muted" style={{ fontSize: "0.85rem" }}>
           Manage admin privileges and view app configuration.
         </div>

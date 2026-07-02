@@ -380,7 +380,7 @@ export default function Requisition({ user }) {
       )}
 
       <div className="flex items-center justify-between mb2">
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Purchase Order Request</h2>
+        <h2 className="page-title">Purchase Order Request</h2>
         <div className="flex items-center gap2">
           <span className="tag tag-gold">{cart.length} vendor{cart.length !== 1 ? "s" : ""}</span>
           <span className="tag tag-gold">{itemCount} item{itemCount !== 1 ? "s" : ""}</span>

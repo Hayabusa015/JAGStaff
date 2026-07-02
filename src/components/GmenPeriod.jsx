@@ -229,7 +229,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
       {/* Header */}
       <div className="flex items-center justify-between mb2">
         <div>
-          <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>G-Men Enrichment Period</h2>
+          <h2 className="page-title">G-Men Enrichment Period</h2>
           <div className="text-muted">{gmenTime} · 4th Period · Tue / Wed / Thu · Grading Period {period}</div>
         </div>
         <button className="btn btn-primary" onClick={() => setKioskMode(true)}>📺 Launch Projector Display</button>

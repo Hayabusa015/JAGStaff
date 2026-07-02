@@ -136,7 +136,8 @@ function ZoneToggle({ zone, setZone, isClassroomOwner }) {
         }}
       >
         {!isClassroomOwner && <Lock style={{ width: 10, height: 10, flexShrink: 0 }} />}
-        My Classroom
+        <span className="zone-label-full">My Classroom</span>
+        <span className="zone-label-short">Class</span>
       </button>
     </div>
   );
@@ -373,7 +374,7 @@ export default function App() {
               <span className="name-line2">G-Men Portal</span>
             </div>
           </div>
-          <div style={{ marginLeft: "1rem" }}>
+          <div className="nav-zone-wrap" style={{ marginLeft: "1rem" }}>
             <ZoneToggle zone={zone} setZone={setZone} isClassroomOwner={isClassroomOwner} />
           </div>
           <div className="nav-user">

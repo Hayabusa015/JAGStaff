@@ -15,7 +15,7 @@
   --bg-card-hover: rgba(255,255,255,0.08);
   --border:      rgba(245,192,37,0.13);
   --text:        #ffffff;
-  --text-muted:  rgba(255,255,255,0.45);
+  --text-muted:  rgba(255,255,255,0.52);
   --red:         #ef4444;
   --green:       #22c55e;
 }
@@ -26,6 +26,52 @@ body {
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── Themed scrollbars ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.16) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.14);
+  border-radius: 999px;
+  border: 2px solid #08080c;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(245,192,37,0.4); }
+
+/* ── Text selection ── */
+::selection { background: rgba(245,192,37,0.32); color: #fff; }
+
+/* ── Keyboard focus ── */
+:focus-visible {
+  outline: 2px solid rgba(245,192,37,0.6);
+  outline-offset: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; /* inputs keep their gold focus shadow instead */
+}
+
+/* ── Branded page title (main header of each school tab) ── */
+.page-title {
+  font-family: 'Oswald', 'Inter', ui-sans-serif, sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  color: var(--text);
+}
+.page-title::after {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), rgba(245,192,37,0.15));
 }
 
 /* ── Layout ── */
@@ -110,6 +156,9 @@ body {
   white-space: nowrap;
 }
 
+/* Zone toggle label variants — short form swaps in on mobile */
+.zone-label-short { display: none; }
+
 /* Row 2: tabs */
 .nav-row2 {
   display: flex;
@@ -120,6 +169,7 @@ body {
 .nav-row2::-webkit-scrollbar { display: none; }
 
 .tab-btn {
+  position: relative;
   padding: 0.6rem 0.85rem;
   font-size: 0.68rem;
   font-weight: 600;
@@ -128,18 +178,31 @@ body {
   border: none;
   cursor: pointer;
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   flex-shrink: 0;
 }
+.tab-btn::after {
+  content: '';
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--gold);
+  box-shadow: 0 0 12px rgba(245,192,37,0.65);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
 .tab-btn:hover { color: rgba(240,234,216,0.85); background: rgba(255,255,255,0.03); }
 .tab-btn.active {
   color: var(--gold);
-  border-bottom-color: var(--gold);
   background: rgba(245,192,37,0.05);
 }
+.tab-btn.active::after { transform: scaleX(1); }
 
 /* ── Cards ── */
 .card {
@@ -234,6 +297,7 @@ body {
 }
 .btn-ghost:hover { background: var(--gold-glow); color: var(--gold); }
 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.74rem; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── Inputs ── */
@@ -305,7 +369,8 @@ label {
   border-bottom: 1px solid rgba(255,255,255,0.05);
   color: var(--text);
 }
-.stu-table tr:hover td { background: rgba(245,192,37,0.04); }
+.stu-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+.stu-table tr:hover td { background: rgba(245,192,37,0.05); }
 
 /* ── Drop zone ── */
 .drop-zone {
@@ -454,6 +519,19 @@ label {
   /* Sign out button — smaller */
   .nav-user .btn { padding: 0.25rem 0.55rem; font-size: 0.68rem; }
 
+  /* Zone toggle — compact so brand + toggle + sign-out all fit at 390px */
+  .nav-zone-wrap { margin-left: 0.35rem !important; min-width: 0; }
+  .nav-zone-wrap button {
+    padding: 0.24rem 0.5rem !important;
+    font-size: 0.56rem !important;
+    letter-spacing: 0.03em !important;
+  }
+  .zone-label-full { display: none; }
+  .zone-label-short { display: inline; }
+
+  /* Page titles scale down a notch */
+  .page-title { font-size: 1.15rem; }
+
   /* ── Tab bar — bigger tap targets, scroll indicator ── */
   .nav-row2 {
     padding: 0 0.25rem;
@@ -532,7 +610,7 @@ label {
     align-items: flex-start !important;
     gap: 0.5rem !important;
   }
-  .gmen-header h2 { font-size: 1rem !important; }
+  .gmen-header h2 { font-size: 1.15rem !important; }
   .gmen-header > button, .gmen-header > a {
     width: 100%;
     text-align: center;

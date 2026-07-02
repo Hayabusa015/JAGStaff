@@ -493,7 +493,7 @@ export default function HallPass({ user, students }) {
       {/* Header */}
       <div className="hallpass-header flex items-center justify-between mb2">
         <div>
-          <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Hall Pass Manager</h2>
+          <h2 className="page-title">Hall Pass Manager</h2>
           <div className="text-muted">
             Room {settings.room} · {settings.teacherName} ·{" "}
             <span style={{ color: ready && SUPABASE_READY ? "#16a34a" : "#f59e0b", fontWeight: 600 }}>

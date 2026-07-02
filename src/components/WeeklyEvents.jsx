@@ -22,7 +22,7 @@ export default function WeeklyEvents({ weeklyEvents, addEvent, removeEvent }) {
   return (
     <div>
       <div className="flex items-center justify-between mb2">
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Weekly Events Manager</h2>
+        <h2 className="page-title">Weekly Events Manager</h2>
         <span className="tag tag-gold">{weeklyEvents.length} events</span>
       </div>
 

@@ -105,7 +105,7 @@ export default function StudentRoster() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
           <span style={{ fontSize: "1.3rem" }}>🎓</span>
           <div>
-            <h2 style={{ fontWeight: 800, fontSize: "1.05rem", letterSpacing: "0.01em" }}>Student Roster</h2>
+            <h2 className="page-title">Student Roster</h2>
             <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
               {loading ? "Loading…" : `${students.length} students · shared school-wide · powers Hall Pass, G-Men & Infractions${withEmail > 0 ? ` · ${withEmail} with parent email` : ""}`}
             </p>

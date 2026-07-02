@@ -342,7 +342,7 @@ export default function CeuTracker({ user }) {
   return (
     <div>
       <div className="flex items-center justify-between mb2">
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>CEU Tracker &amp; License Renewal</h2>
+        <h2 className="page-title">CEU Tracker &amp; License Renewal</h2>
       </div>
 
       {/* Progress */}

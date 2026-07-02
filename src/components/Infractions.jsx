@@ -174,7 +174,7 @@ export default function Infractions({ students, user }) {
       {/* Header */}
       <div className="flex items-center justify-between mb2">
         <div>
-          <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Infraction Log</h2>
+          <h2 className="page-title">Infraction Log</h2>
           <p className="text-muted" style={{ fontSize: "0.8rem" }}>
             Quick-log warnings before escalating to a formal PBIS referral.
           </p>

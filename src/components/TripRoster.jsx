@@ -68,7 +68,7 @@ export default function TripRoster({ tripRosters, addRoster, removeRoster, stude
   return (
     <div>
       <div className="flex items-center justify-between mb2">
-        <h2 style={{ fontWeight: 800, fontSize: "1.1rem" }}>Trip Rosters &amp; Early Releases</h2>
+        <h2 className="page-title">Trip Rosters &amp; Early Releases</h2>
         <span className="tag tag-gold">{tripRosters.length} rosters</span>
       </div>
 

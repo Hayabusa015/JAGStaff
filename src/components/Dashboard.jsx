@@ -65,19 +65,19 @@ function TodaySchedule({ periods }) {
             return (
               <div key={i} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "0.28rem 0.5rem",
+                padding: "0.32rem 0.5rem",
                 borderRadius: 6,
                 borderLeft: isCurrent ? `3px solid ${GOLD}` : "3px solid transparent",
-                background: isCurrent ? "rgba(245,192,37,0.07)" : "transparent",
-                opacity: isPast ? 0.38 : 1,
+                background: isCurrent ? "rgba(245,192,37,0.07)" : i % 2 === 1 ? "rgba(255,255,255,0.022)" : "transparent",
+                opacity: isPast ? 0.55 : 1,
               }}>
                 <span style={{
                   fontSize: "0.82rem", fontWeight: isCurrent ? 700 : 500,
-                  color: isCurrent ? GOLD : isGmen ? "rgba(245,192,37,0.75)" : "rgba(255,255,255,0.8)",
+                  color: isCurrent ? GOLD : isGmen ? "rgba(245,192,37,0.85)" : "rgba(255,255,255,0.88)",
                 }}>
                   {p.name}{isCurrent ? " ◀ NOW" : ""}
                 </span>
-                <span style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.38)", fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.55)", fontVariantNumeric: "tabular-nums" }}>
                   {fmt12(p.start)} – {fmt12(p.end)}
                 </span>
               </div>
