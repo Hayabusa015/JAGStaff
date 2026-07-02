@@ -346,6 +346,20 @@ label {
   animation: page-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ── Lazy-tab loading spinner ── */
+@keyframes tab-spin {
+  to { transform: rotate(360deg); }
+}
+.tab-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 192, 37, 0.25);
+  border-top-color: var(--gold);
+  display: inline-block;
+  animation: tab-spin 0.7s linear infinite;
+}
+
 /* ── Pulse animation ── */
 @keyframes pulse-dot {
   0%,100% { opacity: 1; transform: scale(1); }

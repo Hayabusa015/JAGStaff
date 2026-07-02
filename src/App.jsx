@@ -1,25 +1,28 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
-import StaffMessaging from "./components/StaffMessaging.jsx";
-import AdminSettings from "./components/AdminSettings.jsx";
-import StudentClassroomPortal from "./components/StudentClassroomPortal.jsx";
 import Dashboard from "./components/Dashboard.jsx";
-import WeeklyEvents from "./components/WeeklyEvents.jsx";
-import TripRoster from "./components/TripRoster.jsx";
-import CeuTracker from "./components/CeuTracker.jsx";
-import GmenPeriod from "./components/GmenPeriod.jsx";
-import HallPass from "./components/HallPass.jsx";
-import Requisition from "./components/Requisition.jsx";
-import FieldTrip from "./components/FieldTrip.jsx";
-import StudentRoster from "./components/StudentRoster.jsx";
-import Infractions from "./components/Infractions.jsx";
-// Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
-import { AppProvider as ClassroomProvider } from "./classroom/ClassroomContext.jsx";
-import ClassroomApp from "./classroom/ClassroomApp.jsx";
+import ErrorBoundary, { TabLoading } from "./components/ErrorBoundary.jsx";
 import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
+
+// Every tab except the Dashboard landing view is lazy-loaded so the initial
+// bundle stays small — chunks download on first visit to each tab.
+const StaffMessaging         = lazy(() => import("./components/StaffMessaging.jsx"));
+const AdminSettings          = lazy(() => import("./components/AdminSettings.jsx"));
+const StudentClassroomPortal = lazy(() => import("./components/StudentClassroomPortal.jsx"));
+const WeeklyEvents           = lazy(() => import("./components/WeeklyEvents.jsx"));
+const TripRoster             = lazy(() => import("./components/TripRoster.jsx"));
+const CeuTracker             = lazy(() => import("./components/CeuTracker.jsx"));
+const GmenPeriod             = lazy(() => import("./components/GmenPeriod.jsx"));
+const HallPass               = lazy(() => import("./components/HallPass.jsx"));
+const Requisition            = lazy(() => import("./components/Requisition.jsx"));
+const FieldTrip              = lazy(() => import("./components/FieldTrip.jsx"));
+const StudentRoster          = lazy(() => import("./components/StudentRoster.jsx"));
+const Infractions            = lazy(() => import("./components/Infractions.jsx"));
+// Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
+const ClassroomZone          = lazy(() => import("./classroom/ClassroomZone.jsx"));
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
@@ -271,6 +274,19 @@ export default function App() {
 
   // Wrap setTab so opening any tab also closes the More sheet
   const goToTab = useCallback((key) => { setTab(key); setShowMoreSheet(false); }, []);
+
+  // More sheet: Escape closes it, and the page behind it stops scrolling
+  useEffect(() => {
+    if (!showMoreSheet) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowMoreSheet(false); };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [showMoreSheet]);
   // Top-level zone: building-wide "school" vs the teacher's own "classroom".
   const [zone, setZoneState] = useState(() => {
     try { return localStorage.getItem("jag-zone") || "school"; } catch { return "school"; }
@@ -326,7 +342,11 @@ export default function App() {
   );
 
   // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
-  if (isStaff === false) return <StudentClassroomPortal user={user} signOut={signOut} />;
+  if (isStaff === false) return (
+    <Suspense fallback={<TabLoading />}>
+      <StudentClassroomPortal user={user} signOut={signOut} />
+    </Suspense>
+  );
 
   const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email.toLowerCase() === CLASSROOM_OWNER_EMAIL.toLowerCase();
 
@@ -391,9 +411,9 @@ export default function App() {
       </nav>
 
       {zone === "classroom" && isClassroomOwner ? (
-        <ClassroomProvider user={user} isStaff={true}>
-          <ClassroomApp user={user} students={students} isAdmin={isAdmin} />
-        </ClassroomProvider>
+        <Suspense fallback={<TabLoading />}>
+          <ClassroomZone user={user} students={students} isAdmin={isAdmin} />
+        </Suspense>
       ) : zone === "classroom" ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
           <div style={{
@@ -427,6 +447,8 @@ export default function App() {
         />
 
         <div key={tab} className="page-enter">
+        <ErrorBoundary resetKey={`${tab}/${resourceTab}`}>
+        <Suspense fallback={<TabLoading />}>
         {tab === "dashboard"   && <Dashboard   {...sharedProps} messaging={messaging} staffList={staffList} onNavigate={setTab} />}
         {tab === "events"      && <WeeklyEvents weeklyEvents={weeklyEvents} addEvent={addEvent} removeEvent={removeEvent} />}
         {tab === "trips"       && <TripRoster   tripRosters={tripRosters} addRoster={addRoster} removeRoster={removeRoster} students={students} />}
@@ -467,6 +489,8 @@ export default function App() {
             {resourceTab === "roster"      && <StudentRoster />}
           </>
         )}
+        </Suspense>
+        </ErrorBoundary>
         </div>
       </div>
       )}
