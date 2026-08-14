@@ -5,7 +5,7 @@
 //  wired up. Flip MOCK_MODE to false once production adapters exist.
 // =============================================================================
 
-export const MOCK_MODE = true;
+export const MOCK_MODE = false;
 
 // -----------------------------------------------------------------------------
 //  Subject theming — single G-MEN gold identity (gold / black / white).

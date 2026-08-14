@@ -157,14 +157,14 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
   // ---- Global UI state ------------------------------------------------------
   const [role, setRole] = useState(() => isStaff ? 'teacher' : 'student');
-  const [activeStudentId, setActiveStudentId] = useState('stu-chem-demo');
+  const [activeStudentId, setActiveStudentId] = useState(null);
   const [activeView, setActiveView] = useState('dashboard');
-  const [activeClassId, setActiveClassId] = useState('cls-chem');
+  const [activeClassId, setActiveClassId] = useState(null);
 
   // ---- Mock "database" (used when liveMode = false) -------------------------
-  const [students, setStudents] = useState(() => clone(STUDENTS));
-  const [moleRequests, setMoleRequests] = useState(() => clone(MOLE_REQUESTS));
-  const [tickets, setTickets] = useState(() => clone(HELP_TICKETS));
+  const [students, setStudents] = useState(() => liveMode ? [] : clone(STUDENTS));
+  const [moleRequests, setMoleRequests] = useState(() => liveMode ? [] : clone(MOLE_REQUESTS));
+  const [tickets, setTickets] = useState(() => liveMode ? [] : clone(HELP_TICKETS));
   const [emailLog, setEmailLog] = useState([]);
   const [metrics, setMetrics] = useState({ approvedMoleDollars: 30, completedTasks: 1 });
   const [dashboardLayout, setDashboardLayout] = useState(() => clone(DEFAULT_DASHBOARD_LAYOUT));
@@ -224,17 +224,17 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
   useEffect(() => {
-    if (!liveMode || !isStaff || liveStudents.length === 0) return;
+    if (!liveMode || !isStaff) return;
     setStudents(liveStudents);
   }, [liveStudents, liveMode, isStaff]);
 
   useEffect(() => {
-    if (!liveMode || !isStaff || liveTeacherTickets.length === 0) return;
+    if (!liveMode || !isStaff) return;
     setTickets(liveTeacherTickets);
   }, [liveTeacherTickets, liveMode, isStaff]);
 
   useEffect(() => {
-    if (!liveMode || !isStaff || liveTeacherRequests.length === 0) return;
+    if (!liveMode || !isStaff) return;
     setMoleRequests(liveTeacherRequests);
   }, [liveTeacherRequests, liveMode, isStaff]);
 
@@ -261,8 +261,9 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   // managedClasses: same as allClasses — exposed separately so ClassManager
   //   can use it without pulling in mock CLASSES that may linger in `students`.
   const allClasses = useMemo(() => {
-    if (liveMode && isStaff && liveClasses.length > 0) return liveClasses;
+    if (liveMode && isStaff) return liveClasses;
     if (liveMode && !isStaff && liveMyClass) return [liveMyClass];
+    if (liveMode) return [];
     return CLASSES;
   }, [liveMode, isStaff, liveClasses, liveMyClass]);
 
@@ -279,17 +280,17 @@ export function AppProvider({ children, user = null, isStaff = true }) {
 
   const getClass = useCallback(
     (classId) =>
-      allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId),
-    [allClasses]
+      allClasses.find((c) => c.id === classId) || (liveMode ? undefined : CLASSES.find((c) => c.id === classId)),
+    [allClasses, liveMode]
   );
   const getStudent = useCallback((id) => students.find((s) => s.id === id), [students]);
   const getTheme = useCallback(
     (classId) => {
       const cls =
-        allClasses.find((c) => c.id === classId) || CLASSES.find((c) => c.id === classId);
+        allClasses.find((c) => c.id === classId) || (liveMode ? undefined : CLASSES.find((c) => c.id === classId));
       return SUBJECT_THEME[cls?.subject] || SUBJECT_THEME.chemistry;
     },
-    [allClasses]
+    [allClasses, liveMode]
   );
 
   // ===========================================================================
@@ -610,7 +611,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     (studentId, tone, scenario, notes) => {
       const student = students.find((s) => s.id === studentId);
       if (!student) return null;
-      const cls = allClasses.find((c) => c.id === student.classId) || CLASSES.find((c) => c.id === student.classId);
+      const cls = allClasses.find((c) => c.id === student.classId) || (liveMode ? null : CLASSES.find((c) => c.id === student.classId));
       const guardianName = student.guardian.name || 'Parent/Guardian';
       const firstName = student.name.split(' ')[0];
       const positive = tone === 'positive';

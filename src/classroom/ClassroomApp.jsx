@@ -1,7 +1,7 @@
 import { useState, Component } from 'react';
 import { useApp } from './ClassroomContext.jsx';
 import ClassroomSetupWizard, { setupDone } from './views/ClassroomSetupWizard.jsx';
-import RoleSwitcherBanner from './components/RoleSwitcherBanner.jsx';
+
 import SideNav from './components/SideNav.jsx';
 import TopControlBar from './components/TopControlBar.jsx';
 import WelcomeWizard from './views/WelcomeWizard.jsx';
@@ -78,8 +78,6 @@ export default function ClassroomApp({ user, students = [], isAdmin = false }) {
             onComplete={() => setShowSetup(false)}
           />
         )}
-
-        <RoleSwitcherBanner />
 
         {wizardBlocking ? (
           <WelcomeWizard key={activeStudent.id} />
