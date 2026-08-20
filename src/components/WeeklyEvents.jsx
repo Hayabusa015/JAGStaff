@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { EVENT_TYPES } from "../constants.js";
 
 const blank = { type: "Fire Drill", title: "", date: "", time: "", details: "" };
@@ -19,10 +19,25 @@ export default function WeeklyEvents({ weeklyEvents, addEvent, removeEvent }) {
     removeEvent(id);
   }
 
+  // Split events into upcoming and past, sorted by date
+  const { upcoming, past } = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const sorted = [...weeklyEvents].sort((a, b) => {
+      const da = a.date ? new Date(a.date + "T12:00:00") : new Date(0);
+      const db = b.date ? new Date(b.date + "T12:00:00") : new Date(0);
+      return da - db;
+    });
+    return {
+      upcoming: sorted.filter(e => e.date && new Date(e.date + "T12:00:00") >= now),
+      past: sorted.filter(e => e.date && new Date(e.date + "T12:00:00") < now).reverse(),
+    };
+  }, [weeklyEvents]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb2">
-        <h2 className="page-title">Weekly Events Manager</h2>
+        <h2 className="page-title">School Events</h2>
         <span className="tag tag-gold">{weeklyEvents.length} events</span>
       </div>
 
@@ -60,27 +75,38 @@ export default function WeeklyEvents({ weeklyEvents, addEvent, removeEvent }) {
         </form>
       </div>
 
-      <div className="card">
-        <div className="section-title">Current Week Events</div>
-        {weeklyEvents.length === 0 && <p className="text-muted">No events yet.</p>}
-        {weeklyEvents.map(ev => {
-          const tagMap = { "Fire Drill": "tag-red", "State Test": "tag-blue", "ACT": "tag-blue", "Field Trip": "tag-amber" };
-          const cls = tagMap[ev.type] || "tag-gold";
-          const d = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
-          return (
-            <div key={ev.id} className="flex items-center justify-between" style={{ padding: "0.65rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
-              <div style={{ flex: 1 }}>
-                <div className="flex items-center gap1">
-                  <span className={`tag ${cls}`}>{ev.type}</span>
-                  <span style={{ fontWeight: 600 }}>{ev.title}</span>
-                </div>
-                <div className="text-muted mt1">{d}{ev.time ? ` · ${ev.time}` : ""}{ev.details ? ` · ${ev.details}` : ""}</div>
-              </div>
-              <button className="btn btn-danger btn-sm" onClick={() => remove(ev.id)}>✕</button>
-            </div>
-          );
-        })}
+      {/* Upcoming Events */}
+      <div className="card mb2">
+        <div className="section-title">Upcoming Events</div>
+        {upcoming.length === 0 && <p className="text-muted">No upcoming events.</p>}
+        {upcoming.map(ev => <EventRow key={ev.id} ev={ev} onRemove={remove} />)}
       </div>
+
+      {/* Past Events */}
+      {past.length > 0 && (
+        <div className="card">
+          <div className="section-title" style={{ opacity: 0.6 }}>Past Events</div>
+          {past.map(ev => <EventRow key={ev.id} ev={ev} onRemove={remove} faded />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventRow({ ev, onRemove, faded }) {
+  const tagMap = { "Fire Drill": "tag-red", "State Test": "tag-blue", "ACT": "tag-blue", "Field Trip": "tag-amber" };
+  const cls = tagMap[ev.type] || "tag-gold";
+  const d = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  return (
+    <div className="flex items-center justify-between" style={{ padding: "0.65rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)", opacity: faded ? 0.5 : 1 }}>
+      <div style={{ flex: 1 }}>
+        <div className="flex items-center gap1">
+          <span className={`tag ${cls}`}>{ev.type}</span>
+          <span style={{ fontWeight: 600 }}>{ev.title}</span>
+        </div>
+        <div className="text-muted mt1">{d}{ev.time ? ` · ${ev.time}` : ""}{ev.details ? ` · ${ev.details}` : ""}</div>
+      </div>
+      <button className="btn btn-danger btn-sm" onClick={() => onRemove(ev.id)}>✕</button>
     </div>
   );
 }

@@ -26,7 +26,7 @@ const ClassroomZone          = lazy(() => import("./classroom/ClassroomZone.jsx"
 
 const TABS = [
   { key: "dashboard",   label: "Dashboard"        },
-  { key: "events",      label: "Weekly Events"    },
+  { key: "events",      label: "Events"           },
   { key: "trips",       label: "Trip Rosters"     },
   { key: "gmen",        label: "G-Men Period"     },
   { key: "hallpass",    label: "Hall Pass"        },

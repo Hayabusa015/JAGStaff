@@ -533,24 +533,40 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
       })()}
 
       <div className="grid2">
-        {/* Weekly Events */}
+        {/* Upcoming Events — next 14 days only */}
         <div className="card">
-          <div className="section-title">This Week — Important Events</div>
-          {weeklyEvents.length === 0 && <p className="text-muted">No events scheduled.</p>}
-          {weeklyEvents.map(ev => {
-            const tagClass = ev.type === "Fire Drill" ? "tag-red" : ev.type === "State Test" || ev.type === "ACT" ? "tag-blue" : ev.type === "Field Trip" ? "tag-amber" : "tag-gold";
-            const d = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
-            return (
-              <div key={ev.id} style={{ marginBottom: "0.75rem", paddingBottom: "0.75rem", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
-                <div className="flex items-center gap1 mb1">
-                  <span className={`tag ${tagClass}`}>{ev.type}</span>
-                  <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{ev.title}</span>
+          <div className="section-title">Upcoming Events</div>
+          {(() => {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            const cutoff = new Date(now);
+            cutoff.setDate(cutoff.getDate() + 14);
+            const upcoming = weeklyEvents
+              .filter(ev => {
+                if (!ev.date) return false;
+                const d = new Date(ev.date + "T12:00:00");
+                return d >= now && d <= cutoff;
+              })
+              .sort((a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"));
+            if (upcoming.length === 0) return <p className="text-muted">No events in the next 14 days.</p>;
+            return upcoming.map(ev => {
+              const tagClass = ev.type === "Fire Drill" ? "tag-red" : ev.type === "State Test" || ev.type === "ACT" ? "tag-blue" : ev.type === "Field Trip" ? "tag-amber" : "tag-gold";
+              const d = new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+              const diffDays = Math.round((new Date(ev.date + "T12:00:00") - now) / 86400000);
+              const countdown = diffDays === 0 ? "TODAY" : diffDays === 1 ? "TOMORROW" : `in ${diffDays} days`;
+              return (
+                <div key={ev.id} style={{ marginBottom: "0.75rem", paddingBottom: "0.75rem", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
+                  <div className="flex items-center gap1 mb1">
+                    <span className={`tag ${tagClass}`}>{ev.type}</span>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{ev.title}</span>
+                    <span style={{ fontSize: "0.65rem", fontWeight: 700, color: diffDays <= 1 ? GOLD : "rgba(255,255,255,0.4)", marginLeft: "auto", flexShrink: 0 }}>{countdown}</span>
+                  </div>
+                  <div className="text-muted">{d}{ev.time ? ` · ${ev.time}` : ""}</div>
+                  {ev.details && <div className="text-muted">{ev.details}</div>}
                 </div>
-                <div className="text-muted">{d}{ev.time ? ` · ${ev.time}` : ""}</div>
-                {ev.details && <div className="text-muted">{ev.details}</div>}
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Trip Rosters */}
