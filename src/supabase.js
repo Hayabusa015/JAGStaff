@@ -882,16 +882,31 @@ const toMin = (s) => {
 };
 
 function daySchedule(schedules) {
-  const dow = new Date().getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
-  return (dow === 2 || dow === 3 || dow === 4)
-    ? (schedules?.twt || [])
-    : (schedules?.mf || []);
+  const key = todayScheduleKey();
+  return key ? (schedules?.[key] || []) : [];
 }
 
-// Which schedule key is active today: "twt" (Tue/Wed/Thu) or "mf" (Mon/Fri)
-export function todayScheduleKey() {
-  const dow = new Date().getDay();
+// Which schedule key is active today: "twt" (Tue/Wed/Thu), "mf" (Mon/Fri),
+// or null on weekends — there is no bell schedule at all on Sat/Sun.
+export function todayScheduleKey(at = new Date()) {
+  const dow = at.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  if (dow === 0 || dow === 6) return null;
   return (dow === 2 || dow === 3 || dow === 4) ? "twt" : "mf";
+}
+
+// Local YYYY-MM-DD (not UTC — toISOString() would shift the date after 8pm ET).
+export function localYMD(at = new Date()) {
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+// Is the given day a no-school day per the posted school calendar? Returns the
+// matching event, or null. Holidays and anything explicitly flagged "No School"
+// (breaks, records days, conference credit days) count.
+export function noSchoolDay(weeklyEvents, at = new Date()) {
+  const ymd = localYMD(at);
+  return (weeklyEvents || []).find(e =>
+    e.date === ymd && (e.type === "Holiday" || /no school/i.test(e.title || ""))
+  ) || null;
 }
 
 // Pure helper: which period (if any) contains the given time?
@@ -926,7 +941,7 @@ const DEFAULT_TWT = [
   { name: "1st Period",       start: "07:45", end: "08:33" },
   { name: "2nd Period",       start: "08:37", end: "09:22" },
   { name: "3rd Period",       start: "09:26", end: "10:11" },
-  { name: "G-Men Time",       start: "10:15", end: "10:47" },
+  { name: "4th G-Men Time",   start: "10:15", end: "10:47" },
   { name: "5th Period",       start: "10:51", end: "11:21" },
   { name: "6th Period",       start: "11:25", end: "11:36" },
   { name: "7th Period-Lunch", start: "11:40", end: "12:10" },

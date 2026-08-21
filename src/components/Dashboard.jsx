@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo, todayScheduleKey } from "../supabase.js";
+import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo, todayScheduleKey, noSchoolDay } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -22,13 +22,37 @@ function fmt12(hhmm) {
   return `${hr}:${String(m).padStart(2, "0")} ${ap}`;
 }
 
-function TodaySchedule({ periods }) {
+function NoSchoolCard({ reason }) {
+  return (
+    <div className="card mb2" style={{ padding: "0.75rem 1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.4)" }}>
+          Today's Bell Schedule
+        </span>
+        <span style={{
+          fontSize: "0.65rem", fontWeight: 700, color: GOLD,
+          background: "rgba(245,192,37,0.12)", border: "1px solid rgba(245,192,37,0.3)",
+          borderRadius: 4, padding: "0.1rem 0.45rem", letterSpacing: "0.06em",
+        }}>NO SCHOOL</span>
+      </div>
+      <div style={{ marginTop: "0.4rem", fontSize: "0.85rem", color: "rgba(255,255,255,0.65)" }}>{reason}</div>
+    </div>
+  );
+}
+
+function TodaySchedule({ periods, weeklyEvents }) {
   const [collapsed, setCollapsed] = useState(false);
-  const dow = new Date().getDay();
   const key = todayScheduleKey();
   const scheduleLabel = key === "twt" ? "Tue · Wed · Thu" : "Mon · Fri";
   const now = new Date();
   const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Weekend — no bell schedule at all.
+  if (!key) return <NoSchoolCard reason="Weekend — no classes today." />;
+
+  // Calendar holiday / break / records day.
+  const offDay = noSchoolDay(weeklyEvents, now);
+  if (offDay) return <NoSchoolCard reason={offDay.title} />;
 
   if (!periods?.length) return null;
 
@@ -329,7 +353,13 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
     return () => clearInterval(id);
   }, []);
 
-  const periodInfo = currentPeriodInfo(periodsToday);
+  // No school today? (weekend, or a Holiday / "No School" day on the calendar)
+  const offDay = !todayScheduleKey()
+    ? { title: "Weekend" }
+    : noSchoolDay(weeklyEvents, new Date());
+
+  // Don't run live period tracking on a day with no classes.
+  const periodInfo = offDay ? null : currentPeriodInfo(periodsToday);
 
   const pending = gmenRequests.filter(r => !r.arrived);
   const arrived = gmenRequests.filter(r => r.arrived);
@@ -405,14 +435,14 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
                 fontFamily: "'Oswald', 'Inter', sans-serif",
                 boxShadow: "0 2px 12px rgba(245,192,37,0.3)",
               }}>
-                {periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}
+                {offDay ? "NO SCHOOL" : periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <TodaySchedule periods={periodsToday} />
+      <TodaySchedule periods={periodsToday} weeklyEvents={weeklyEvents} />
 
       <EventTicker events={weeklyEvents} tripRosters={tripRosters} />
 
