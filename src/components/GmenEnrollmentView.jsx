@@ -83,7 +83,7 @@ export default function GmenEnrollmentView({ user, signOut }) {
   return (
     <div style={{
       minHeight: "100vh", background: "#000", color: "#fff",
-      fontFamily: "'Inter', sans-serif",
+      fontFamily: "var(--font-sans)",
     }}>
       {/* Header */}
       <div style={{

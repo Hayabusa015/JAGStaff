@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Oswald', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Trade Gothic Next', 'Archivo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Trade Gothic Next Condensed', 'Trade Gothic Next', 'Archivo Narrow', 'Archivo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
         // G-MEN gold — anchored on the logo. Never drifts into brown/goldenrod.

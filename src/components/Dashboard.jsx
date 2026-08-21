@@ -390,7 +390,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
             <div style={{
               fontSize: "0.62rem", color: "rgba(245,192,37,0.65)",
               letterSpacing: "0.22em", textTransform: "uppercase",
-              fontFamily: "'Oswald', 'Inter', sans-serif", fontWeight: 700,
+              fontFamily: "var(--font-display)", fontWeight: 700,
             }}>
               G-Men · Command Center
             </div>
@@ -399,7 +399,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
             </div>
             <div style={{
               color: GOLD, fontWeight: 900, fontSize: "2.2rem",
-              fontFamily: "'Oswald', 'Inter', sans-serif", letterSpacing: "0.04em",
+              fontFamily: "var(--font-display)", letterSpacing: "0.04em",
               textShadow: "0 0 22px rgba(245,179,1,0.55)", lineHeight: 1.1, marginTop: "0.1rem",
             }}>
               {now.time}
@@ -410,7 +410,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
               <div style={{
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
                 color: "#000", borderRadius: 12, padding: "0.5rem 1rem",
-                fontFamily: "'Oswald', 'Inter', sans-serif",
+                fontFamily: "var(--font-display)",
                 boxShadow: "0 4px 16px rgba(245,192,37,0.35)",
               }}>
                 <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.04em" }}>{periodInfo.period.name}</div>
@@ -422,7 +422,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
               <div style={{
                 background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.35)",
                 color: "#60a5fa", borderRadius: 12, padding: "0.5rem 1rem",
-                fontFamily: "'Oswald', 'Inter', sans-serif",
+                fontFamily: "var(--font-display)",
               }}>
                 <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.04em" }}>{periodInfo.next.name} NEXT</div>
                 <div style={{ fontSize: "0.65rem", fontWeight: 700, opacity: 0.8, letterSpacing: "0.06em" }}>IN {periodInfo.until} MIN</div>
@@ -432,7 +432,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
                 color: "#000", borderRadius: "999px", padding: "0.35rem 1.1rem",
                 fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.1em",
-                fontFamily: "'Oswald', 'Inter', sans-serif",
+                fontFamily: "var(--font-display)",
                 boxShadow: "0 2px 12px rgba(245,192,37,0.3)",
               }}>
                 {offDay ? "NO SCHOOL" : periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}

@@ -212,19 +212,13 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
       )}
 
       {/* ── Header ── */}
-      <div style={{
-        position: "relative", height: 86, flexShrink: 0, zIndex: 1,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 1.75rem",
-        background: "linear-gradient(180deg, rgba(20,16,6,0.92), rgba(10,8,4,0.72))",
-        backdropFilter: "blur(12px)",
-      }}>
+      <div className="kiosk-header">
         {/* Gradient hairline instead of a hard 2px rule */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1,
           background: `linear-gradient(90deg, transparent, ${GOLD}66 15%, ${GOLD}66 85%, transparent)` }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.9rem", minWidth: 0 }}>
-          <img src="/logo.png" alt="G-Men" style={{ height: 50, width: 50, objectFit: "contain" }} />
+        <div className="kiosk-brand">
+          <img src="/logo.png" alt="G-Men" />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: "0.98rem", letterSpacing: "0.18em", color: GOLD, lineHeight: 1.2, textTransform: "uppercase" }}>
               Hall Pass
@@ -236,44 +230,44 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         </div>
 
         {/* Clock */}
-        <div style={{ textAlign: "center", position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
-          <div style={{
-            fontSize: "2.5rem", fontWeight: 300, color: GOLD, lineHeight: 1, letterSpacing: "0.06em",
-            textShadow: `0 0 34px ${GOLD}44`, ...NUM,
-          }}>{clockStr}</div>
-          <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", marginTop: "0.3rem", letterSpacing: "0.14em" }}>
+        <div className="kiosk-clock">
+          <div className="kiosk-clock-time" style={{ color: GOLD, textShadow: `0 0 34px ${GOLD}44`, ...NUM }}>
+            {clockStr}
+          </div>
+          <div className="kiosk-date" style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", marginTop: "0.3rem", letterSpacing: "0.14em" }}>
             {fmtDayShort()}
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "1.15rem" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "1.6rem", fontWeight: 600, lineHeight: 1, color: maxReached ? "#f87171" : GOLD, ...NUM }}>
-              {activePasses.length}
+        <div className="kiosk-actions">
+          <div className="kiosk-stats">
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "1.6rem", fontWeight: 600, lineHeight: 1, color: maxReached ? "#f87171" : GOLD, ...NUM }}>
+                {activePasses.length}
+              </div>
+              <div style={{ ...LABEL, fontSize: "0.58rem", marginTop: "0.25rem" }}>Out</div>
             </div>
-            <div style={{ ...LABEL, fontSize: "0.58rem", marginTop: "0.25rem" }}>Out</div>
-          </div>
-          <div style={{ width: 1, height: 34, background: "rgba(255,255,255,0.1)" }} />
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "1.6rem", fontWeight: 300, lineHeight: 1, color: "rgba(255,255,255,0.4)", ...NUM }}>
-              {settings.maxOut}
+            <div style={{ width: 1, height: 34, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "1.6rem", fontWeight: 300, lineHeight: 1, color: "rgba(255,255,255,0.4)", ...NUM }}>
+                {settings.maxOut}
+              </div>
+              <div style={{ ...LABEL, fontSize: "0.58rem", marginTop: "0.25rem" }}>Max</div>
             </div>
-            <div style={{ ...LABEL, fontSize: "0.58rem", marginTop: "0.25rem" }}>Max</div>
           </div>
-          <div style={{ width: 1, height: 34, background: "rgba(255,255,255,0.1)" }} />
           <GhostButton onClick={() => setScreen(s => s === "locator" ? "home" : "locator")} active={screen === "locator"}>
-            <IconSearch size={15} /> Locator
+            <IconSearch size={15} /> <span className="kiosk-btn-label">Locator</span>
           </GhostButton>
           <GhostButton onClick={toggleFs} title={isFs ? "Exit fullscreen" : "Fullscreen"} style={{ padding: "0.5rem 0.6rem" }}>
             {isFs
               ? <Ico size={16}><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></Ico>
               : <Ico size={16}><path d="M3 7V3h4"/><path d="M21 7V3h-4"/><path d="M3 17v4h4"/><path d="M21 17v4h-4"/></Ico>}
           </GhostButton>
-          <GhostButton onClick={onClose}><IconLock size={15} /> Close</GhostButton>
+          <GhostButton onClick={onClose}><IconLock size={15} /> <span className="kiosk-btn-label">Close</span></GhostButton>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "2rem 2.25rem", zIndex: 1 }}>
+      <div className="kiosk-body">
 
         {/* ── Students currently out ── */}
         {screen !== "locator" && activePasses.length > 0 ? (
@@ -629,12 +623,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
       </div>
 
       {/* ── Footer ── */}
-      <div style={{
-        position: "relative", flexShrink: 0, zIndex: 1,
-        padding: "0.6rem 1.75rem", display: "flex", justifyContent: "space-between",
-        fontSize: "0.63rem", color: "rgba(255,255,255,0.25)", letterSpacing: "0.18em",
-        textTransform: "uppercase", background: "rgba(10,8,4,0.6)", backdropFilter: "blur(10px)",
-      }}>
+      <div className="kiosk-footer">
         <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 1,
           background: `linear-gradient(90deg, transparent, ${GOLD}22 20%, ${GOLD}22 80%, transparent)` }} />
         <span>Garfield G-Men · Room {settings.room}</span>
