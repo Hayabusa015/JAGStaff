@@ -660,6 +660,14 @@ export default function HallPass({ user, students }) {
   const [rpReason, setRpReason] = useState(ROOM_PASS_REASONS[0]);
   const [rpSent, setRpSent] = useState(false);
 
+  // Issue-a-pass form (main page — mirrors what kiosk mode does, so a teacher
+  // can sign a student out without blanking the screen into kiosk mode).
+  const [hpSearch, setHpSearch] = useState("");
+  const [hpResults, setHpResults] = useState([]);
+  const [hpStudent, setHpStudent] = useState(null);
+  const [hpDest, setHpDest] = useState(DESTINATIONS[0].key);
+  const [hpBusy, setHpBusy] = useState(false);
+
   // Late arrival form
   const [laSearch, setLaSearch] = useState("");
   const [laResults, setLaResults] = useState([]);
@@ -675,11 +683,41 @@ export default function HallPass({ user, students }) {
   }, [rpSearch, students]);
 
   useEffect(() => {
+    if (!hpSearch.trim()) { setHpResults([]); return; }
+    setHpResults(students.filter(s =>
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(hpSearch.toLowerCase())
+    ).slice(0, 6));
+  }, [hpSearch, students]);
+
+  useEffect(() => {
     if (!laSearch.trim()) { setLaResults([]); return; }
     setLaResults(students.filter(s =>
       `${s.firstName} ${s.lastName}`.toLowerCase().includes(laSearch.toLowerCase())
     ).slice(0, 6));
   }, [laSearch, students]);
+
+  async function handleIssuePass(e) {
+    e.preventDefault();
+    if (!hpStudent || hpBusy) return;
+    setHpBusy(true);
+    await addPass({
+      studentId: hpStudent.id,
+      studentName: `${hpStudent.firstName} ${hpStudent.lastName}`,
+      destination: hpDest,
+      teacherName: settings.teacherName,
+      room: settings.room,
+    });
+    setHpStudent(null); setHpSearch(""); setHpDest(DESTINATIONS[0].key);
+    setHpBusy(false);
+  }
+
+  async function handleReturnSelected(pass) {
+    if (hpBusy) return;
+    setHpBusy(true);
+    await returnPass(pass.id, pass);
+    setHpStudent(null); setHpSearch("");
+    setHpBusy(false);
+  }
 
   async function handleSendRoomPass(e) {
     e.preventDefault();
@@ -773,6 +811,106 @@ export default function HallPass({ user, students }) {
               <div className="stat-label">Avg Duration (min)</div>
             </div>
           </div>
+
+          {/* Issue a pass — same actions as kiosk mode, inline on this page */}
+          {(() => {
+            const selectedOut = hpStudent && activePasses.find(p => p.studentId === hpStudent.id);
+            const maxReached = activePasses.length >= settings.maxOut;
+            const allowed = DESTINATIONS.filter(d => settings.destinations.includes(d.key));
+            return (
+              <div className="card mb2" style={{ borderLeft: `4px solid ${GOLD}` }}>
+                <div style={{ fontWeight: 800, fontSize: "0.75rem", letterSpacing: "0.1em", color: GOLD, marginBottom: "0.75rem" }}>
+                  ISSUE HALL PASS
+                </div>
+
+                <form onSubmit={handleIssuePass}>
+                  {/* Student picker */}
+                  <div style={{ position: "relative", marginBottom: "0.6rem" }}>
+                    {hpStudent ? (
+                      <div className="flex items-center gap1">
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.7rem", color: "#000", flexShrink: 0 }}>
+                          {`${hpStudent.firstName} ${hpStudent.lastName}`.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                        </div>
+                        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{hpStudent.firstName} {hpStudent.lastName}</span>
+                        {hpStudent.grade && <span className="tag tag-amber">{hpStudent.grade}</span>}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setHpStudent(null); setHpSearch(""); }}>✕</button>
+                      </div>
+                    ) : (
+                      <>
+                        <input value={hpSearch} onChange={e => setHpSearch(e.target.value)}
+                          placeholder="Student name…" style={{ fontSize: "0.9rem" }} />
+                        {hpResults.length > 0 && (
+                          <ul className="autocomplete-list" style={{ zIndex: 20 }}>
+                            {hpResults.map(st => {
+                              const out = activePasses.find(p => p.studentId === st.id);
+                              return (
+                                <li key={st.id} className="autocomplete-item"
+                                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                  onClick={() => { setHpStudent(st); setHpSearch(""); setHpResults([]); }}>
+                                  <span>{st.firstName} {st.lastName} {st.grade ? <span className="tag tag-amber">{st.grade}</span> : null}</span>
+                                  {out && <span style={{ color: GOLD, fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em" }}>OUT NOW</span>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Already out → offer the return instead of a second pass */}
+                  {selectedOut ? (
+                    <div style={{ background: "rgba(245,192,37,0.07)", border: `1px solid ${GOLD}44`, borderRadius: 8, padding: "0.7rem 0.85rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                            Out to {selectedOut.destination} since {fmtClock(selectedOut.outTime)}
+                          </div>
+                          <div style={{ color: GOLD, fontWeight: 800, fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
+                            {fmtElapsed(elapsed(selectedOut.outTime))}
+                          </div>
+                        </div>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={hpBusy}
+                          onClick={() => handleReturnSelected(selectedOut)}>
+                          ✓ Sign Back In
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Destination */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.65rem" }}>
+                        {allowed.map(d => (
+                          <button key={d.key} type="button" onClick={() => setHpDest(d.key)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "0.3rem",
+                              background: hpDest === d.key ? "rgba(245,192,37,0.16)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${hpDest === d.key ? GOLD : "rgba(255,255,255,0.12)"}`,
+                              color: hpDest === d.key ? GOLD : "var(--text-muted)",
+                              borderRadius: 999, padding: "0.32rem 0.7rem", cursor: "pointer",
+                              fontSize: "0.78rem", fontWeight: 600, transition: "all 0.15s",
+                            }}>
+                            <DestIcon dest={d.key} size={13} /> {d.key}
+                          </button>
+                        ))}
+                      </div>
+
+                      {maxReached && (
+                        <div style={{ fontSize: "0.78rem", color: "#fca5a5", marginBottom: "0.5rem" }}>
+                          ⛔ {settings.maxOut} already out — sign someone back in first.
+                        </div>
+                      )}
+
+                      <button type="submit" className="btn btn-primary btn-sm" style={{ width: "100%" }}
+                        disabled={!hpStudent || maxReached || hpBusy}>
+                        {hpBusy ? "Saving…" : hpStudent ? `Sign Out → ${hpDest}` : "Sign Out"}
+                      </button>
+                    </>
+                  )}
+                </form>
+              </div>
+            );
+          })()}
 
           {/* Currently Out */}
           {activePasses.length > 0 && (
