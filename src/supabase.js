@@ -328,12 +328,50 @@ export function useStudents() {
   });
 
   // Replace the entire roster (used on CSV import).
+  //
+  // Order matters: the old roster is only removed AFTER the new rows are
+  // safely inserted. The previous version deleted first, so any failed or
+  // empty import wiped the roster and left nothing behind.
   async function importStudents(rows) {
-    if (!SUPABASE_READY || !supabase) { setStudents(rows); return; }
-    await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    if (rows.length === 0) { setStudents([]); return; }
-    const { data } = await supabase.from("students").insert(rows.map(studentToRow)).select("*");
-    setStudents((data || []).map(rowToStudent));
+    if (!SUPABASE_READY || !supabase) { setStudents(rows); return { added: rows.length }; }
+
+    // An empty import is always a mapping mistake, never an intent to clear
+    // the roster. Removing students is what the per-row delete button is for.
+    if (!rows.length) {
+      throw new Error("Nothing to import — no rows had a first or last name. Check the column mapping.");
+    }
+
+    const { data: existing, error: readErr } = await supabase.from("students").select("id");
+    if (readErr) throw new Error(`Could not read the current roster: ${readErr.message}`);
+    const oldIds = (existing || []).map(r => r.id);
+
+    // Insert in batches so a large roster doesn't blow the request size.
+    const CHUNK = 500;
+    const payload = rows.map(studentToRow);
+    const inserted = [];
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const { data, error } = await supabase
+        .from("students").insert(payload.slice(i, i + CHUNK)).select("*");
+      if (error) {
+        // Roll back this import's own rows; the old roster was never touched.
+        const ids = inserted.map(r => r.id);
+        for (let j = 0; j < ids.length; j += 200) {
+          await supabase.from("students").delete().in("id", ids.slice(j, j + 200));
+        }
+        throw new Error(`Import failed — ${error.message}`);
+      }
+      inserted.push(...(data || []));
+    }
+
+    // New roster is in. Now retire the old one.
+    for (let i = 0; i < oldIds.length; i += 200) {
+      const { error } = await supabase.from("students").delete().in("id", oldIds.slice(i, i + 200));
+      if (error) throw new Error(`Imported ${inserted.length} students, but clearing the old roster failed: ${error.message}`);
+    }
+
+    const mapped = inserted.map(rowToStudent);
+    setStudents(mapped);
+    return { added: mapped.length };
   }
 
   async function addStudent(s) {

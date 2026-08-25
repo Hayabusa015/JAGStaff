@@ -2,21 +2,101 @@ import { useState, useRef } from "react";
 import { useStudents } from "../supabase.js";
 import ClassroomSyncModal from "./ClassroomSyncModal.jsx";
 
-function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+// Split one delimited line, honouring quoted fields. A naive split() broke on
+// any quoted value containing the delimiter — "Shull, Matt" being the common
+// case in SIS exports.
+function splitLine(line, delim) {
+  const out = [];
+  let cur = "", inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }  // escaped ""
+        else inQuotes = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delim) {
+      out.push(cur); cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.map(c => c.trim());
+}
+
+export function parseCSV(text) {
+  // Strip a UTF-8 BOM — Excel adds one, and it corrupts the first header.
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return null;
-  const delim = lines[0].includes("\t") ? "\t" : lines[0].includes("|") ? "|" : ",";
-  const headers = lines[0].split(delim).map(h => h.trim().replace(/^"|"$/g, "").toLowerCase());
-  const rows = lines.slice(1).map(l => l.split(delim).map(c => c.trim().replace(/^"|"$/g, "")));
+
+  // Some exports open with a title or blank rows; the header is the first line
+  // that actually carries two or more filled cells.
+  const sniff = (l) => l.includes("\t") ? "\t" : l.includes("|") ? "|" : ",";
+  let hi = lines.findIndex(l => splitLine(l, sniff(l)).filter(c => c).length >= 2);
+  if (hi === -1) hi = 0;
+
+  const delim = sniff(lines[hi]);
+  const headers = splitLine(lines[hi], delim).map(h => h.toLowerCase());
+  const rows = lines.slice(hi + 1).map(l => splitLine(l, delim));
   return { headers, rows };
 }
 
-function guessCol(headers, patterns) {
+// Header matching. `avoid` keeps "last name" from binding to "last login" and
+// keeps a bare "email" from stealing the student's address into parent email.
+function guessCol(headers, patterns, avoid = []) {
   for (const p of patterns) {
-    const i = headers.findIndex(h => h.includes(p));
+    const i = headers.findIndex(h => h.includes(p) && !avoid.some(a => h.includes(a)));
     if (i !== -1) return String(i);
   }
   return "-1";
+}
+
+const FIRST_PATTERNS = ["first name", "firstname", "first_name", "given name", "first", "fname", "given"];
+const LAST_PATTERNS  = ["last name", "lastname", "last_name", "surname", "family name", "last", "lname", "surname", "family"];
+const STALE          = ["login", "modified", "updated", "seen", "active", "changed"];
+
+export function guessAll(headers) {
+  return {
+    first: guessCol(headers, FIRST_PATTERNS, STALE),
+    last:  guessCol(headers, LAST_PATTERNS, STALE),
+    grade: guessCol(headers, ["grade level", "gradelevel", "grade", "year level", "yr", "level"]),
+    // Prefer an explicitly parent/guardian address; only fall back to a bare
+    // "email" when it isn't the student's own.
+    parentEmail: (() => {
+      const explicit = guessCol(headers, ["parent email", "guardian email", "contact email", "parent", "guardian"]);
+      if (explicit !== "-1") return explicit;
+      return guessCol(headers, ["email"], ["student", "school", "pupil"]);
+    })(),
+  };
+}
+
+// Several SIS exports ship one "Student Name" column instead of two. Split it
+// into synthetic first/last columns so the mapping UI still has something to
+// point at.
+export function expandNameColumn(parsed) {
+  const { headers, rows } = parsed;
+  const g = guessAll(headers);
+  if (g.first !== "-1" && g.last !== "-1") return parsed;
+
+  const ni = headers.findIndex(h => /name/.test(h) && !STALE.some(a => h.includes(a)));
+  if (ni === -1) return parsed;
+
+  const splitName = (raw) => {
+    const v = (raw || "").trim();
+    if (!v) return ["", ""];
+    if (v.includes(",")) {                       // "Last, First"
+      const [l, ...rest] = v.split(",");
+      return [rest.join(",").trim(), l.trim()];
+    }
+    const parts = v.split(/\s+/);                 // "First Last"
+    return [parts.shift() || "", parts.join(" ")];
+  };
+
+  return {
+    headers: [...headers, "first name (split)", "last name (split)"],
+    rows: rows.map(r => { const [f, l] = splitName(r[ni]); return [...r, f, l]; }),
+  };
 }
 
 export default function StudentRoster() {
@@ -26,7 +106,8 @@ export default function StudentRoster() {
   const [parsed, setParsed] = useState(null);
   const [colMap, setColMap] = useState({ first: "0", last: "1", grade: "2", parentEmail: "-1" });
   const [importing, setImporting] = useState(false);
-  const [imported, setImported] = useState(false);
+  const [imported, setImported] = useState(null);   // { added } on success
+  const [importErr, setImportErr] = useState("");
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState("All");
   const [editId, setEditId] = useState(null);
@@ -37,37 +118,48 @@ export default function StudentRoster() {
   function handleFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
-      const result = parseCSV(e.target.result);
-      if (!result) return;
-      setColMap({
-        first:       guessCol(result.headers, ["first","fname","given"]),
-        last:        guessCol(result.headers, ["last","lname","surname","family"]),
-        grade:       guessCol(result.headers, ["grade","yr","year","level"]),
-        parentEmail: guessCol(result.headers, ["parent","email","guardian","contact"]),
-      });
+      const raw = parseCSV(e.target.result);
+      if (!raw) { setImportErr("That file didn't have a header row plus at least one student row."); return; }
+      const result = expandNameColumn(raw);
+      setColMap(guessAll(result.headers));
       setParsed(result);
-      setImported(false);
+      setImported(null);
+      setImportErr("");
     };
+    reader.onerror = () => setImportErr("Could not read that file.");
     reader.readAsText(file);
   }
 
-  async function doImport() {
-    if (!parsed) return;
-    setImporting(true);
-    const { rows } = parsed;
-    const fi = Number(colMap.first), li = Number(colMap.last), gi = Number(colMap.grade), pi = Number(colMap.parentEmail);
-    const newStudents = rows
-      .filter(r => r[fi]?.trim() || r[li]?.trim())
+  // Rows that will actually be saved, under the current mapping.
+  const importable = (() => {
+    if (!parsed) return [];
+    const fi = Number(colMap.first), li = Number(colMap.last);
+    const gi = Number(colMap.grade), pi = Number(colMap.parentEmail);
+    return parsed.rows
+      .filter(r => (fi >= 0 && r[fi]?.trim()) || (li >= 0 && r[li]?.trim()))
       .map(r => ({
-        firstName: r[fi]?.trim() || "",
-        lastName: r[li]?.trim() || "",
-        grade: r[gi]?.trim() || "",
+        firstName:   fi >= 0 ? (r[fi]?.trim() || "") : "",
+        lastName:    li >= 0 ? (r[li]?.trim() || "") : "",
+        grade:       gi >= 0 ? (r[gi]?.trim() || "") : "",
         parentEmail: pi >= 0 ? (r[pi]?.trim() || "") : "",
       }));
-    await importStudents(newStudents);
-    setParsed(null);
-    setImporting(false);
-    setImported(true);
+  })();
+
+  async function doImport() {
+    if (!parsed || !importable.length) return;
+    setImporting(true);
+    setImportErr("");
+    try {
+      const res = await importStudents(importable);
+      setParsed(null);
+      setImported({ added: res?.added ?? importable.length });
+    } catch (err) {
+      // Surfaced rather than swallowed — a silent failure here used to look
+      // exactly like a successful import of zero students.
+      setImportErr(err.message || "Import failed.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function addManual(e) {
@@ -187,8 +279,27 @@ export default function StudentRoster() {
         <div className="card mb2">
           <div className="section-title">Map Columns</div>
           <p className="text-muted mb1" style={{ fontSize: "0.82rem" }}>
-            Found {parsed.rows.length} rows · {parsed.headers.length} columns. This will <strong>replace</strong> the current roster.
+            Found {parsed.rows.length} rows · {parsed.headers.length} columns.{" "}
+            <strong style={{ color: importable.length ? "var(--text)" : "#fca5a5" }}>
+              {importable.length} will be saved
+            </strong>. This replaces the current roster.
           </p>
+
+          {!importable.length && (
+            <div style={{
+              display: "flex", gap: "0.6rem", alignItems: "flex-start",
+              background: "rgba(220,38,38,0.08)", border: "1px solid rgba(248,113,113,0.3)",
+              borderRadius: 8, padding: "0.7rem 0.9rem", marginBottom: "0.85rem",
+              fontSize: "0.82rem", color: "#fca5a5",
+            }}>
+              <span style={{ flexShrink: 0 }}>⚠</span>
+              <span>
+                No rows have a first or last name with the current mapping, so nothing would be
+                saved. Point <strong>First Name</strong> or <strong>Last Name</strong> at the right
+                column below — the preview updates as you change it.
+              </span>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px,1fr))", gap: "0.5rem", marginBottom: "0.75rem" }}>
             {[["First Name", "first"], ["Last Name", "last"], ["Grade", "grade"], ["Parent Email", "parentEmail"]].map(([label, key]) => (
               <div key={key}>
@@ -217,8 +328,8 @@ export default function StudentRoster() {
           </div>
           <div className="flex gap1">
             <button className="btn btn-ghost" onClick={() => setParsed(null)}>Cancel</button>
-            <button className="btn btn-primary" onClick={doImport} disabled={importing}>
-              {importing ? "Saving…" : `Import ${parsed.rows.length} Students`}
+            <button className="btn btn-primary" onClick={doImport} disabled={importing || !importable.length}>
+              {importing ? "Saving…" : `Import ${importable.length} Students`}
             </button>
           </div>
         </div>
@@ -226,7 +337,17 @@ export default function StudentRoster() {
 
       {imported && (
         <div className="card mb2" style={{ borderLeft: "4px solid #22c55e" }}>
-          <span className="text-green bold">✓ Roster saved to Supabase — {students.length} students loaded on every device.</span>
+          <span className="text-green bold">✓ Roster saved — {imported.added} students loaded on every device.</span>
+        </div>
+      )}
+
+      {importErr && (
+        <div className="card mb2" style={{ borderLeft: "4px solid #ef4444" }}>
+          <div style={{ fontWeight: 700, color: "#fca5a5", marginBottom: "0.25rem" }}>Import failed</div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>{importErr}</div>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
+            Your existing roster was left untouched.
+          </div>
         </div>
       )}
 
