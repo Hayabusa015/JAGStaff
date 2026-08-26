@@ -255,6 +255,17 @@ function LoginScreen({ signInWithGoogle, loading, error }) {
   );
 }
 
+function FullScreenLoader() {
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <SchoolLogo size={56} />
+        <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>LOADING…</div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
   const [isStaff, setIsStaff] = useState(null); // null = checking
@@ -326,28 +337,12 @@ export default function App() {
     };
   }, [user, resetTimer]);
 
-  if (loading) return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-        <SchoolLogo size={56} />
-        <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>
-          LOADING…
-        </div>
-      </div>
-    </div>
-  );
+  if (loading) return <FullScreenLoader />;
 
   if (!user) return <LoginScreen signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
 
   // While checking staff status, show spinner
-  if (isStaff === null) return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-        <SchoolLogo size={56} />
-        <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>LOADING…</div>
-      </div>
-    </div>
-  );
+  if (isStaff === null) return <FullScreenLoader />;
 
   // Non-staff @jagschools.org account. Three cases:
   //   - already on the student roster (RLS narrows `students` to just their
@@ -359,21 +354,18 @@ export default function App() {
   //     which shows its own "Not on the Roster Yet" state until the office
   //     adds them
   if (isStaff === false) {
-    if (studentsLoading) return (
-      <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-          <SchoolLogo size={56} />
-          <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>LOADING…</div>
-        </div>
-      </div>
-    );
+    if (studentsLoading) return <FullScreenLoader />;
 
     const isRecognized = students.length > 0 || continuingAsStudent;
     if (!isRecognized) return (
       <RoleChooser
         user={user}
         onContinueAsStudent={() => setContinuingAsStudent(true)}
-        onBecameStaff={() => { setIsStaff(true); setIsAdmin(false); }}
+        onBecameStaff={() => {
+          setIsStaff(true);
+          setIsAdmin(false);
+          if (!tourDone(user.email)) setShowTour(true);
+        }}
       />
     );
 

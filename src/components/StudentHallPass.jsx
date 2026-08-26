@@ -67,10 +67,12 @@ export default function StudentHallPass({ user }) {
     return () => { active = false; clearInterval(id); };
   }, [teacherEmail, myPass?.status]);
 
-  // Live-updating elapsed timer while a pass is active.
+  // Live-updating elapsed timer while a pass is active. The display only
+  // shows whole minutes, so a 15s tick keeps it accurate without waking a
+  // battery-powered Chromebook every second.
   useEffect(() => {
     if (myPass?.status !== "active") return;
-    const id = setInterval(() => forceTick(t => t + 1), 1000);
+    const id = setInterval(() => forceTick(t => t + 1), 15000);
     return () => clearInterval(id);
   }, [myPass?.status]);
 

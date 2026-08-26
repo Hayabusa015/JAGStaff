@@ -2095,7 +2095,6 @@ export function useCeuOpportunities(userEmail) {
 
   async function uploadFlyer(file) {
     if (!SUPABASE_READY || !supabase) return null;
-    const ext = file.name.split(".").pop();
     const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error } = await supabase.storage.from("ceu-flyers").upload(path, file);
     if (error) return null;

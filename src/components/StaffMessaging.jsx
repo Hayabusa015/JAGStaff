@@ -252,7 +252,7 @@ export default function StaffMessaging({
   user, staffList = [],
   conversations = [], messages = {}, members = {},
   openOrCreateDM, createGroup, sendMessage, uploadAttachment, markRead,
-  getUnread, totalUnread,
+  getUnread,
 }) {
   const [activeConvId, setActiveConvId] = useState(null);
   const [draft, setDraft] = useState("");
