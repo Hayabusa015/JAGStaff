@@ -362,9 +362,13 @@ export default function App() {
         user={user}
         onContinueAsStudent={() => setContinuingAsStudent(true)}
         onBecameStaff={() => {
-          setIsStaff(true);
-          setIsAdmin(false);
-          if (!tourDone(user.email)) setShowTour(true);
+          // Full reload, not a state flip. Every data hook (students, events,
+          // roster, …) already fetched while this account was still non-staff
+          // and got empty results under RLS; flipping isStaff in place kept
+          // showing that stale emptiness — only hall passes recovered, via
+          // their realtime reload. A fresh mount refetches everything as
+          // staff, and the normal login effect handles the welcome tour.
+          window.location.reload();
         }}
       />
     );
