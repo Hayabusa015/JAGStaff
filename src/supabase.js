@@ -703,6 +703,23 @@ export function useStaffDirectory(user, room) {
   return staff;
 }
 
+// Persist a teacher's "max students out at once" to their staff_directory
+// row so it has a real source of truth — it was pure client-side React
+// state until now, invisible to anyone but that one open browser tab.
+export async function saveMaxOut(email, maxOut) {
+  if (!SUPABASE_READY || !supabase || !email) return;
+  await supabase.from("staff_directory").update({ max_out: maxOut }).eq("email", email);
+}
+
+// A count only, never the underlying rows — lets a student's own request
+// screen show "N already out" without granting read access to who those N
+// students are (that boundary is what Phase 1 closed).
+export async function getActivePassCount() {
+  if (!SUPABASE_READY || !supabase) return 0;
+  const { data } = await supabase.rpc("active_pass_count");
+  return data ?? 0;
+}
+
 // ─── Student Hall Pass (self-service) ──────────────────────────────
 // Powers the student-facing "Hall Pass" tab: request a pass, watch it go
 // pending -> active as a teacher approves it, sign back in when done.

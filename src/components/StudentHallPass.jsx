@@ -4,7 +4,7 @@
 // this component only ever reads myPass/myStudentRow and calls its actions.
 import { useEffect, useState } from "react";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useStudentHallPass, useStaffDirectory } from "../supabase.js";
+import { useStudentHallPass, useStaffDirectory, getActivePassCount } from "../supabase.js";
 import { DestIcon, IconClock, IconSend, IconReturn, IconBack, IconAlert } from "./hallPassIcons.jsx";
 
 const LAST_TEACHER_KEY = "student-hallpass-last-teacher";
@@ -19,6 +19,30 @@ function fmtElapsed(mins) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+// Informational only — a student can always submit or keep waiting
+// regardless of what this shows. A teacher can (and often will) approve
+// past their own limit.
+function CapacityNote({ activeOut, maxOut }) {
+  if (activeOut == null) return null;
+  const atOrOver = maxOut != null && activeOut >= maxOut;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "0.5rem",
+      fontSize: "0.76rem", color: atOrOver ? "#fbbf24" : "rgba(255,255,255,0.4)",
+      marginBottom: "1rem", justifyContent: "center",
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: atOrOver ? "#fbbf24" : "rgba(255,255,255,0.3)", flexShrink: 0,
+      }} />
+      {maxOut != null
+        ? `${activeOut}/${maxOut} students already out right now`
+        : `${activeOut} students already out right now`}
+      {atOrOver && " — your teacher can still approve you"}
+    </div>
+  );
+}
+
 export default function StudentHallPass({ user }) {
   const { myStudentRow, myPass, loading, error, requestPass, returnFromPass, cancelRequest } = useStudentHallPass(user);
   const teachers = useStaffDirectory(user);
@@ -29,6 +53,19 @@ export default function StudentHallPass({ user }) {
   });
   const [busy, setBusy] = useState(false);
   const [, forceTick] = useState(0);
+  const [activeOut, setActiveOut] = useState(null); // building-wide count, or null while unknown
+
+  // Advisory only — never gates the request. Refreshed when the picked
+  // teacher changes, when the pass status changes (form <-> pending), and
+  // on a light poll so a student waiting on approval sees it move as
+  // other students return.
+  useEffect(() => {
+    let active = true;
+    function refresh() { getActivePassCount().then(n => { if (active) setActiveOut(n); }); }
+    refresh();
+    const id = setInterval(refresh, 20000);
+    return () => { active = false; clearInterval(id); };
+  }, [teacherEmail, myPass?.status]);
 
   // Live-updating elapsed timer while a pass is active.
   useEffect(() => {
@@ -156,6 +193,8 @@ export default function StudentHallPass({ user }) {
               ))}
             </select>
 
+            <CapacityNote activeOut={activeOut} maxOut={teachers.find(t => t.email === teacherEmail)?.max_out} />
+
             <button type="submit" className="btn btn-primary" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
               disabled={busy || !teacherEmail}>
               <IconSend size={16} /> {busy ? "Sending…" : "Request Hall Pass"}
@@ -185,6 +224,8 @@ export default function StudentHallPass({ user }) {
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
               Waiting for {myPass.teacherName || "your teacher"} to approve…
             </div>
+            <CapacityNote activeOut={activeOut} maxOut={teachers.find(t => t.email === myPass.teacherEmail)?.max_out} />
+
             <button className="btn btn-ghost" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }}
               onClick={handleCancel} disabled={busy}>
               <IconBack size={14} style={{ marginRight: "0.35rem" }} /> Cancel Request

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY, saveMaxOut } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
 import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 
@@ -619,6 +619,23 @@ export default function HallPass({ user, students }) {
   const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
   const { periodsToday: bellPeriods } = useBellSchedule();
 
+  // Seed maxOut from the persisted directory value the first time it loads,
+  // so a student's "N already out" screen and this teacher's own setting
+  // start in agreement. Only runs once — after that, edits here are the
+  // source of truth until saved back out.
+  const [maxOutSynced, setMaxOutSynced] = useState(false);
+  useEffect(() => {
+    if (maxOutSynced || !user?.email || staff.length === 0) return;
+    const mine = staff.find(s => s.email === user.email);
+    if (mine?.max_out != null) setSettings(s => ({ ...s, maxOut: mine.max_out }));
+    setMaxOutSynced(true);
+  }, [staff, user?.email, maxOutSynced]);
+
+  function updateMaxOut(n) {
+    setSettings(s => ({ ...s, maxOut: n }));
+    saveMaxOut(user?.email, n);
+  }
+
   // Room pass form
   const [rpStudent, setRpStudent] = useState(null);
   const [rpSearch, setRpSearch] = useState("");
@@ -1021,9 +1038,13 @@ export default function HallPass({ user, students }) {
                   <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Pass Rules</div>
                   <div className="mb1">
                     <label>Max Students Out at Once</label>
-                    <select value={settings.maxOut} onChange={e => setSettings(s => ({ ...s, maxOut: Number(e.target.value) }))}>
+                    <select value={settings.maxOut} onChange={e => updateMaxOut(Number(e.target.value))}>
                       {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
+                    <div className="text-muted" style={{ fontSize: "0.72rem", marginTop: "0.3rem" }}>
+                      Visible to students as "already out" on their own request screen — approving past it is
+                      always still allowed.
+                    </div>
                   </div>
                   <div className="mb1">
                     <label>Flag After (minutes)</label>
