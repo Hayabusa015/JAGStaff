@@ -54,6 +54,7 @@ export default function AdminSettings({ user }) {
   const [codeErr, setCodeErr] = useState("");
   const [codeOk, setCodeOk] = useState(false);
   const [savingCode, setSavingCode] = useState(false);
+  const [showCode, setShowCode] = useState(false);
 
   async function handleSetCode(e) {
     e.preventDefault();
@@ -209,16 +210,30 @@ export default function AdminSettings({ user }) {
         <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
           A new teacher who isn't in the directory above sees a chooser on first login. Entering this
           passcode grants them staff access immediately — tell it to staff verbally, not in writing.
-          The code itself is never stored or shown in plain text, only a one-way hash.
+          Visible below only to admins; rotate it any time and the old code stops working instantly.
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", fontSize: "0.82rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", fontSize: "0.82rem", flexWrap: "wrap" }}>
           {codeStatus == null ? (
             <span className="text-muted">Checking…</span>
           ) : codeStatus.set ? (
             <>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80" }} />
-              <span>Passcode is set{codeStatus.updatedBy ? ` · last changed by ${codeStatus.updatedBy}` : ""}{codeStatus.updatedAt ? ` (${fmtLastSeen(codeStatus.updatedAt)})` : ""}</span>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", flexShrink: 0 }} />
+              <span>Current passcode:</span>
+              <code style={{
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 6, padding: "0.15rem 0.6rem", fontFamily: "monospace", fontSize: "0.85rem",
+                letterSpacing: showCode ? "0.02em" : "0.2em", color: GOLD, minWidth: "5.5rem", textAlign: "center",
+              }}>
+                {showCode ? codeStatus.code : "•".repeat(Math.max(6, codeStatus.code?.length || 8))}
+              </code>
+              <button type="button" onClick={() => setShowCode(v => !v)} style={{
+                background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.6)",
+                borderRadius: 6, padding: "0.15rem 0.6rem", cursor: "pointer", fontSize: "0.75rem",
+              }}>{showCode ? "Hide" : "Show"}</button>
+              <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                {codeStatus.updatedBy ? `changed by ${codeStatus.updatedBy}` : ""}{codeStatus.updatedAt ? ` · ${fmtLastSeen(codeStatus.updatedAt)}` : ""}
+              </span>
             </>
           ) : (
             <>

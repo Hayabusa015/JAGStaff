@@ -746,13 +746,17 @@ export async function setStaffSignupCode(code) {
 
 // Admin-only: whether a passcode is currently set, and when/by whom it was
 // last changed — never the code or its hash.
+// code_plain exists so an admin can view the live passcode, not just rotate
+// it blind. It's readable only under the same is_admin()-gated RLS as the
+// rest of this row — see the staff_signup_code_recoverable migration for
+// the trade-off that creates versus the original hash-only design.
 export function useStaffSignupCodeStatus() {
-  const [status, setStatus] = useState(null); // { set, updatedBy, updatedAt } | null while loading
+  const [status, setStatus] = useState(null); // { set, code, updatedBy, updatedAt } | null while loading
 
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) { setStatus({ set: false }); return; }
-    supabase.from("staff_signup_code").select("updated_by, updated_at").eq("id", 1).maybeSingle()
-      .then(({ data }) => setStatus({ set: !!data, updatedBy: data?.updated_by, updatedAt: data?.updated_at }));
+    supabase.from("staff_signup_code").select("code_plain, updated_by, updated_at").eq("id", 1).maybeSingle()
+      .then(({ data }) => setStatus({ set: !!data, code: data?.code_plain, updatedBy: data?.updated_by, updatedAt: data?.updated_at }));
   }, []);
 
   return status;
