@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
+import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 
 const timeToMin = (s) => { if (!s || !s.includes(":")) return null; const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
@@ -34,42 +35,6 @@ function useFullscreen() {
   }
   return { isFs, toggle };
 }
-
-// ─── Kiosk iconography ───────────────────────────────────────────────────────
-// Line icons keep the kiosk feeling like signage rather than a chat window.
-// 1.6 stroke on a 24-grid reads cleanly at both 20px and 40px.
-function Ico({ d, size = 24, stroke = 1.6, fill = "none", children }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
-         strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {children || <path d={d} />}
-    </svg>
-  );
-}
-
-const DEST_ICON = {
-  Bathroom:  (p) => <Ico {...p}><path d="M4 21V6a2 2 0 0 1 2-2h5v17"/><path d="M11 21h9V9a2 2 0 0 0-2-2h-7"/><circle cx="8" cy="13" r="1"/></Ico>,
-  Water:     (p) => <Ico {...p}><path d="M12 2.7s6 6.2 6 10.3a6 6 0 0 1-12 0C6 8.9 12 2.7 12 2.7Z"/></Ico>,
-  Office:    (p) => <Ico {...p}><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M15 9h2a2 2 0 0 1 2 2v10"/><path d="M9 7h2M9 11h2M9 15h2"/></Ico>,
-  Nurse:     (p) => <Ico {...p}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M12 11v5M9.5 13.5h5"/></Ico>,
-  Counselor: (p) => <Ico {...p}><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.8 9.8 0 0 1-2.9-.5L3 21l1.6-4.6A8.2 8.2 0 0 1 3.6 11.5a8.4 8.4 0 0 1 9-8.4 8.4 8.4 0 0 1 8.4 8.4Z"/></Ico>,
-  Library:   (p) => <Ico {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></Ico>,
-  Locker:    (p) => <Ico {...p}><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></Ico>,
-};
-
-const DestIcon = ({ dest, size = 24 }) => {
-  const C = DEST_ICON[dest];
-  return C ? <C size={size} /> : <Ico size={size}><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.7-7-11a7 7 0 1 1 14 0c0 5.3-7 11-7 11Z"/></Ico>;
-};
-
-const IconSearch = (p) => <Ico {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></Ico>;
-const IconLock   = (p) => <Ico {...p}><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></Ico>;
-const IconWalk   = (p) => <Ico {...p}><circle cx="13" cy="4" r="1.6"/><path d="m11 21 1.5-5.5L9 13l1-5 3 2 3 1"/><path d="m10 8-2.5 3M12.5 15.5 15 21"/></Ico>;
-const IconSwap   = (p) => <Ico {...p}><path d="M8 3 4 7l4 4"/><path d="M4 7h12a4 4 0 0 1 4 4v1"/><path d="m16 21 4-4-4-4"/><path d="M20 17H8a4 4 0 0 1-4-4v-1"/></Ico>;
-const IconBack   = (p) => <Ico {...p}><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></Ico>;
-const IconReturn = (p) => <Ico {...p}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></Ico>;
-const IconCheck  = (p) => <Ico {...p}><path d="m5 13 4 4L19 7"/></Ico>;
-const IconAlert  = (p) => <Ico {...p}><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></Ico>;
 
 // Shared surface tokens — one set of values so every panel in the kiosk
 // shares the same glass, radius and hairline.
@@ -126,7 +91,9 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
     return () => clearInterval(id);
   }, []);
 
-  const activePasses = passes.filter(p => !p.returnTime);
+  // status is undefined in mock mode / for legacy rows — treat that as active.
+  // Only an explicit 'pending' (an unapproved student request) is excluded.
+  const activePasses = passes.filter(p => p.status !== "pending");
   const maxReached = activePasses.length >= settings.maxOut;
 
   const filteredStudents = kioskSearch.trim()
@@ -635,7 +602,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
 }
 
 export default function HallPass({ user, students }) {
-  const { passes, log, ready, addPass, returnPass } = useSharedHallPasses();
+  const { passes, log, ready, addPass, returnPass, approvePass, denyPass } = useSharedHallPasses();
   const [kioskMode, setKioskMode] = useState(false);
   const [subTab, setSubTab] = useState("overview");
   const [settings, setSettings] = useState({
@@ -748,7 +715,18 @@ export default function HallPass({ user, students }) {
   const unconfirmedLate = lateArrivals.filter(a => !a.confirmed_by);
   const [logSearch, setLogSearch] = useState("");
 
-  const activePasses = passes.filter(p => !p.returnTime);
+  // status is undefined in mock mode / for legacy rows — treat that as active.
+  // Only an explicit 'pending' (an unapproved student request) is excluded.
+  const activePasses = passes.filter(p => p.status !== "pending");
+  const pendingPasses = passes.filter(p => p.status === "pending");
+  const [approvingId, setApprovingId] = useState(null);
+
+  async function handleApprove(passId) {
+    setApprovingId(passId);
+    await approvePass(passId);
+    setApprovingId(null);
+  }
+
   const todayLog = log;
   const avgDuration = todayLog.length ? Math.round(todayLog.reduce((s, p) => s + (p.duration || 0), 0) / todayLog.length) : null;
 
@@ -911,6 +889,47 @@ export default function HallPass({ user, students }) {
               </div>
             );
           })()}
+
+          {/* Pending Requests — students who asked for a pass from their own
+              device and are waiting on a teacher to clear them. Visible to
+              every staff member (matches this page's existing shared/
+              building-wide visibility), tagged with who it's addressed to. */}
+          {pendingPasses.length > 0 && (
+            <div className="card mb2" style={{ borderLeft: "4px solid " + GOLD }}>
+              <div className="flex items-center gap1 mb1">
+                <span className="pulse-dot" style={{ background: GOLD }} />
+                <span style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "0.08em", color: GOLD }}>
+                  PENDING REQUESTS · {pendingPasses.length}
+                </span>
+              </div>
+              {pendingPasses.map(p => {
+                const atMax = activePasses.length >= settings.maxOut;
+                return (
+                  <div key={p.id} className="flex items-center justify-between" style={{ padding: "0.5rem 0", borderBottom: "1px solid rgba(200,200,200,0.15)", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div className="flex items-center gap1">
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.75rem", color: "#000", flexShrink: 0 }}>
+                        {p.studentName?.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{p.studentName}</div>
+                        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                          Wants: {p.destination}{p.teacherName ? ` · asked ${p.teacherName}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap1" style={{ flexShrink: 0 }}>
+                      {atMax && <span style={{ fontSize: "0.72rem", color: "#fca5a5", alignSelf: "center" }}>at max out</span>}
+                      <button className="btn btn-ghost btn-sm" onClick={() => denyPass(p.id)}>Deny</button>
+                      <button className="btn btn-primary btn-sm" disabled={approvingId === p.id}
+                        onClick={() => handleApprove(p.id)}>
+                        {approvingId === p.id ? "…" : "✓ Approve"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Currently Out */}
           {activePasses.length > 0 && (

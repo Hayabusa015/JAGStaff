@@ -20,7 +20,9 @@ function rowToPass(r) {
     id: r.id,
     studentId: r.student_id,
     studentName: r.student_name,
+    studentEmail: r.student_email,
     destination: r.destination,
+    status: r.status, // 'pending' | 'active' — undefined on log rows and in mock mode
     outTime: r.out_time,
     returnTime: r.return_time,
     duration: r.duration,
@@ -110,7 +112,30 @@ export function useSharedHallPasses() {
     await supabase.from("hall_passes").delete().eq("id", passId);
   }
 
-  return { passes, log, ready, addPass, returnPass };
+  // Approve a student's pending request: flips it to an active pass and
+  // stamps out_time now (the request's created_at is when they asked, not
+  // when they were cleared to leave).
+  async function approvePass(passId) {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(p => p.map(x => x.id === passId ? { ...x, status: "active", outTime: new Date().toISOString() } : x));
+      return;
+    }
+    await supabase.from("hall_passes")
+      .update({ status: "active", out_time: new Date().toISOString() })
+      .eq("id", passId).eq("status", "pending");
+  }
+
+  // Decline a pending request outright — it never happened, so it's removed
+  // rather than logged (covered by the existing staff delete policy).
+  async function denyPass(passId) {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(p => p.filter(x => x.id !== passId));
+      return;
+    }
+    await supabase.from("hall_passes").delete().eq("id", passId).eq("status", "pending");
+  }
+
+  return { passes, log, ready, addPass, returnPass, approvePass, denyPass };
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -676,6 +701,75 @@ export function useStaffDirectory(user, room) {
   }, [user?.email, room]);
 
   return staff;
+}
+
+// ─── Student Hall Pass (self-service) ──────────────────────────────
+// Powers the student-facing "Hall Pass" tab: request a pass, watch it go
+// pending -> active as a teacher approves it, sign back in when done.
+// All writes route through SECURITY DEFINER RPCs (see the
+// student_hall_pass_self_service migration) — this hook never inserts or
+// updates hall_passes directly, only reads the caller's own row and calls
+// the RPC for every mutation, so the anti-cheat checks live in one place.
+export function useStudentHallPass(user) {
+  const [myStudentRow, setMyStudentRow] = useState(null); // school-wide roster row, or null
+  const [myPass, setMyPass] = useState(null);              // own pending/active row, or null
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !user?.email) { setLoading(false); return; }
+    let active = true;
+
+    async function load() {
+      const [{ data: srow }, { data: prow }] = await Promise.all([
+        supabase.from("students").select("*").eq("student_email", user.email).maybeSingle(),
+        supabase.from("hall_passes").select("*").eq("student_email", user.email).maybeSingle(),
+      ]);
+      if (!active) return;
+      setMyStudentRow(srow || null);
+      setMyPass(prow ? rowToPass(prow) : null);
+      setLoading(false);
+    }
+    load();
+
+    // Realtime: a teacher approving/denying elsewhere should update this
+    // student's screen without a refresh.
+    const channel = supabase
+      .channel(`student-hallpass-${user.email}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hall_passes", filter: `student_email=eq.${user.email}` }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [user?.email]);
+
+  async function requestPass(destination, teacherEmail) {
+    setError("");
+    if (!SUPABASE_READY || !supabase) return false;
+    const { error: err } = await supabase.rpc("student_request_pass", {
+      p_destination: destination,
+      p_teacher_email: teacherEmail || null,
+    });
+    if (err) { setError(err.message.replace(/^.*?:\s*/, "")); return false; }
+    return true;
+  }
+
+  async function returnFromPass() {
+    setError("");
+    if (!myPass || !SUPABASE_READY || !supabase) return false;
+    const { error: err } = await supabase.rpc("student_return_pass", { p_pass_id: myPass.id });
+    if (err) { setError(err.message.replace(/^.*?:\s*/, "")); return false; }
+    return true;
+  }
+
+  async function cancelRequest() {
+    setError("");
+    if (!myPass || !SUPABASE_READY || !supabase) return false;
+    const { error: err } = await supabase.rpc("student_cancel_pass_request", { p_pass_id: myPass.id });
+    if (err) { setError(err.message.replace(/^.*?:\s*/, "")); return false; }
+    return true;
+  }
+
+  return { myStudentRow, myPass, loading, error, requestPass, returnFromPass, cancelRequest };
 }
 
 // ─── Room Passes ──────────────────────────────────────────────────

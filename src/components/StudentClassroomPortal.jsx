@@ -17,6 +17,7 @@ function getTeacherName() {
 import { AppProvider as ClassroomProvider, useApp } from "../classroom/ClassroomContext.jsx";
 import ClassroomApp from "../classroom/ClassroomApp.jsx";
 import GmenEnrollmentView from "./GmenEnrollmentView.jsx";
+import StudentHallPass from "./StudentHallPass.jsx";
 
 function SchoolLogo({ size = 36 }) {
   return (
@@ -143,6 +144,9 @@ export default function StudentClassroomPortal({ user, signOut }) {
             <ZoneTab active={zone === "gmen"} onClick={() => setZone("gmen")}>
               G-Men Period
             </ZoneTab>
+            <ZoneTab active={zone === "hallpass"} onClick={() => setZone("hallpass")}>
+              Hall Pass
+            </ZoneTab>
           </div>
 
           <div className="nav-user">
@@ -161,6 +165,8 @@ export default function StudentClassroomPortal({ user, signOut }) {
         <div style={{ flex: 1, overflow: "auto" }}>
           <GmenEnrollmentView user={user} signOut={signOut} />
         </div>
+      ) : zone === "hallpass" ? (
+        <StudentHallPass user={user} />
       ) : (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <ClassroomProvider user={user} isStaff={false}>
