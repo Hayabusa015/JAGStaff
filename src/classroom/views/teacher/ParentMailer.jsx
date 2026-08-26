@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Mail,
   Sparkles,
@@ -25,9 +25,11 @@ export default function ParentMailer({ embedded = false }) {
     emailLog,
   } = useApp();
 
-  const [classId, setClassId] = useState(classes[0].id);
+  // classes/students arrive async from Supabase, so they can legitimately be
+  // empty on the very first render — never index into them unguarded here.
+  const [classId, setClassId] = useState(classes[0]?.id ?? null);
   const [studentId, setStudentId] = useState(
-    students.find((s) => s.classId === classes[0].id)?.id
+    () => students.find((s) => s.classId === classes[0]?.id)?.id ?? null
   );
   const [tone, setTone] = useState('positive');
   const [scenario, setScenario] = useState(behaviorScenarios.positive[0]);
@@ -35,10 +37,30 @@ export default function ParentMailer({ embedded = false }) {
   const [draft, setDraft] = useState(null);
   const [sentFlash, setSentFlash] = useState(null);
 
+  // The useState initializer above only runs once — if classes/students
+  // load in *after* mount (the normal case), pick up the first real class
+  // as soon as it appears instead of staying stuck on null.
+  useEffect(() => {
+    if (classId != null || classes.length === 0) return;
+    const firstClass = classes[0];
+    setClassId(firstClass.id);
+    setStudentId(students.find((s) => s.classId === firstClass.id)?.id ?? null);
+  }, [classes, students, classId]);
+
   const roster = useMemo(
     () => students.filter((s) => s.classId === classId),
     [students, classId]
   );
+
+  if (classes.length === 0) {
+    return (
+      <EmptyState
+        icon={Mail}
+        title="No classes yet"
+        subtitle="Add a class in Settings, then come back to send a parent note."
+      />
+    );
+  }
 
   const onClassChange = (id) => {
     setClassId(id);
