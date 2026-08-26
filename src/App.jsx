@@ -6,6 +6,7 @@ import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, 
 import Dashboard from "./components/Dashboard.jsx";
 import ErrorBoundary, { TabLoading } from "./components/ErrorBoundary.jsx";
 import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
+import RoleChooser from "./components/RoleChooser.jsx";
 
 // Every tab except the Dashboard landing view is lazy-loaded so the initial
 // bundle stays small — chunks download on first visit to each tab.
@@ -258,6 +259,12 @@ export default function App() {
   const { user, loading, error, signInWithGoogle, signOut } = useAuth(ALLOWED_DOMAIN);
   const [isStaff, setIsStaff] = useState(null); // null = checking
   const [isAdmin, setIsAdmin] = useState(false);
+  // Session-only — an account genuinely unknown to the system (neither
+  // staff_directory nor the student roster) that picked "I'm a Student".
+  // Not persisted: if they aren't on the roster yet, they'll see the
+  // chooser again next login, which is harmless and resolves itself the
+  // moment the office adds them.
+  const [continuingAsStudent, setContinuingAsStudent] = useState(false);
 
   useEffect(() => {
     if (!user) { setIsStaff(null); setIsAdmin(false); return; }
@@ -296,7 +303,7 @@ export default function App() {
     setZoneState(z);
     try { localStorage.setItem("jag-zone", z); } catch { /* ignore */ }
   }, []);
-  const { students } = useStudents();
+  const { students, loading: studentsLoading } = useStudents();
   const { events: weeklyEvents, addEvent, removeEvent } = useWeeklyEvents();
   const { rosters: tripRosters, addRoster, removeRoster } = useTripRosters();
   const [alerts, setAlerts] = useState([]);
@@ -342,12 +349,40 @@ export default function App() {
     </div>
   );
 
-  // Non-staff @jagschools.org account → student portal (My Classroom + G-Men Period)
-  if (isStaff === false) return (
-    <Suspense fallback={<TabLoading />}>
-      <StudentClassroomPortal user={user} signOut={signOut} />
-    </Suspense>
-  );
+  // Non-staff @jagschools.org account. Three cases:
+  //   - already on the student roster (RLS narrows `students` to just their
+  //     own row) → straight into the student portal, as always
+  //   - genuinely unknown to the system (neither staff_directory nor the
+  //     roster) → one-time chooser, so a new hire doesn't land in the
+  //     student portal by default
+  //   - picked "I'm a Student" from that chooser this session → portal,
+  //     which shows its own "Not on the Roster Yet" state until the office
+  //     adds them
+  if (isStaff === false) {
+    if (studentsLoading) return (
+      <div style={{ minHeight: "100vh", background: "var(--bg-deep)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+          <SchoolLogo size={56} />
+          <div style={{ color: GOLD, fontWeight: 800, letterSpacing: "0.15em", fontSize: "0.8rem" }}>LOADING…</div>
+        </div>
+      </div>
+    );
+
+    const isRecognized = students.length > 0 || continuingAsStudent;
+    if (!isRecognized) return (
+      <RoleChooser
+        user={user}
+        onContinueAsStudent={() => setContinuingAsStudent(true)}
+        onBecameStaff={() => { setIsStaff(true); setIsAdmin(false); }}
+      />
+    );
+
+    return (
+      <Suspense fallback={<TabLoading />}>
+        <StudentClassroomPortal user={user} signOut={signOut} />
+      </Suspense>
+    );
+  }
 
   const isClassroomOwner = !CLASSROOM_OWNER_EMAIL || user.email.toLowerCase() === CLASSROOM_OWNER_EMAIL.toLowerCase();
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GOLD, ALLOWED_DOMAIN, SESSION_TIMEOUT_MS } from "../constants.js";
-import { useAdminStaff, useBellSchedule, todayScheduleKey } from "../supabase.js";
+import { useAdminStaff, useBellSchedule, todayScheduleKey, useStaffSignupCodeStatus, useStaffSignupAttempts, setStaffSignupCode } from "../supabase.js";
 
 function fmt12(hhmm) {
   if (!hhmm || !hhmm.includes(":")) return "—";
@@ -11,10 +11,62 @@ function fmt12(hhmm) {
 }
 
 export default function AdminSettings({ user }) {
-  const { staffList, toggleAdmin } = useAdminStaff();
+  const { staffList, toggleAdmin, addStaffMember, removeStaffMember } = useAdminStaff();
   const { schedules, saveSchedule } = useBellSchedule();
   const [schedTab, setSchedTab] = useState("twt"); // "twt" | "mf"
   const [drafts, setDrafts] = useState({}); // { twt: [...] | null, mf: [...] | null }
+
+  // Add-staff-by-email form
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [addErr, setAddErr] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [rowErr, setRowErr] = useState(""); // per-row remove/toggle failures (e.g. last-admin block)
+
+  async function handleAddStaff(e) {
+    e.preventDefault();
+    if (adding) return;
+    setAdding(true);
+    setAddErr("");
+    const res = await addStaffMember(newEmail, newName);
+    setAdding(false);
+    if (!res.ok) { setAddErr(res.error); return; }
+    setNewEmail(""); setNewName("");
+  }
+
+  async function handleToggleAdmin(email, value) {
+    setRowErr("");
+    const res = await toggleAdmin(email, value);
+    if (res && !res.ok) setRowErr(res.error);
+  }
+
+  async function handleRemoveStaff(email, name) {
+    if (!window.confirm(`Remove ${name || email} from staff? They'll lose staff access immediately.`)) return;
+    setRowErr("");
+    const res = await removeStaffMember(email);
+    if (!res.ok) setRowErr(res.error);
+  }
+
+  // Staff sign-up passcode (self-service onboarding)
+  const codeStatus = useStaffSignupCodeStatus();
+  const attempts = useStaffSignupAttempts();
+  const [newCode, setNewCode] = useState("");
+  const [codeErr, setCodeErr] = useState("");
+  const [codeOk, setCodeOk] = useState(false);
+  const [savingCode, setSavingCode] = useState(false);
+
+  async function handleSetCode(e) {
+    e.preventDefault();
+    if (savingCode) return;
+    setSavingCode(true);
+    setCodeErr("");
+    setCodeOk(false);
+    const res = await setStaffSignupCode(newCode);
+    setSavingCode(false);
+    if (!res.ok) { setCodeErr(res.error); return; }
+    setNewCode("");
+    setCodeOk(true);
+  }
 
   const editing = !!drafts[schedTab];
   const rows = drafts[schedTab] || schedules[schedTab] || [];
@@ -73,6 +125,20 @@ export default function AdminSettings({ user }) {
           </div>
         </div>
 
+        {/* Add staff by email — the zero-shared-secret path: you already
+            know your staff's school addresses, so this needs no passcode. */}
+        <form onSubmit={handleAddStaff} style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+          <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
+            placeholder="name@jagschools.org" style={{ flex: "1 1 220px" }} />
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+            placeholder="Display name (optional)" style={{ flex: "1 1 160px" }} />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={adding || !newEmail.trim()}>
+            {adding ? "Adding…" : "+ Add Staff"}
+          </button>
+        </form>
+        {addErr && <p className="text-red mb1" style={{ fontSize: "0.8rem" }}>{addErr}</p>}
+        {rowErr && <p className="text-red mb1" style={{ fontSize: "0.8rem" }}>{rowErr}</p>}
+
         {staffList.length === 0 ? (
           <div className="text-muted" style={{ fontSize: "0.85rem" }}>No staff have logged in yet.</div>
         ) : (
@@ -80,7 +146,7 @@ export default function AdminSettings({ user }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                  {["Name", "Email", "Room", "Last Seen", "Admin"].map(h => (
+                  {["Name", "Email", "Room", "Last Seen", "Admin", ""].map(h => (
                     <th key={h} style={{
                       textAlign: "left", padding: "0.4rem 0.75rem",
                       fontSize: "0.7rem", textTransform: "uppercase",
@@ -103,7 +169,7 @@ export default function AdminSettings({ user }) {
                         <span style={{ fontSize: "0.75rem", color: GOLD, fontWeight: 700 }}>You</span>
                       ) : (
                         <button
-                          onClick={() => toggleAdmin(s.email, !s.is_admin)}
+                          onClick={() => handleToggleAdmin(s.email, !s.is_admin)}
                           title={s.is_admin ? "Remove admin" : "Grant admin"}
                           style={{
                             width: 40, height: 22, borderRadius: 11, border: "none",
@@ -121,10 +187,75 @@ export default function AdminSettings({ user }) {
                         </button>
                       )}
                     </td>
+                    <td style={{ padding: "0.55rem 0.75rem" }}>
+                      {s.email !== user?.email && (
+                        <button onClick={() => handleRemoveStaff(s.email, s.name)} title="Remove staff access" style={{
+                          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444",
+                          borderRadius: 6, padding: "0.25rem 0.55rem", cursor: "pointer", fontSize: "0.75rem",
+                        }}>Remove</button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* Staff Sign-Up Passcode */}
+      <div className="card">
+        <div className="section-title">Staff Sign-Up Passcode</div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          A new teacher who isn't in the directory above sees a chooser on first login. Entering this
+          passcode grants them staff access immediately — tell it to staff verbally, not in writing.
+          The code itself is never stored or shown in plain text, only a one-way hash.
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", fontSize: "0.82rem" }}>
+          {codeStatus == null ? (
+            <span className="text-muted">Checking…</span>
+          ) : codeStatus.set ? (
+            <>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80" }} />
+              <span>Passcode is set{codeStatus.updatedBy ? ` · last changed by ${codeStatus.updatedBy}` : ""}{codeStatus.updatedAt ? ` (${fmtLastSeen(codeStatus.updatedAt)})` : ""}</span>
+            </>
+          ) : (
+            <>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171" }} />
+              <span>No passcode set yet — self sign-up is disabled until you set one.</span>
+            </>
+          )}
+        </div>
+
+        <form onSubmit={handleSetCode} style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <input type="text" value={newCode} onChange={e => setNewCode(e.target.value)}
+            placeholder="New passcode (6+ characters)" style={{ flex: "1 1 220px" }} />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={savingCode || newCode.trim().length < 6}>
+            {savingCode ? "Saving…" : codeStatus?.set ? "Rotate Passcode" : "Set Passcode"}
+          </button>
+        </form>
+        {codeErr && <p className="text-red mt1" style={{ fontSize: "0.8rem" }}>{codeErr}</p>}
+        {codeOk && <p className="text-green mt1" style={{ fontSize: "0.8rem" }}>✓ Passcode updated. Tell your staff the new one — the old one stops working immediately.</p>}
+
+        {attempts.length > 0 && (
+          <div style={{ marginTop: "1.25rem" }}>
+            <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", marginBottom: "0.5rem" }}>
+              Recent Sign-Up Attempts
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", maxHeight: 200, overflowY: "auto" }}>
+              {attempts.map(a => (
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", padding: "0.25rem 0" }}>
+                  <span style={{ color: "rgba(255,255,255,0.6)" }}>{a.email}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ color: a.success ? "#4ade80" : "#f87171", fontWeight: 700, fontSize: "0.7rem" }}>
+                      {a.success ? "JOINED" : "WRONG CODE"}
+                    </span>
+                    <span style={{ color: "rgba(255,255,255,0.3)" }}>{fmtLastSeen(a.created_at)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -720,6 +720,44 @@ export async function getActivePassCount() {
   return data ?? 0;
 }
 
+// ─── Staff self-service sign-up (passcode-gated) ────────────────────
+// A brand-new account (not yet in staff_directory or the student roster)
+// can self-declare as staff by entering a passcode the admin set. The
+// passcode itself is never readable client-side — everything routes
+// through claim_staff_role(), which checks it server-side against a
+// bcrypt hash. Returns { ok, error } instead of throwing so the caller
+// can render the message directly.
+export async function claimStaffRole(code, name) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+  const { error } = await supabase.rpc("claim_staff_role", { p_code: code, p_name: name || null });
+  if (error) return { ok: false, error: error.message.replace(/^.*?:\s*/, "") };
+  return { ok: true };
+}
+
+// Admin-only: set or rotate the passcode staff use to self-claim access.
+// The RPC re-checks is_admin() itself, so this is safe to expose to any
+// signed-in caller — it will simply fail for a non-admin.
+export async function setStaffSignupCode(code) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+  const { error } = await supabase.rpc("set_staff_signup_code", { p_code: code });
+  if (error) return { ok: false, error: error.message.replace(/^.*?:\s*/, "") };
+  return { ok: true };
+}
+
+// Admin-only: whether a passcode is currently set, and when/by whom it was
+// last changed — never the code or its hash.
+export function useStaffSignupCodeStatus() {
+  const [status, setStatus] = useState(null); // { set, updatedBy, updatedAt } | null while loading
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) { setStatus({ set: false }); return; }
+    supabase.from("staff_signup_code").select("updated_by, updated_at").eq("id", 1).maybeSingle()
+      .then(({ data }) => setStatus({ set: !!data, updatedBy: data?.updated_by, updatedAt: data?.updated_at }));
+  }, []);
+
+  return status;
+}
+
 // ─── Student Hall Pass (self-service) ──────────────────────────────
 // Powers the student-facing "Hall Pass" tab: request a pass, watch it go
 // pending -> active as a teacher approves it, sign back in when done.
@@ -959,20 +997,64 @@ export async function isStaffEmail(email) {
 export function useAdminStaff() {
   const [staffList, setStaffList] = useState([]);
 
-  useEffect(() => {
+  function reload() {
     if (!SUPABASE_READY || !supabase) return;
     supabase.from("staff_directory").select("*").order("name").then(({ data }) => {
       if (data) setStaffList(data);
     });
-  }, []);
+  }
+
+  useEffect(reload, []);
 
   async function toggleAdmin(email, value) {
     setStaffList(prev => prev.map(s => s.email === email ? { ...s, is_admin: value } : s));
     if (!SUPABASE_READY || !supabase) return;
-    await supabase.from("staff_directory").update({ is_admin: value }).eq("email", email);
+    const { error } = await supabase.from("staff_directory").update({ is_admin: value }).eq("email", email);
+    // The last-admin trigger can reject this — resync from the server so a
+    // rejected demote doesn't leave the UI showing a state that didn't stick.
+    if (error) { reload(); return { ok: false, error: error.message.replace(/^.*?:\s*/, "") }; }
+    return { ok: true };
   }
 
-  return { staffList, toggleAdmin };
+  // Admin-only per RLS (see admin_only_staff_directory_management) — this
+  // will fail server-side for anyone else even if somehow called.
+  async function addStaffMember(email, name) {
+    if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+    const clean = (email || "").trim().toLowerCase();
+    if (!clean.endsWith("@jagschools.org")) return { ok: false, error: "Must be a @jagschools.org address." };
+    const { data, error } = await supabase.from("staff_directory")
+      .insert({ email: clean, name: (name || "").trim() || clean.split("@")[0] })
+      .select("*").single();
+    if (error) return { ok: false, error: error.message.replace(/^.*?:\s*/, "") };
+    setStaffList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+    return { ok: true };
+  }
+
+  async function removeStaffMember(email) {
+    if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+    const { error } = await supabase.from("staff_directory").delete().eq("email", email);
+    // The last-admin trigger blocks removing the sole admin — surface that
+    // instead of silently leaving a stale row in the UI.
+    if (error) return { ok: false, error: error.message.replace(/^.*?:\s*/, "") };
+    setStaffList(prev => prev.filter(s => s.email !== email));
+    return { ok: true };
+  }
+
+  return { staffList, toggleAdmin, addStaffMember, removeStaffMember };
+}
+
+// Admin-only (RLS): who has tried to self-claim staff access via the
+// passcode, and whether it succeeded — the audit trail for that flow.
+export function useStaffSignupAttempts() {
+  const [attempts, setAttempts] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("staff_signup_attempts").select("*").order("created_at", { ascending: false }).limit(50)
+      .then(({ data }) => setAttempts(data || []));
+  }, []);
+
+  return attempts;
 }
 
 export function useGmenSettings() {
