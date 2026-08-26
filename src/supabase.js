@@ -1381,6 +1381,18 @@ export function useGmenEnrollments(period) {
   return { enrollments, enroll, unenroll, seatCount, adminMoveStudent };
 }
 
+// Bulk-enroll for the class roster import. Upsert with ignoreDuplicates
+// leans on the (student_email, grading_period) unique constraint: a student
+// who already has an enrollment this period is left untouched rather than
+// moved, so re-importing the same sheet is always safe.
+export async function bulkEnrollGmen(rows) {
+  if (!SUPABASE_READY || !supabase || !rows.length) return { added: 0, error: null };
+  const { data, error } = await supabase.from("gmen_enrollments")
+    .upsert(rows, { onConflict: "student_email,grading_period", ignoreDuplicates: true })
+    .select("id");
+  return { added: data?.length ?? 0, error };
+}
+
 export function useGmenChangeRequests() {
   const [changeRequests, setChangeRequests] = useState([]);
 

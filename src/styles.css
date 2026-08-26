@@ -1162,3 +1162,10 @@ label {
   .kiosk-body { padding: 1.25rem 1rem; }
   .kiosk-footer { padding: 0.5rem 1rem; font-size: 0.56rem; letter-spacing: 0.12em; }
 }
+
+/* A card with an open autocomplete must float above sibling cards.
+   backdrop-filter gives every .card its own stacking context, so the
+   dropdown itself can never escape — lift the host card instead. The
+   list only exists in the DOM while the user is typing, so this never
+   affects resting layout. */
+.card:has(.autocomplete-list) { z-index: 30; }

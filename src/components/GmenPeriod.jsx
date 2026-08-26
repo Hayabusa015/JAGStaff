@@ -5,6 +5,7 @@ import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
   useGmenChangeRequests, useGmenSettings, useGmailSend, useBellSchedule,
 } from "../supabase.js";
+import { AddGmenClassForm, GmenRosterImport } from "./GmenClassManager.jsx";
 
 function fmt12(hhmm) {
   if (!hhmm || !hhmm.includes(":")) return "";
@@ -13,7 +14,6 @@ function fmt12(hhmm) {
   const hr = h % 12 === 0 ? 12 : h % 12;
   return `${hr}:${String(m).padStart(2, "0")} ${ap}`;
 }
-import GmenClassManager from "./GmenClassManager.jsx";
 
 function initials(s) {
   const f = s?.firstName || s?.name || "";
@@ -910,6 +910,21 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
             })}
           </div>
         )}
+      </div>
+
+      {/* ── Build classes: manual add + sheet import ─────────────────────── */}
+      <div className="card">
+        <div className="section-title">Add a Class — Period {period}</div>
+        <AddGmenClassForm addGmenClass={addGmenClass} period={period} />
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", margin: "1.1rem 0 0.9rem" }} />
+        <div className="section-title">Import Classes &amp; Students from a Sheet</div>
+        <GmenRosterImport
+          classes={classes}
+          enrollments={enrollments}
+          addGmenClass={addGmenClass}
+          students={students}
+          period={period}
+        />
       </div>
 
       {/* ── All classes overview ─────────────────────────────────────────── */}
