@@ -4,7 +4,8 @@
 // this component only ever reads myPass/myStudentRow and calls its actions.
 import { useEffect, useState } from "react";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useStudentHallPass, useStaffDirectory, getActivePassCount } from "../supabase.js";
+import { useStudentHallPass, useStaffDirectory, getActivePassCount, getMyPassStats } from "../supabase.js";
+import { pickPassMessage } from "./passMessages.js";
 import { DestIcon, IconClock, IconSend, IconReturn, IconBack, IconAlert } from "./hallPassIcons.jsx";
 
 const LAST_TEACHER_KEY = "student-hallpass-last-teacher";
@@ -54,6 +55,8 @@ export default function StudentHallPass({ user }) {
   const [busy, setBusy] = useState(false);
   const [, forceTick] = useState(0);
   const [activeOut, setActiveOut] = useState(null); // building-wide count, or null while unknown
+  const [stats, setStats] = useState(null);         // my counts/rank/limits, from my_pass_stats
+  const [funMsg, setFunMsg] = useState("");
 
   // Advisory only — never gates the request. Refreshed when the picked
   // teacher changes, when the pass status changes (form <-> pending), and
@@ -66,6 +69,13 @@ export default function StudentHallPass({ user }) {
     const id = setInterval(refresh, 20000);
     return () => { active = false; clearInterval(id); };
   }, [teacherEmail, myPass?.status]);
+
+  // Personal stats: powers the fun message and the daily-limit meter.
+  useEffect(() => {
+    let live = true;
+    getMyPassStats().then(st => { if (live) setStats(st); });
+    return () => { live = false; };
+  }, [myPass?.status]);
 
   // Live-updating elapsed timer while a pass is active. The display only
   // shows whole minutes, so a 15s tick keeps it accurate without waking a
@@ -87,6 +97,15 @@ export default function StudentHallPass({ user }) {
     const ok = await requestPass(destination, teacherEmail || null);
     if (ok && teacherEmail) {
       try { localStorage.setItem(LAST_TEACHER_KEY, teacherEmail); } catch { /* ignore */ }
+    }
+    if (ok) {
+      // Stats-aware one-liner, varied and never the same twice in a row.
+      let last = null;
+      try { last = localStorage.getItem("hallpass-last-msg"); } catch { /* ignore */ }
+      const st = await getMyPassStats();
+      const msg = pickPassMessage({ stats: st, destination, lastMessage: last });
+      setFunMsg(msg);
+      try { localStorage.setItem("hallpass-last-msg", msg); } catch { /* ignore */ }
     }
     setBusy(false);
   }
@@ -197,6 +216,19 @@ export default function StudentHallPass({ user }) {
 
             <CapacityNote activeOut={activeOut} maxOut={teachers.find(t => t.email === teacherEmail)?.max_out} />
 
+            {stats?.dailyMax != null && (
+              <div style={{ textAlign: "center", fontSize: "0.76rem", marginBottom: "1rem",
+                color: stats.today >= stats.dailyMax ? "#fca5a5" : "rgba(255,255,255,0.45)" }}>
+                {Math.min(stats.today, stats.dailyMax)} of {stats.dailyMax} daily passes used
+                {stats.allowedPeriods?.length ? ` · allowed during ${stats.allowedPeriods.join(", ")}` : ""}
+              </div>
+            )}
+            {stats?.dailyMax == null && stats?.allowedPeriods?.length > 0 && (
+              <div style={{ textAlign: "center", fontSize: "0.76rem", marginBottom: "1rem", color: "rgba(255,255,255,0.45)" }}>
+                Passes allowed during: {stats.allowedPeriods.join(", ")}
+              </div>
+            )}
+
             <button type="submit" className="btn btn-primary" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
               disabled={busy || !teacherEmail}>
               <IconSend size={16} /> {busy ? "Sending…" : "Request Hall Pass"}
@@ -223,9 +255,17 @@ export default function StudentHallPass({ user }) {
               <DestIcon dest={myPass.destination} size={16} style={{ verticalAlign: "-2px", marginRight: "0.35rem" }} />
               {myPass.destination}
             </div>
-            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", marginBottom: funMsg ? "0.75rem" : "1.5rem" }}>
               Waiting for {myPass.teacherName || "your teacher"} to approve…
             </div>
+            {funMsg && (
+              <div style={{
+                display: "inline-block", background: "rgba(245,192,37,0.1)",
+                border: `1px solid ${GOLD}33`, borderRadius: 999,
+                padding: "0.4rem 1rem", fontSize: "0.82rem", color: GOLD,
+                marginBottom: "1.5rem",
+              }}>{funMsg}</div>
+            )}
             <CapacityNote activeOut={activeOut} maxOut={teachers.find(t => t.email === myPass.teacherEmail)?.max_out} />
 
             <button className="btn btn-ghost" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.2)" }}

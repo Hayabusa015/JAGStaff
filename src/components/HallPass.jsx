@@ -4,6 +4,7 @@ import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY, saveMaxOut } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
 import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
+import StudentPassInspector from "./StudentPassInspector.jsx";
 
 const timeToMin = (s) => { if (!s || !s.includes(":")) return null; const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
@@ -617,7 +618,7 @@ export default function HallPass({ user, students }) {
   const staff = useStaffDirectory(user, settings.room);
   const { sentByMe, sentToMe, allActive: allActiveRoomPasses, sendPass, markArrived: markRoomArrived, dismiss } = useRoomPasses(user?.email);
   const { arrivals: lateArrivals, logArrival, confirmArrival } = useLateArrivals();
-  const { periodsToday: bellPeriods } = useBellSchedule();
+  const { periodsToday: bellPeriods, schedules: bellSchedules } = useBellSchedule();
 
   // Seed maxOut from the persisted directory value the first time it loads,
   // so a student's "N already out" screen and this teacher's own setting
@@ -746,6 +747,14 @@ export default function HallPass({ user, students }) {
 
   const todayLog = log;
   const avgDuration = todayLog.length ? Math.round(todayLog.reduce((s, p) => s + (p.duration || 0), 0) / todayLog.length) : null;
+
+  // Per-student drill-down (history + restrictions)
+  const [inspect, setInspect] = useState(null); // { id, name } | null
+  const [inspectSearch, setInspectSearch] = useState("");
+  const allPeriodNames = [...new Set([...(bellSchedules?.twt || []), ...(bellSchedules?.mf || [])].map(p => p.name))];
+  const inspectResults = inspectSearch.trim()
+    ? students.filter(st => `${st.firstName} ${st.lastName}`.toLowerCase().includes(inspectSearch.toLowerCase())).slice(0, 6)
+    : [];
 
   const overviewMap = {};
   todayLog.forEach(p => {
@@ -986,12 +995,35 @@ export default function HallPass({ user, students }) {
           {subTab === "overview" && (
             <div className="card">
               <div className="section-title">Student Pass Usage Today</div>
+
+              {/* Look up any student's full history & restrictions */}
+              <div style={{ position: "relative", marginBottom: "0.75rem", maxWidth: 340 }}>
+                <input value={inspectSearch} onChange={e => setInspectSearch(e.target.value)}
+                  placeholder="Look up any student's history & limits…" style={{ fontSize: "0.85rem" }} />
+                {inspectResults.length > 0 && (
+                  <ul className="autocomplete-list" style={{ zIndex: 20 }}>
+                    {inspectResults.map(st => (
+                      <li key={st.id} className="autocomplete-item"
+                        onClick={() => { setInspect({ id: st.id, name: `${st.firstName} ${st.lastName}` }); setInspectSearch(""); }}>
+                        {st.firstName} {st.lastName} {st.grade ? <span className="tag tag-amber">{st.grade}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               {overviewRows.length === 0 && <p className="text-muted">No passes issued yet today.</p>}
+              {overviewRows.length > 0 && (
+                <p className="text-muted" style={{ fontSize: "0.72rem", marginBottom: "0.5rem" }}>
+                  Click a student for full history and per-student limits.
+                </p>
+              )}
               <table className="stu-table">
                 <thead><tr><th>Student</th><th>Passes</th><th>Total Time</th><th>Destinations</th></tr></thead>
                 <tbody>
                   {overviewRows.map(([id, d]) => (
-                    <tr key={id}>
+                    <tr key={id} onClick={() => setInspect({ id, name: d.name })} style={{ cursor: "pointer" }}
+                      title="View history & limits">
                       <td style={{ fontWeight: 600 }}>{d.name}</td>
                       <td><span className={`tag ${d.passes >= 3 ? "tag-red" : "tag-gold"}`}>{d.passes}</span></td>
                       <td>{d.totalMin} min</td>
@@ -1000,6 +1032,11 @@ export default function HallPass({ user, students }) {
                   ))}
                 </tbody>
               </table>
+
+              {inspect && (
+                <StudentPassInspector student={inspect} periodNames={allPeriodNames}
+                  user={user} onClose={() => setInspect(null)} />
+              )}
             </div>
           )}
 

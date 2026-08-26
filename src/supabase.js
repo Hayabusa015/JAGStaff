@@ -762,6 +762,53 @@ export function useStaffSignupCodeStatus() {
   return status;
 }
 
+// ─── Hall pass stats & per-student limits ──────────────────────────
+// my_pass_stats returns aggregate numbers about the CALLER only (today /
+// week counts, rank, any limits) — it never exposes another student.
+export async function getMyPassStats() {
+  if (!SUPABASE_READY || !supabase) return null;
+  const { data } = await supabase.rpc("my_pass_stats");
+  return data?.found ? data : null;
+}
+
+// Staff-only (RLS): one student's full pass history, newest first.
+export async function getStudentPassHistory(studentId, limit = 60) {
+  if (!SUPABASE_READY || !supabase) return [];
+  const { data } = await supabase.from("hall_pass_log")
+    .select("*").eq("student_id", studentId)
+    .order("out_time", { ascending: false }).limit(limit);
+  return data || [];
+}
+
+// Staff-only (RLS): read/save a student's pass restrictions.
+export async function getPassLimits(studentId) {
+  if (!SUPABASE_READY || !supabase) return null;
+  const { data } = await supabase.from("hall_pass_student_limits")
+    .select("*").eq("student_id", studentId).maybeSingle();
+  return data;
+}
+
+export async function savePassLimits(studentId, { dailyMax, allowedPeriods, note }, updatedBy) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+  const row = {
+    student_id: studentId,
+    daily_max: dailyMax ?? null,
+    allowed_periods: allowedPeriods?.length ? allowedPeriods : null,
+    note: note?.trim() || null,
+    updated_by: updatedBy || null,
+    updated_at: new Date().toISOString(),
+  };
+  // No restrictions at all -> remove the row entirely rather than keeping
+  // an empty one around.
+  if (row.daily_max == null && !row.allowed_periods && !row.note) {
+    const { error } = await supabase.from("hall_pass_student_limits").delete().eq("student_id", studentId);
+    return error ? { ok: false, error: error.message } : { ok: true, cleared: true };
+  }
+  const { error } = await supabase.from("hall_pass_student_limits")
+    .upsert(row, { onConflict: "student_id" });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 // ─── Student Hall Pass (self-service) ──────────────────────────────
 // Powers the student-facing "Hall Pass" tab: request a pass, watch it go
 // pending -> active as a teacher approves it, sign back in when done.
