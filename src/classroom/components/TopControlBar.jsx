@@ -7,6 +7,7 @@ export default function TopControlBar({ onMenu }) {
   const viewTitles = {
     dashboard: { teacher: 'Command Center', student: 'My Dashboard' },
     materials: { teacher: 'Class Materials', student: 'Class Materials' },
+    scenarios: { teacher: 'Scenario Games', student: 'Scenario Games' },
     mole: { teacher: `${currencyName} Vault`, student: 'Cash-In Shop' },
     helpdesk: { teacher: 'Help Desk Queue', student: 'Student Help Desk' },
     mailer: { teacher: 'Parent Communication', student: '' },
