@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, SUPABASE_READY } from './supabase.js';
+import { sortByPeriod } from './classroom/periodOptions.js';
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────
 
@@ -108,8 +109,7 @@ export function useTeacherClassroom(teacherEmail) {
           supabase
             .from('classroom_classes')
             .select('*')
-            .eq('teacher_email', teacherEmail)
-            .order('period'),
+            .eq('teacher_email', teacherEmail),
           supabase
             .from('classroom_students')
             .select('*')
@@ -126,7 +126,7 @@ export function useTeacherClassroom(teacherEmail) {
             .order('created_at', { ascending: false }),
         ]);
       if (!active) return;
-      const mappedClasses = (cls || []).map(mapClass);
+      const mappedClasses = sortByPeriod((cls || []).map(mapClass));
       const classById = Object.fromEntries(mappedClasses.map(c => [c.id, c]));
       setClasses(mappedClasses);
       setStudents((stu || []).map((s) => mapStudent(s, classById[s.class_id])));
@@ -197,9 +197,8 @@ export function useTeacherClassroom(teacherEmail) {
     const { data } = await supabase
       .from('classroom_classes')
       .select('*')
-      .eq('teacher_email', teacherEmail)
-      .order('period');
-    setClasses((data || []).map(mapClass));
+      .eq('teacher_email', teacherEmail);
+    setClasses(sortByPeriod((data || []).map(mapClass)));
   }, [teacherEmail]);
 
   const addClass = useCallback(async ({ name, subject, period, room }) => {

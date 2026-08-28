@@ -6,13 +6,13 @@ import { PATTERNS } from '../../ClassroomThemeLayer.jsx';
 import { SUPABASE_READY } from '../../../supabase.js';
 import GCSyncModal from '../../components/GCSyncModal.jsx';
 import { SUBJECT_THEME } from '../../data/mockData.js';
+import { PERIOD_OPTIONS, sortByPeriod } from '../../periodOptions.js';
 
 // ── Subject options ───────────────────────────────────────────────────────────
 
 const SUBJECT_OPTIONS = Object.values(SUBJECT_THEME).map(s => ({ value: s.key, label: s.label }));
-const PERIOD_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-const BLANK_DRAFT = { name: '', subject: 'chemistry', period: 1, room: '' };
+const BLANK_DRAFT = { name: '', subject: 'chemistry', period: PERIOD_OPTIONS[0], room: '' };
 
 // ── ClassManager ──────────────────────────────────────────────────────────────
 
@@ -24,17 +24,17 @@ function ClassManager() {
   const [addDraft, setAddDraft] = useState(BLANK_DRAFT);
   const [adding, setAdding] = useState(false);
 
-  const sorted = [...classes].sort((a, b) => (a.period ?? 99) - (b.period ?? 99));
+  const sorted = sortByPeriod(classes);
 
   function startEdit(cls) {
     setEditingId(cls.id);
-    setEditDraft({ name: cls.name, subject: cls.subject, period: cls.period ?? 1, room: cls.room || '' });
+    setEditDraft({ name: cls.name, subject: cls.subject, period: cls.period ?? PERIOD_OPTIONS[0], room: cls.room || '' });
     setConfirmDeleteId(null);
   }
 
   async function saveEdit() {
     if (!editDraft.name.trim()) return;
-    await updateClass(editingId, { ...editDraft, name: editDraft.name.trim(), period: Number(editDraft.period) });
+    await updateClass(editingId, { ...editDraft, name: editDraft.name.trim() });
     setEditingId(null);
   }
 
@@ -51,7 +51,7 @@ function ClassManager() {
   async function handleAdd() {
     if (!addDraft.name.trim()) return;
     setAdding(true);
-    await addClass({ ...addDraft, name: addDraft.name.trim(), period: Number(addDraft.period) });
+    await addClass({ ...addDraft, name: addDraft.name.trim() });
     setAddDraft(BLANK_DRAFT);
     setAdding(false);
   }
