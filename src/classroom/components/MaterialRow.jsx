@@ -11,6 +11,7 @@ import {
   Trash2,
   Sparkles,
   ChevronDown,
+  Link2,
 } from 'lucide-react';
 import { MATERIAL_TYPES } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
@@ -34,7 +35,7 @@ function prettySize(bytes) {
 }
 
 export default function MaterialRow({ material, unitId, canManage }) {
-  const { openMaterialFile, deleteMaterial } = useApp();
+  const { openMaterialFile, deleteMaterial, units } = useApp();
   const [showPreview, setShowPreview] = useState(false);
   const meta = MATERIAL_TYPES[material.type] || MATERIAL_TYPES.other;
   const Icon = ICONS[meta.icon] || Paperclip;
@@ -44,6 +45,17 @@ export default function MaterialRow({ material, unitId, canManage }) {
   const open = () => {
     if (material.hasFile) openMaterialFile(material.id);
     else if (previewText) setShowPreview((s) => !s);
+  };
+
+  const syncedCount = material.syncId
+    ? units.reduce((n, u) => n + u.materials.filter((m) => m.syncId === material.syncId).length, 0)
+    : 1;
+
+  const handleDelete = () => {
+    if (syncedCount > 1 && !confirm(`"${material.title}" is synced across ${syncedCount} classes. Delete it everywhere?`)) {
+      return;
+    }
+    deleteMaterial(unitId, material.id);
   };
 
   return (
@@ -57,6 +69,9 @@ export default function MaterialRow({ material, unitId, canManage }) {
             <p className="truncate text-sm font-semibold text-zinc-100">{material.title}</p>
             <Badge tone="neutral">{meta.label}</Badge>
             {material.sample && <Badge tone="gold">Sample</Badge>}
+            {syncedCount > 1 && (
+              <Badge tone="gold" icon={Link2}>Synced · {syncedCount}</Badge>
+            )}
             {studyReady && (
               <span title="Feeds the study-tool generator">
                 <Sparkles className="h-3.5 w-3.5 text-gold-400" />
@@ -96,7 +111,7 @@ export default function MaterialRow({ material, unitId, canManage }) {
           )}
           {canManage && (
             <button
-              onClick={() => deleteMaterial(unitId, material.id)}
+              onClick={handleDelete}
               className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition-colors hover:bg-red-500/15 hover:text-red-300"
               aria-label="Delete material"
             >

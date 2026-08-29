@@ -30,6 +30,7 @@ const TEACHER_PROFILE_KEY = 'gmen-teacher-profile-v1';
 const CLASSROOM_DESIGN_KEY = 'gmen-classroom-design-v1';
 const QUICK_LINKS_KEY = 'gmen-quick-links-v1';
 const MOLE_CREDITS_KEY = 'gmen-mole-credits-v1';
+const MATERIAL_GROUPS_KEY = 'gmen-material-groups-v1';
 
 function loadMoleGradeCredits() {
   if (typeof window !== 'undefined') {
@@ -132,6 +133,19 @@ function loadUnits() {
   return clone(SEED_UNITS);
 }
 
+// Material sync groups (which classes share content) persist locally, same as units.
+function loadMaterialGroups() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(MATERIAL_GROUPS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      /* ignore corrupt storage */
+    }
+  }
+  return [];
+}
+
 // user: the logged-in Supabase user object (or null in mock/dev mode)
 // isStaff: true for teachers, false for real student logins
 export function AppProvider({ children, user = null, isStaff = true }) {
@@ -174,6 +188,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   const [moleGradeCredits, setMoleGradeCredits] = useState(loadMoleGradeCredits);
   const [classroomDesign, setClassroomDesign] = useState(loadClassroomDesign);
   const [quickLinks, setQuickLinks] = useState(loadQuickLinks);
+  const [materialGroups, setMaterialGroups] = useState(loadMaterialGroups);
 
   // Persist units + material metadata locally (file blobs are stored in IndexedDB).
   useEffect(() => {
@@ -220,6 +235,14 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       window.localStorage.setItem(QUICK_LINKS_KEY, JSON.stringify(quickLinks));
     } catch { /* ignore */ }
   }, [quickLinks]);
+
+  // Persist material sync groups.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(MATERIAL_GROUPS_KEY, JSON.stringify(materialGroups));
+    } catch { /* ignore */ }
+  }, [materialGroups]);
 
   // ---- Supabase → local state sync -----------------------------------------
   // Teacher side: sync live data into local state once it arrives.
@@ -660,7 +683,11 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     [units]
   );
 
-  const addUnit = useCallback((classId, { title, description }) => {
+  // syncKey links units across classes: a unit created (or later linked) together
+  // with sibling units shares one syncKey, and addMaterial/deleteMaterial below use
+  // it to keep their materials mirrored across every class in the group.
+  const addUnit = useCallback((classId, { title, description }, syncKey = null) => {
+    const id = nextId('unit');
     setUnits((prev) => {
       const maxOrder = prev
         .filter((u) => u.classId === classId)
@@ -668,15 +695,94 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       return [
         ...prev,
         {
-          id: nextId('unit'),
+          id,
           classId,
           title: title.trim(),
           description: (description || '').trim(),
           order: maxOrder + 1,
           materials: [],
+          syncKey,
         },
       ];
     });
+    return id;
+  }, []);
+
+  // Creates the same unit in every listed class at once, linked so future material
+  // uploads to any one of them copy to all the others. Returns the syncKey (null if
+  // only one class was given — nothing to sync).
+  const createSyncedUnits = useCallback(
+    (classIds, { title, description }) => {
+      const ids = [...new Set(classIds)];
+      if (ids.length === 0) return null;
+      const syncKey = ids.length > 1 ? nextId('sync') : null;
+      const unitIds = ids.map((classId) => addUnit(classId, { title, description }, syncKey));
+      return { syncKey, unitIds };
+    },
+    [addUnit]
+  );
+
+  // Retroactively links sourceUnitId with targetUnitIds — reusing an existing
+  // syncKey if any of them already has one, so linking a new class into an
+  // already-synced group doesn't fork it — AND copies every material currently in
+  // sourceUnitId out to each target, in one atomic state update. (Deliberately one
+  // update, not linkUnits() + a separate copy step: chaining two setUnits calls
+  // here would have the second one reading a not-yet-committed syncKey, since
+  // React batches state updates within the same event handler.)
+  const linkUnitsWithMaterials = useCallback(
+    async (sourceUnitId, targetUnitIds) => {
+      const allIds = [...new Set([sourceUnitId, ...targetUnitIds])];
+      if (allIds.length < 2) return null;
+      const sourceUnit = units.find((u) => u.id === sourceUnitId);
+      if (!sourceUnit) return null;
+      const existingKey = units.find((u) => allIds.includes(u.id) && u.syncKey)?.syncKey;
+      const syncKey = existingKey || nextId('sync');
+
+      // Pre-build every material copy (with its blob, if any) for every target
+      // before touching state, so the state update itself is synchronous.
+      const copiesByTarget = {};
+      targetUnitIds.forEach((id) => { copiesByTarget[id] = []; });
+      const syncIdBySourceMaterialId = {};
+      for (const material of sourceUnit.materials) {
+        const syncId = material.syncId || nextId('matsync');
+        syncIdBySourceMaterialId[material.id] = syncId;
+        let blob = null;
+        if (material.hasFile) blob = await getBlob(material.id);
+        for (const targetId of targetUnitIds) {
+          const id = nextId('mat');
+          copiesByTarget[targetId].push({ ...material, id, syncId });
+          if (blob) {
+            try {
+              await putBlob(id, blob);
+            } catch {
+              /* keep the metadata even if the blob copy fails */
+            }
+          }
+        }
+      }
+
+      setUnits((prev) =>
+        prev.map((u) => {
+          if (!allIds.includes(u.id)) return u;
+          let materials = u.materials;
+          if (u.id === sourceUnitId) {
+            materials = materials.map((m) =>
+              syncIdBySourceMaterialId[m.id] ? { ...m, syncId: syncIdBySourceMaterialId[m.id] } : m
+            );
+          } else if (copiesByTarget[u.id]) {
+            materials = [...materials, ...copiesByTarget[u.id]];
+          }
+          return { ...u, syncKey, materials };
+        })
+      );
+      return syncKey;
+    },
+    [units]
+  );
+
+  // Opts a single unit out of its sync group; siblings stay linked to each other.
+  const unlinkUnit = useCallback((unitId) => {
+    setUnits((prev) => prev.map((u) => (u.id === unitId ? { ...u, syncKey: null } : u)));
   }, []);
 
   const updateUnit = useCallback((unitId, patch) => {
@@ -694,7 +800,43 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     [units]
   );
 
+  // Copies `material` (already saved under material.id, with its blob in IndexedDB
+  // if hasFile) into each of `targetUnitIds`, stamping every copy — plus the
+  // original — with a shared material-level syncId so a later delete can find and
+  // remove all of them together.
+  const propagateMaterial = useCallback(async (sourceUnitId, material, targetUnitIds) => {
+    if (!targetUnitIds.length) return;
+    const syncId = material.syncId || nextId('matsync');
+    let blob = null;
+    if (material.hasFile) blob = await getBlob(material.id);
+    const copyByUnitId = {};
+    for (const unitId of targetUnitIds) {
+      const id = nextId('mat');
+      copyByUnitId[unitId] = { ...material, id, syncId };
+      if (blob) {
+        try {
+          await putBlob(id, blob);
+        } catch {
+          /* keep the metadata even if the blob copy fails */
+        }
+      }
+    }
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.id === sourceUnitId) {
+          return { ...u, materials: u.materials.map((m) => (m.id === material.id ? { ...m, syncId } : m)) };
+        }
+        if (copyByUnitId[u.id]) {
+          return { ...u, materials: [...u.materials, copyByUnitId[u.id]] };
+        }
+        return u;
+      })
+    );
+  }, []);
+
   // meta: { type, title, description, studyContent }. file is optional (real upload).
+  // If the unit is synced (has a syncKey), the new material is mirrored into every
+  // linked sibling unit automatically.
   const addMaterial = useCallback(async (unitId, meta, file) => {
     const id = nextId('mat');
     const material = {
@@ -724,10 +866,32 @@ export function AppProvider({ children, user = null, isStaff = true }) {
         u.id === unitId ? { ...u, materials: [...u.materials, material] } : u
       )
     );
+    const sourceUnit = units.find((u) => u.id === unitId);
+    if (sourceUnit?.syncKey) {
+      const siblingIds = units
+        .filter((u) => u.syncKey === sourceUnit.syncKey && u.id !== unitId)
+        .map((u) => u.id);
+      if (siblingIds.length) await propagateMaterial(unitId, material, siblingIds);
+    }
     return material;
-  }, []);
+  }, [units, propagateMaterial]);
 
+  // If the material is synced (has a syncId), removes every linked copy across all
+  // classes, not just this one.
   const deleteMaterial = useCallback((unitId, materialId) => {
+    const unit = units.find((u) => u.id === unitId);
+    const material = unit?.materials?.find((m) => m.id === materialId);
+    if (material?.syncId) {
+      units.forEach((u) =>
+        u.materials.forEach((m) => {
+          if (m.syncId === material.syncId) deleteBlob(m.id);
+        })
+      );
+      setUnits((prev) =>
+        prev.map((u) => ({ ...u, materials: u.materials.filter((m) => m.syncId !== material.syncId) }))
+      );
+      return;
+    }
     deleteBlob(materialId);
     setUnits((prev) =>
       prev.map((u) =>
@@ -736,7 +900,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
           : u
       )
     );
-  }, []);
+  }, [units]);
 
   // Open an uploaded file in a new tab from its IndexedDB blob.
   const openMaterialFile = useCallback(async (materialId) => {
@@ -762,6 +926,25 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   }, []);
 
   const updateQuickLinks = useCallback((links) => setQuickLinks(links), []);
+
+  // ===========================================================================
+  //  MATERIAL SYNC GROUPS  (teacher-configurable, localStorage-persisted)
+  //  Groups of classes that share the same content — see CLASS MATERIALS above
+  //  for how a group's classes end up with linked (syncKey-sharing) units.
+  // ===========================================================================
+  const addMaterialGroup = useCallback((name, classIds) => {
+    const id = nextId('mgrp');
+    setMaterialGroups((prev) => [...prev, { id, name: name.trim(), classIds: [...new Set(classIds)] }]);
+    return id;
+  }, []);
+
+  const updateMaterialGroup = useCallback((id, patch) => {
+    setMaterialGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  }, []);
+
+  const deleteMaterialGroup = useCallback((id) => {
+    setMaterialGroups((prev) => prev.filter((g) => g.id !== id));
+  }, []);
 
   // ===========================================================================
   //  MOLE ECONOMY SETTINGS  (teacher-configurable, localStorage-persisted)
@@ -891,12 +1074,19 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     getTheme,
     getUnitsForClass,
     addUnit,
+    createSyncedUnits,
+    linkUnitsWithMaterials,
+    unlinkUnit,
     updateUnit,
     deleteUnit,
     addMaterial,
     deleteMaterial,
     openMaterialFile,
     resetMaterials,
+    materialGroups,
+    addMaterialGroup,
+    updateMaterialGroup,
+    deleteMaterialGroup,
 
     completeWizard,
     submitMoleRequest,

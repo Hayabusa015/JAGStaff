@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users, Pencil, Trash2, Plus, BookOpen } from 'lucide-react';
+import { Settings2, User, School, Tag, CheckCircle2, Coins, Palette, Users, Pencil, Trash2, Plus, BookOpen, Link2 } from 'lucide-react';
 import { useApp } from '../../ClassroomContext.jsx';
 import Card, { CardHeader } from '../../components/Card.jsx';
 import { PATTERNS } from '../../ClassroomThemeLayer.jsx';
@@ -158,6 +158,196 @@ function ClassManager() {
             </button>
           </div>
         </div>
+      </div>
+    </Card>
+  );
+}
+
+// ── MaterialGroupsManager ──────────────────────────────────────────────────────
+// Groups classes that share the same content (e.g. two sections of the same
+// course) so a unit or file uploaded once in Class Materials lands in every
+// class in the group automatically — see MaterialsView.jsx / UnitSection.jsx.
+
+function MaterialGroupsManager() {
+  const {
+    managedClasses: classes, materialGroups, addMaterialGroup, updateMaterialGroup, deleteMaterialGroup,
+  } = useApp();
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ name: '', classIds: [] });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [addDraft, setAddDraft] = useState({ name: '', classIds: [] });
+
+  function startEdit(g) {
+    setEditingId(g.id);
+    setEditDraft({ name: g.name, classIds: [...g.classIds] });
+    setConfirmDeleteId(null);
+  }
+
+  function toggle(setDraft, id) {
+    setDraft((d) => ({
+      ...d,
+      classIds: d.classIds.includes(id) ? d.classIds.filter((x) => x !== id) : [...d.classIds, id],
+    }));
+  }
+
+  function saveEdit() {
+    if (!editDraft.name.trim() || editDraft.classIds.length < 2) return;
+    updateMaterialGroup(editingId, { name: editDraft.name.trim(), classIds: editDraft.classIds });
+    setEditingId(null);
+  }
+
+  function handleDelete(id) {
+    if (confirmDeleteId === id) {
+      deleteMaterialGroup(id);
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(id);
+      setEditingId(null);
+    }
+  }
+
+  function handleAdd() {
+    if (!addDraft.name.trim() || addDraft.classIds.length < 2) return;
+    addMaterialGroup(addDraft.name, addDraft.classIds);
+    setAddDraft({ name: '', classIds: [] });
+    setAddingGroup(false);
+  }
+
+  const inputCls = 'w-full rounded-lg border border-white/10 bg-ink-900 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500/30';
+
+  const classChip = (id, checked, onClick) => {
+    const c = classes.find((x) => x.id === id);
+    if (!c) return null;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={onClick}
+        className={[
+          'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all',
+          checked
+            ? 'border-gold-500/60 bg-gold-500/15 text-gold-300'
+            : 'border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200',
+        ].join(' ')}
+      >
+        <span className={`h-2.5 w-2.5 rounded-full border ${checked ? 'border-gold-400 bg-gold-400' : 'border-zinc-500'}`} />
+        {c.name}
+        {c.period ? ` · P${c.period}` : ''}
+      </button>
+    );
+  };
+
+  return (
+    <Card hairline>
+      <CardHeader
+        title="Material Sync Groups"
+        subtitle="Group classes that share the same content — add a unit or upload a file once, it lands in every class in the group"
+        icon={Link2}
+      />
+      <div className="p-5 space-y-3">
+        {materialGroups.length === 0 && (
+          <p className="text-sm text-zinc-500 text-center py-4">
+            No groups yet — group two or more classes below so you stop uploading the same materials to each one separately.
+          </p>
+        )}
+        {materialGroups.map((g) => (
+          <div key={g.id} className="group rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3">
+            {editingId === g.id ? (
+              <div className="space-y-3">
+                <input
+                  className={inputCls}
+                  placeholder="Group name — e.g. Chemistry"
+                  value={editDraft.name}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                  onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
+                  autoFocus
+                />
+                <div className="flex flex-wrap gap-2">
+                  {classes.map((c) => classChip(c.id, editDraft.classIds.includes(c.id), () => toggle(setEditDraft, c.id)))}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditingId(null)} className="px-4 py-1.5 rounded-lg text-sm text-zinc-400 border border-white/10 hover:bg-white/5">Cancel</button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={!editDraft.name.trim() || editDraft.classIds.length < 2}
+                    className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gold-500 text-black hover:bg-gold-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-gold-400">
+                  <Link2 className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-semibold text-white">{g.name}</div>
+                  <div className="truncate text-xs text-zinc-500">
+                    {g.classIds.map((id) => classes.find((c) => c.id === id)).filter(Boolean).map((c) => `${c.name}${c.period ? ` · P${c.period}` : ''}`).join('  ·  ')}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {confirmDeleteId === g.id ? (
+                    <>
+                      <button onClick={() => setConfirmDeleteId(null)} className="px-2 py-1 text-xs rounded-md text-zinc-400 hover:bg-white/5">Cancel</button>
+                      <button onClick={() => handleDelete(g.id)} className="px-2 py-1 text-xs rounded-md bg-red-600/20 text-red-400 hover:bg-red-600/30 font-semibold">Delete</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(g)} className="p-1.5 rounded-lg text-zinc-500 hover:text-gold-400 hover:bg-gold-500/10">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(g.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Add group */}
+        {!addingGroup ? (
+          <button
+            onClick={() => setAddingGroup(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-dashed border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-400 transition-all hover:border-gold-500/40 hover:text-gold-300"
+          >
+            <Plus className="h-4 w-4" /> Add Group
+          </button>
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-3 space-y-3">
+            <input
+              className={inputCls}
+              placeholder="Group name — e.g. Chemistry"
+              value={addDraft.name}
+              onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-2">
+              {classes.map((c) => classChip(c.id, addDraft.classIds.includes(c.id), () => toggle(setAddDraft, c.id)))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setAddingGroup(false); setAddDraft({ name: '', classIds: [] }); }}
+                className="px-4 py-1.5 rounded-lg text-sm text-zinc-400 border border-white/10 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAdd}
+                disabled={!addDraft.name.trim() || addDraft.classIds.length < 2}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-gold-500 text-black hover:bg-gold-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" /> Add Group
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -592,6 +782,7 @@ export default function ClassroomSettings() {
   return (
     <div className="space-y-5">
       <ClassManager />
+      <MaterialGroupsManager />
 
       <Card hairline>
         <CardHeader

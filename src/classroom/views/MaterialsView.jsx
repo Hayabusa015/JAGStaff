@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState.jsx';
 const SUBJECT_ICON = { chemistry: FlaskConical, physics: Atom, geology: Mountain };
 
 export default function MaterialsView() {
-  const { role, classes, activeStudent, getClass, getTheme, getUnitsForClass, addUnit } = useApp();
+  const { role, classes, activeStudent, getClass, getTheme, getUnitsForClass, createSyncedUnits, materialGroups } = useApp();
 
   const isTeacher = role === 'teacher';
   const studentClassId = activeStudent?.classId;
@@ -25,6 +25,17 @@ export default function MaterialsView() {
   const cls = getClass(classId);
   const units = getUnitsForClass(classId);
 
+  // The material sync group (if any) this class belongs to — its other classes are
+  // pre-selected below so a new unit is linked automatically, no re-picking needed.
+  const myGroup = useMemo(
+    () => materialGroups.find((g) => g.classIds.includes(classId)),
+    [materialGroups, classId]
+  );
+  const groupSiblingIds = useMemo(
+    () => (myGroup ? myGroup.classIds.filter((id) => id !== classId) : []),
+    [myGroup, classId]
+  );
+
   // Other classes the teacher can sync this unit to
   const otherClasses = useMemo(
     () => classes.filter((c) => c.id !== classId),
@@ -37,11 +48,15 @@ export default function MaterialsView() {
   const selectAllSync = () =>
     setSyncIds(otherClasses.map((c) => c.id));
 
+  const openAddUnit = () => {
+    setAddingUnit(true);
+    setSyncIds(groupSiblingIds);
+  };
+
   const submitUnit = (e) => {
     e.preventDefault();
     if (!unitForm.title.trim()) return;
-    addUnit(classId, unitForm);
-    syncIds.forEach((id) => addUnit(id, unitForm));
+    createSyncedUnits([classId, ...syncIds], unitForm);
     setUnitForm({ title: '', description: '' });
     setSyncIds([]);
     setAddingUnit(false);
@@ -98,7 +113,7 @@ export default function MaterialsView() {
         <div>
           {!addingUnit ? (
             <button
-              onClick={() => setAddingUnit(true)}
+              onClick={openAddUnit}
               className="flex items-center gap-1.5 rounded-xl border border-dashed border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-400 transition-all hover:border-gold-500/40 hover:text-gold-300"
             >
               <Plus className="h-4 w-4" /> Add Unit
@@ -136,7 +151,8 @@ export default function MaterialsView() {
                   <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                        <Copy className="h-3 w-3" /> Also add to
+                        <Copy className="h-3 w-3" />
+                        {myGroup ? `Synced via your "${myGroup.name}" group` : 'Also add to'}
                       </p>
                       {otherClasses.length > 1 && (
                         <button
