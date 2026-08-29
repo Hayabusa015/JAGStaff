@@ -9,6 +9,7 @@ import {
   BookOpenCheck,
   Sparkles,
   Settings2,
+  Dices,
   X,
 } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
@@ -17,6 +18,7 @@ const STUDENT_NAV = [
   { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
   { id: 'grades',    label: 'My Grades',    icon: GraduationCap },
   { id: 'materials', label: 'Materials', icon: Library },
+  { id: 'scenarios', label: 'Scenario Games', icon: Dices },
   { id: 'mole', label: 'Cash-In Shop', icon: Coins },
   { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
   { id: 'lessons', label: 'Lesson Plans', icon: CalendarRange },
@@ -29,6 +31,7 @@ export default function SideNav({ open, onClose }) {
     { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
     { id: 'aigrader', label: 'AI Grader', icon: Sparkles },
     { id: 'materials', label: 'Class Materials', icon: Library },
+    { id: 'scenarios', label: 'Scenario Games', icon: Dices },
     { id: 'mole', label: `${currencyName} Vault`, icon: Coins },
     { id: 'helpdesk', label: 'Help Desk', icon: LifeBuoy },
     { id: 'mailer', label: 'Parent Mailer', icon: Mail },

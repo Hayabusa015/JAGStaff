@@ -14,6 +14,7 @@ import HelpDeskKanban from './views/teacher/HelpDeskKanban.jsx';
 import ParentMailer from './views/teacher/ParentMailer.jsx';
 import LessonPlans from './views/teacher/LessonPlans.jsx';
 import ClassroomSettings from './views/teacher/ClassroomSettings.jsx';
+import TeacherScenarioPanel from './scenario/views/TeacherScenarioPanel.jsx';
 
 // Student views
 import StudentDashboard from './views/student/StudentDashboard.jsx';
@@ -21,6 +22,7 @@ import StudentGradesView from './views/student/StudentGradesView.jsx';
 import CashInShop from './views/student/CashInShop.jsx';
 import StudentHelpDesk from './views/student/StudentHelpDesk.jsx';
 import StudentLessonPlans from './views/student/StudentLessonPlans.jsx';
+import ScenarioPlayer from './scenario/views/ScenarioPlayer.jsx';
 
 // Per-teacher tools relocated from the School zone into "My Classroom".
 import Gradebook from '../components/Gradebook.jsx';
@@ -124,6 +126,8 @@ function ViewRouter({ role, view, user, students }) {
         return <Gradebook students={students} user={user} />;
       case 'aigrader':
         return <AIGrader user={user} />;
+      case 'scenarios':
+        return <TeacherScenarioPanel />;
       case 'settings':
         return <ClassroomSettings />;
       default:
@@ -136,6 +140,8 @@ function ViewRouter({ role, view, user, students }) {
       return <StudentDashboard />;
     case 'materials':
       return <MaterialsView />;
+    case 'scenarios':
+      return <ScenarioPlayer />;
     case 'mole':
       return <CashInShop />;
     case 'helpdesk':
