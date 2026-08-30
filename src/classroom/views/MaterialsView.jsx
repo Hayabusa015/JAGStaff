@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { FlaskConical, Atom, Mountain, Plus, Library, X, Copy, Link2, Loader2 } from 'lucide-react';
+import { FlaskConical, Atom, Mountain, Plus, Library, X, Copy, Link2, Loader2, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import UnitSection from '../components/UnitSection.jsx';
+import UnitSheetImportPanel from '../components/UnitSheetImportPanel.jsx';
 import Card, { CardHeader } from '../components/Card.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 
@@ -23,6 +24,8 @@ export default function MaterialsView() {
   const [addingUnit, setAddingUnit] = useState(false);
   const [unitForm, setUnitForm] = useState({ title: '', description: '' });
   const [syncIds, setSyncIds] = useState([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const theme = getTheme(classId);
   const cls = getClass(classId);
@@ -172,6 +175,38 @@ export default function MaterialsView() {
             </button>
           </div>
         </Card>
+      )}
+
+      {/* Teacher: import a unit breakdown sheet — bulk-creates units/sections/items */}
+      {isTeacher && (
+        <div>
+          {importResult && !importOpen && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Imported {importResult.unitCount} unit{importResult.unitCount === 1 ? '' : 's'},{' '}
+              {importResult.sectionCount} section{importResult.sectionCount === 1 ? '' : 's'}, and{' '}
+              {importResult.itemCount} item{importResult.itemCount === 1 ? '' : 's'} — attach files per item below.
+            </div>
+          )}
+          {!importOpen ? (
+            <button
+              onClick={() => { setImportOpen(true); setImportResult(null); }}
+              className="flex items-center gap-1.5 rounded-xl border border-dashed border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-400 transition-all hover:border-gold-500/40 hover:text-gold-300"
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Import Unit Breakdown
+            </button>
+          ) : (
+            <UnitSheetImportPanel
+              classId={classId}
+              className={cls?.name}
+              onClose={() => setImportOpen(false)}
+              onImported={(result) => {
+                setImportResult(result);
+                setImportOpen(false);
+              }}
+            />
+          )}
+        </div>
       )}
 
       {/* Teacher: add unit */}

@@ -121,16 +121,23 @@ function loadMoleEconomy() {
 
 // Units + materials persist locally (file blobs live in IndexedDB). Browser-only;
 // falls back to the seed during SSR / first run.
+// Units created before the Sections feature (or the sheet-import feature) shipped
+// won't have a `sections` array in localStorage — backfill it so every consumer
+// can assume unit.sections is always an array.
+function normalizeUnit(u) {
+  return { ...u, sections: (u.sections || []).map((s) => ({ ...s, materials: s.materials || [] })) };
+}
+
 function loadUnits() {
   if (typeof window !== 'undefined') {
     try {
       const saved = window.localStorage.getItem(UNITS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) return JSON.parse(saved).map(normalizeUnit);
     } catch {
       /* ignore corrupt storage */
     }
   }
-  return clone(SEED_UNITS);
+  return clone(SEED_UNITS).map(normalizeUnit);
 }
 
 // Material sync groups (which classes share content) persist locally, same as units.
@@ -701,6 +708,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
           description: (description || '').trim(),
           order: maxOrder + 1,
           materials: [],
+          sections: [],
           syncKey,
         },
       ];
@@ -795,7 +803,49 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       unit?.materials?.forEach((m) => {
         if (m.hasFile) deleteBlob(m.id);
       });
+      unit?.sections?.forEach((s) =>
+        s.materials?.forEach((m) => {
+          if (m.hasFile) deleteBlob(m.id);
+        })
+      );
       setUnits((prev) => prev.filter((u) => u.id !== unitId));
+    },
+    [units]
+  );
+
+  // A unit's homework/lab breakdown lives in named sections beneath its top-level
+  // materials (overall slides/notes/study guide). Sections aren't wired into the
+  // cross-class sync group machinery above — they're teacher-authored per class.
+  const addSection = useCallback((unitId, { title, description = '' } = {}) => {
+    const id = nextId('section');
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.id !== unitId) return u;
+        const maxOrder = (u.sections || []).reduce((m, s) => Math.max(m, s.order ?? -1), -1);
+        return {
+          ...u,
+          sections: [
+            ...(u.sections || []),
+            { id, title: title.trim(), description: description.trim(), order: maxOrder + 1, materials: [] },
+          ],
+        };
+      })
+    );
+    return id;
+  }, []);
+
+  const deleteSection = useCallback(
+    (unitId, sectionId) => {
+      const unit = units.find((u) => u.id === unitId);
+      const section = unit?.sections?.find((s) => s.id === sectionId);
+      section?.materials?.forEach((m) => {
+        if (m.hasFile) deleteBlob(m.id);
+      });
+      setUnits((prev) =>
+        prev.map((u) =>
+          u.id === unitId ? { ...u, sections: (u.sections || []).filter((s) => s.id !== sectionId) } : u
+        )
+      );
     },
     [units]
   );
@@ -835,9 +885,11 @@ export function AppProvider({ children, user = null, isStaff = true }) {
   }, []);
 
   // meta: { type, title, description, studyContent }. file is optional (real upload).
-  // If the unit is synced (has a syncKey), the new material is mirrored into every
-  // linked sibling unit automatically.
-  const addMaterial = useCallback(async (unitId, meta, file) => {
+  // sectionId: when given, the material is filed under that section (a unit's
+  // per-lesson homework/labs) instead of the unit's own top-level materials.
+  // If the unit is synced (has a syncKey), a unit-level material is mirrored into
+  // every linked sibling unit automatically — sections aren't part of that sync.
+  const addMaterial = useCallback(async (unitId, meta, file, sectionId = null) => {
     const id = nextId('mat');
     const material = {
       id,
@@ -862,12 +914,21 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       }
     }
     setUnits((prev) =>
-      prev.map((u) =>
-        u.id === unitId ? { ...u, materials: [...u.materials, material] } : u
-      )
+      prev.map((u) => {
+        if (u.id !== unitId) return u;
+        if (sectionId) {
+          return {
+            ...u,
+            sections: (u.sections || []).map((s) =>
+              s.id === sectionId ? { ...s, materials: [...s.materials, material] } : s
+            ),
+          };
+        }
+        return { ...u, materials: [...u.materials, material] };
+      })
     );
     const sourceUnit = units.find((u) => u.id === unitId);
-    if (sourceUnit?.syncKey) {
+    if (!sectionId && sourceUnit?.syncKey) {
       const siblingIds = units
         .filter((u) => u.syncKey === sourceUnit.syncKey && u.id !== unitId)
         .map((u) => u.id);
@@ -876,9 +937,60 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     return material;
   }, [units, propagateMaterial]);
 
+  // Attaches a real file to a placeholder material (e.g. one created by the sheet
+  // importer with a title but no file yet) without disturbing its id/type/title.
+  const attachMaterialFile = useCallback(async (unitId, materialId, file, sectionId = null) => {
+    if (!file) return;
+    let patch;
+    try {
+      await putBlob(materialId, file);
+      patch = {
+        hasFile: true,
+        fileName: file.name,
+        fileType: file.type || '',
+        fileSize: file.size,
+        extractedText: (await extractText(file)).slice(0, 20000),
+      };
+    } catch {
+      return;
+    }
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.id !== unitId) return u;
+        if (sectionId) {
+          return {
+            ...u,
+            sections: (u.sections || []).map((s) =>
+              s.id === sectionId
+                ? { ...s, materials: s.materials.map((m) => (m.id === materialId ? { ...m, ...patch } : m)) }
+                : s
+            ),
+          };
+        }
+        return { ...u, materials: u.materials.map((m) => (m.id === materialId ? { ...m, ...patch } : m)) };
+      })
+    );
+  }, []);
+
   // If the material is synced (has a syncId), removes every linked copy across all
-  // classes, not just this one.
-  const deleteMaterial = useCallback((unitId, materialId) => {
+  // classes, not just this one. sectionId targets a section-scoped material.
+  const deleteMaterial = useCallback((unitId, materialId, sectionId = null) => {
+    if (sectionId) {
+      deleteBlob(materialId);
+      setUnits((prev) =>
+        prev.map((u) =>
+          u.id !== unitId
+            ? u
+            : {
+                ...u,
+                sections: (u.sections || []).map((s) =>
+                  s.id === sectionId ? { ...s, materials: s.materials.filter((m) => m.id !== materialId) } : s
+                ),
+              }
+        )
+      );
+      return;
+    }
     const unit = units.find((u) => u.id === unitId);
     const material = unit?.materials?.find((m) => m.id === materialId);
     if (material?.syncId) {
@@ -901,6 +1013,62 @@ export function AppProvider({ children, user = null, isStaff = true }) {
       )
     );
   }, [units]);
+
+  // Bulk-creates units (+ their sections + placeholder materials) from a parsed
+  // unit-breakdown sheet in one state update. Placeholders carry a title/type but
+  // no file — the teacher attaches the real file per item afterward (MaterialRow's
+  // "Attach File"). Returns counts for the confirmation UI.
+  //
+  // Counts are derived from parsedUnits itself (the input), not accumulated inside
+  // the setUnits updater — React StrictMode can invoke that updater twice, which
+  // would double-count a closure variable mutated from inside it.
+  const importUnitBreakdown = useCallback((classId, parsedUnits) => {
+    const makePlaceholder = (m) => ({
+      id: nextId('mat'),
+      type: m.type || 'other',
+      title: m.title,
+      description: '',
+      studyContent: '',
+      keyTerms: [],
+      createdAt: new Date().toISOString(),
+      hasFile: false,
+    });
+
+    setUnits((prev) => {
+      const maxOrder = prev
+        .filter((u) => u.classId === classId)
+        .reduce((m, u) => Math.max(m, u.order), -1);
+      const newUnits = parsedUnits.map((pu, ui) => ({
+        id: nextId('unit'),
+        classId,
+        title: pu.title,
+        description: pu.description || '',
+        order: maxOrder + 1 + ui,
+        syncKey: null,
+        materials: (pu.materials || []).map(makePlaceholder),
+        sections: (pu.sections || []).map((ps, si) => ({
+          id: nextId('section'),
+          title: ps.title,
+          description: ps.description || '',
+          order: si,
+          materials: (ps.materials || []).map(makePlaceholder),
+        })),
+      }));
+      return [...prev, ...newUnits];
+    });
+
+    return parsedUnits.reduce(
+      (acc, pu) => ({
+        unitCount: acc.unitCount + 1,
+        sectionCount: acc.sectionCount + (pu.sections || []).length,
+        itemCount:
+          acc.itemCount +
+          (pu.materials || []).length +
+          (pu.sections || []).reduce((n, s) => n + (s.materials || []).length, 0),
+      }),
+      { unitCount: 0, sectionCount: 0, itemCount: 0 }
+    );
+  }, []);
 
   // Open an uploaded file in a new tab from its IndexedDB blob.
   const openMaterialFile = useCallback(async (materialId) => {
@@ -1080,7 +1248,11 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     updateUnit,
     deleteUnit,
     addMaterial,
+    attachMaterialFile,
     deleteMaterial,
+    addSection,
+    deleteSection,
+    importUnitBreakdown,
     openMaterialFile,
     resetMaterials,
     materialGroups,

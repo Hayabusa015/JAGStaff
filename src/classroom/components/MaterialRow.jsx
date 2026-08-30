@@ -3,8 +3,11 @@ import {
   NotebookPen,
   FileText,
   Presentation,
+  BookOpenCheck,
   ClipboardList,
+  ClipboardCheck,
   FlaskConical,
+  FileQuestion,
   Paperclip,
   Download,
   Eye,
@@ -12,6 +15,8 @@ import {
   Sparkles,
   ChevronDown,
   Link2,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 import { MATERIAL_TYPES } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
@@ -22,8 +27,11 @@ const ICONS = {
   NotebookPen,
   FileText,
   Presentation,
+  BookOpenCheck,
   ClipboardList,
+  ClipboardCheck,
   FlaskConical,
+  FileQuestion,
   Paperclip,
 };
 
@@ -34,9 +42,10 @@ function prettySize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function MaterialRow({ material, unitId, canManage }) {
-  const { openMaterialFile, deleteMaterial, units } = useApp();
+export default function MaterialRow({ material, unitId, sectionId = null, canManage }) {
+  const { openMaterialFile, deleteMaterial, attachMaterialFile, units } = useApp();
   const [showPreview, setShowPreview] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const meta = MATERIAL_TYPES[material.type] || MATERIAL_TYPES.other;
   const Icon = ICONS[meta.icon] || Paperclip;
   const previewText = material.studyContent || material.extractedText;
@@ -55,7 +64,16 @@ export default function MaterialRow({ material, unitId, canManage }) {
     if (syncedCount > 1 && !confirm(`"${material.title}" is synced across ${syncedCount} classes. Delete it everywhere?`)) {
       return;
     }
-    deleteMaterial(unitId, material.id);
+    deleteMaterial(unitId, material.id, sectionId);
+  };
+
+  const handleAttach = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAttaching(true);
+    await attachMaterialFile(unitId, material.id, file, sectionId);
+    setAttaching(false);
   };
 
   return (
@@ -106,6 +124,12 @@ export default function MaterialRow({ material, unitId, canManage }) {
                 className={`h-3.5 w-3.5 transition-transform ${showPreview ? 'rotate-180' : ''}`}
               />
             </button>
+          ) : canManage ? (
+            <label className="flex cursor-pointer items-center gap-1 rounded-lg bg-ink-750 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-200 transition-colors hover:bg-gold-500 hover:text-ink-950">
+              {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {attaching ? 'Attaching…' : 'Attach File'}
+              <input type="file" className="hidden" disabled={attaching} onChange={handleAttach} />
+            </label>
           ) : (
             <span className="px-2 text-[10px] italic text-zinc-600">no file</span>
           )}

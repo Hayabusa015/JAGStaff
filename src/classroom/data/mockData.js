@@ -646,8 +646,11 @@ export const MATERIAL_TYPES = {
   guided_notes: { key: 'guided_notes', label: 'Guided Notes', icon: 'NotebookPen' },
   notes: { key: 'notes', label: 'Notes', icon: 'FileText' },
   presentation: { key: 'presentation', label: 'Presentation', icon: 'Presentation' },
+  study_guide: { key: 'study_guide', label: 'Study Guide', icon: 'BookOpenCheck' },
   worksheet: { key: 'worksheet', label: 'Worksheet', icon: 'ClipboardList' },
+  homework: { key: 'homework', label: 'Homework', icon: 'ClipboardCheck' },
   lab: { key: 'lab', label: 'Lab', icon: 'FlaskConical' },
+  assessment: { key: 'assessment', label: 'Quiz/Test', icon: 'FileQuestion' },
   other: { key: 'other', label: 'Resource', icon: 'Paperclip' },
 };
 
@@ -655,10 +658,17 @@ export const MATERIAL_TYPE_ORDER = [
   'guided_notes',
   'notes',
   'presentation',
+  'study_guide',
   'worksheet',
+  'homework',
   'lab',
+  'assessment',
   'other',
 ];
+
+// Material types that belong under a unit's Sections (per-lesson homework/labs)
+// rather than at the unit's top level (overall slides/notes/study guide).
+export const SECTION_MATERIAL_TYPES = ['worksheet', 'homework', 'lab', 'assessment', 'other'];
 
 // -----------------------------------------------------------------------------
 //  Seed units + sample materials. Sample materials carry keyTerms / extractedText

@@ -8,19 +8,21 @@ import {
   Sparkles,
   Link2,
   Unlink,
+  Layers,
 } from 'lucide-react';
 import { MATERIAL_TYPES, MATERIAL_TYPE_ORDER } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
 import MaterialRow from './MaterialRow.jsx';
 import FileDropzone from './FileDropzone.jsx';
 import StudyToolGenerator from './StudyToolGenerator.jsx';
+import SectionBlock from './SectionBlock.jsx';
 import Badge from './Badge.jsx';
 import EmptyState from './EmptyState.jsx';
 
 export default function UnitSection({ unit, theme, canManage, defaultOpen = false }) {
   const {
     addMaterial, deleteUnit, units: allUnits, classes, materialGroups,
-    addUnit, linkUnitsWithMaterials, unlinkUnit,
+    addUnit, linkUnitsWithMaterials, unlinkUnit, addSection,
   } = useApp();
   const [open, setOpen] = useState(defaultOpen);
   const [showStudy, setShowStudy] = useState(false);
@@ -36,8 +38,19 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
   const [linking, setLinking] = useState(false);
   const [linkTargets, setLinkTargets] = useState([]);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [addingSection, setAddingSection] = useState(false);
+  const [sectionTitle, setSectionTitle] = useState('');
 
   const materials = unit.materials || [];
+  const sections = unit.sections || [];
+
+  const submitSection = (e) => {
+    e.preventDefault();
+    if (!sectionTitle.trim()) return;
+    addSection(unit.id, { title: sectionTitle });
+    setSectionTitle('');
+    setAddingSection(false);
+  };
 
   // Sync state: which sibling units (other classes) this unit is already linked
   // to, and which of its material-group siblings still aren't.
@@ -337,6 +350,61 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
               )}
             </div>
           )}
+
+          {/* Sections — per-lesson homework/labs, grouped under an Assignments dropdown */}
+          <div className="border-t border-white/10 pt-4">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+              <Layers className="h-3.5 w-3.5" /> Sections
+            </p>
+            {sections.length === 0 && !addingSection ? (
+              <p className="mb-2 text-xs text-zinc-600">
+                No sections yet — add one for each lesson&rsquo;s homework and labs, or use Import Unit Breakdown above.
+              </p>
+            ) : (
+              <div className="mb-2 space-y-2">
+                {sections
+                  .slice()
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((s) => (
+                    <SectionBlock key={s.id} unit={unit} section={s} canManage={canManage} />
+                  ))}
+              </div>
+            )}
+            {canManage && (
+              addingSection ? (
+                <form onSubmit={submitSection} className="flex items-center gap-2">
+                  <input
+                    value={sectionTitle}
+                    onChange={(e) => setSectionTitle(e.target.value)}
+                    placeholder="Section title — e.g. 1.1 Mole Conversions"
+                    autoFocus
+                    className="flex-1 rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-gold-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!sectionTitle.trim()}
+                    className="font-display flex items-center gap-1.5 rounded-lg bg-gold-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-ink-950 transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingSection(false); setSectionTitle(''); }}
+                    className="rounded-lg bg-ink-750 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-300 hover:bg-ink-700"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setAddingSection(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 transition-all hover:border-gold-500/40 hover:text-gold-300"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Section
+                </button>
+              )
+            )}
+          </div>
 
           {/* Study tool generator */}
           <div className="border-t border-white/10 pt-3">
