@@ -339,9 +339,13 @@ export function useStudents() {
 
     // Realtime: without this, a student inserted from another tab/hook
     // instance (e.g. a Classroom roster sync) never shows up here until a
-    // full reload, since this hook only fetches once on mount.
+    // full reload, since this hook only fetches once on mount. The channel
+    // name must be unique per hook instance — useStudents() is called from
+    // multiple components at once (App.jsx, Gradebook.jsx), and reusing one
+    // hardcoded name across instances made a second `.on()` land on a
+    // channel the first instance had already subscribed, which throws.
     const channel = supabase
-      .channel("students-shared")
+      .channel(`students-shared-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "students" }, load)
       .subscribe();
 
