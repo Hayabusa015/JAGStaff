@@ -3,21 +3,19 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  FolderOpen,
   Loader2,
   Sparkles,
   Link2,
   Unlink,
   Layers,
 } from 'lucide-react';
-import { MATERIAL_TYPES, MATERIAL_TYPE_ORDER } from '../data/mockData.js';
+import { UNIT_MATERIAL_TYPES, MATERIAL_TYPES, bucketTypesFor } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
-import MaterialRow from './MaterialRow.jsx';
+import CategoryBucket from './CategoryBucket.jsx';
 import FileDropzone from './FileDropzone.jsx';
 import StudyToolGenerator from './StudyToolGenerator.jsx';
 import SectionBlock from './SectionBlock.jsx';
 import Badge from './Badge.jsx';
-import EmptyState from './EmptyState.jsx';
 
 export default function UnitSection({ unit, theme, canManage, defaultOpen = false }) {
   const {
@@ -29,7 +27,7 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    type: 'guided_notes',
+    type: UNIT_MATERIAL_TYPES[0],
     title: '',
     description: '',
     studyContent: '',
@@ -100,10 +98,7 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
       unlinkUnit(unit.id);
     }
   };
-  const grouped = MATERIAL_TYPE_ORDER.map((t) => ({
-    type: t,
-    items: materials.filter((m) => m.type === t),
-  })).filter((g) => g.items.length > 0);
+  const unitBucketTypes = bucketTypesFor(UNIT_MATERIAL_TYPES, materials);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -111,7 +106,7 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
     setBusy(true);
     await addMaterial(unit.id, form, file);
     setBusy(false);
-    setForm({ type: 'guided_notes', title: '', description: '', studyContent: '' });
+    setForm({ type: UNIT_MATERIAL_TYPES[0], title: '', description: '', studyContent: '' });
     setFile(null);
     setAdding(false);
   };
@@ -235,29 +230,20 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
 
       {open && (
         <div className="space-y-4 p-4">
-          {/* Materials */}
-          {materials.length === 0 ? (
-            <EmptyState
-              icon={FolderOpen}
-              title="No materials yet"
-              subtitle={canManage ? 'Add your first material below.' : 'Check back soon.'}
-            />
-          ) : (
-            <div className="space-y-3">
-              {grouped.map((g) => (
-                <div key={g.type}>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                    {MATERIAL_TYPES[g.type].label}
-                  </p>
-                  <div className="space-y-1.5">
-                    {g.items.map((m) => (
-                      <MaterialRow key={m.id} material={m} unitId={unit.id} canManage={canManage} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Materials — unit-wide categories (overall slides/notes/study guide/project).
+              Drag a card between these to recategorize it, or down into a Section
+              below to make it that lesson's own assignment instead. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {unitBucketTypes.map((t) => (
+              <CategoryBucket
+                key={t}
+                unitId={unit.id}
+                type={t}
+                materials={materials.filter((m) => m.type === t)}
+                canManage={canManage}
+              />
+            ))}
+          </div>
 
           {/* Teacher: add material */}
           {canManage && (
@@ -282,7 +268,7 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
                         onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
                         className="w-full rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white focus:border-gold-500 focus:outline-none"
                       >
-                        {MATERIAL_TYPE_ORDER.map((t) => (
+                        {UNIT_MATERIAL_TYPES.map((t) => (
                           <option key={t} value={t}>
                             {MATERIAL_TYPES[t].label}
                           </option>

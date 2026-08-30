@@ -4,6 +4,7 @@ import {
   FileText,
   Presentation,
   BookOpenCheck,
+  FolderKanban,
   ClipboardList,
   ClipboardCheck,
   FlaskConical,
@@ -17,6 +18,7 @@ import {
   Link2,
   Upload,
   Loader2,
+  GripVertical,
 } from 'lucide-react';
 import { MATERIAL_TYPES } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
@@ -28,6 +30,7 @@ const ICONS = {
   FileText,
   Presentation,
   BookOpenCheck,
+  FolderKanban,
   ClipboardList,
   ClipboardCheck,
   FlaskConical,
@@ -76,9 +79,27 @@ export default function MaterialRow({ material, unitId, sectionId = null, canMan
     setAttaching(false);
   };
 
+  // Drag payload for CategoryBucket's drop handler — where this card lives now
+  // (unitId/sectionId/type), so a bucket can tell a no-op drop from a real move.
+  const handleDragStart = (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({ unitId, sectionId, materialId: material.id, type: material.type })
+    );
+  };
+
   return (
-    <div className="rounded-xl border border-white/10 bg-ink-950/40 transition-all hover:border-white/20">
+    <div
+      draggable={canManage}
+      onDragStart={canManage ? handleDragStart : undefined}
+      className={[
+        'rounded-xl border border-white/10 bg-ink-950/40 transition-all hover:border-white/20',
+        canManage ? 'cursor-grab active:cursor-grabbing' : '',
+      ].join(' ')}
+    >
       <div className="flex items-center gap-3 px-3 py-2.5">
+        {canManage && <GripVertical className="h-4 w-4 shrink-0 text-zinc-600" />}
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gold-500/10 text-gold-400 ring-1 ring-gold-500/25">
           <Icon className="h-4 w-4" />
         </div>

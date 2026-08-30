@@ -18,6 +18,7 @@ describe('classifyMaterialType', () => {
     expect(classifyMaterialType('Density Lab')).toBe('lab');
     expect(classifyMaterialType('Practice Worksheet')).toBe('worksheet');
     expect(classifyMaterialType('Unit 3 Test')).toBe('assessment');
+    expect(classifyMaterialType('Periodic Table Project')).toBe('project');
   });
 
   it('prefers study guide over the bare "guide" not matching notes', () => {

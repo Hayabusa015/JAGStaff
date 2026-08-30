@@ -647,6 +647,7 @@ export const MATERIAL_TYPES = {
   notes: { key: 'notes', label: 'Notes', icon: 'FileText' },
   presentation: { key: 'presentation', label: 'Presentation', icon: 'Presentation' },
   study_guide: { key: 'study_guide', label: 'Study Guide', icon: 'BookOpenCheck' },
+  project: { key: 'project', label: 'Project', icon: 'FolderKanban' },
   worksheet: { key: 'worksheet', label: 'Worksheet', icon: 'ClipboardList' },
   homework: { key: 'homework', label: 'Homework', icon: 'ClipboardCheck' },
   lab: { key: 'lab', label: 'Lab', icon: 'FlaskConical' },
@@ -659,6 +660,7 @@ export const MATERIAL_TYPE_ORDER = [
   'notes',
   'presentation',
   'study_guide',
+  'project',
   'worksheet',
   'homework',
   'lab',
@@ -666,9 +668,24 @@ export const MATERIAL_TYPE_ORDER = [
   'other',
 ];
 
-// Material types that belong under a unit's Sections (per-lesson homework/labs)
-// rather than at the unit's top level (overall slides/notes/study guide).
-export const SECTION_MATERIAL_TYPES = ['worksheet', 'homework', 'lab', 'assessment', 'other'];
+// The two category groups a teacher organizes materials into: a unit's overall
+// content (top of the unit page) vs. a section's per-lesson assignments (behind
+// its Assignments dropdown). Each is a fixed set of drag-and-drop category
+// buckets — CategoryBucket renders one per type, always visible (even empty) so
+// there's somewhere to drop a card — with Homework/Lab/Project first at the
+// section level per Matt's rule, but Worksheet/Quiz/Resource stay available too
+// so nothing already filed under them goes missing.
+export const UNIT_MATERIAL_TYPES = ['presentation', 'notes', 'guided_notes', 'study_guide', 'project'];
+export const SECTION_MATERIAL_TYPES = ['homework', 'lab', 'project', 'worksheet', 'assessment', 'other'];
+
+// Buckets to render for a given materials array: the fixed category list, plus
+// any type actually present in the data that isn't already in it — so an item
+// filed under a type outside the current rule (e.g. a pre-Sections-era unit
+// material) still gets a bucket instead of silently disappearing from view.
+export function bucketTypesFor(primaryTypes, materials) {
+  const extra = [...new Set((materials || []).map((m) => m.type))].filter((t) => !primaryTypes.includes(t));
+  return [...primaryTypes, ...extra];
+}
 
 // -----------------------------------------------------------------------------
 //  Seed units + sample materials. Sample materials carry keyTerms / extractedText

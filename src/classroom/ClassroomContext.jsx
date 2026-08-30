@@ -1014,6 +1014,54 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     );
   }, [units]);
 
+  // Drag-and-drop recategorize/relocate: moves a material to a different type
+  // bucket, optionally also into a different section (or into/out of the unit's
+  // own top-level materials when toSectionId is null) — all within the same
+  // unit. A unit-level material dropped into a section loses its sync link,
+  // since sections aren't part of the cross-class material-sync feature; a
+  // material dropped between buckets within the same container just changes
+  // type in place.
+  const moveMaterial = useCallback((unitId, materialId, { toSectionId = null, toType } = {}) => {
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.id !== unitId) return u;
+
+        let found = null;
+        let materials = u.materials;
+        if (materials.some((m) => m.id === materialId)) {
+          found = materials.find((m) => m.id === materialId);
+          materials = materials.filter((m) => m.id !== materialId);
+        }
+
+        let sections = u.sections || [];
+        let fromSectionId = null;
+        if (!found) {
+          sections = sections.map((s) => {
+            const hit = s.materials.find((m) => m.id === materialId);
+            if (!hit) return s;
+            found = hit;
+            fromSectionId = s.id;
+            return { ...s, materials: s.materials.filter((m) => m.id !== materialId) };
+          });
+        }
+        if (!found) return u; // not in this unit — nothing to do
+
+        const moved = { ...found, type: toType || found.type };
+        if (!fromSectionId && toSectionId) delete moved.syncId;
+
+        if (toSectionId) {
+          sections = sections.map((s) =>
+            s.id === toSectionId ? { ...s, materials: [...s.materials, moved] } : s
+          );
+        } else {
+          materials = [...materials, moved];
+        }
+
+        return { ...u, materials, sections };
+      })
+    );
+  }, []);
+
   // Bulk-creates units (+ their sections + placeholder materials) from a parsed
   // unit-breakdown sheet in one state update. Placeholders carry a title/type but
   // no file — the teacher attaches the real file per item afterward (MaterialRow's
@@ -1250,6 +1298,7 @@ export function AppProvider({ children, user = null, isStaff = true }) {
     addMaterial,
     attachMaterialFile,
     deleteMaterial,
+    moveMaterial,
     addSection,
     deleteSection,
     importUnitBreakdown,

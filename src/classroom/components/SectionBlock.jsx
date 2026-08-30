@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { ChevronDown, Plus, Trash2, ListChecks, Loader2 } from 'lucide-react';
-import { MATERIAL_TYPES, SECTION_MATERIAL_TYPES } from '../data/mockData.js';
+import { MATERIAL_TYPES, SECTION_MATERIAL_TYPES, bucketTypesFor } from '../data/mockData.js';
 import { useApp } from '../ClassroomContext.jsx';
-import MaterialRow from './MaterialRow.jsx';
+import CategoryBucket from './CategoryBucket.jsx';
 import FileDropzone from './FileDropzone.jsx';
-import EmptyState from './EmptyState.jsx';
 
 // A named section inside a unit (e.g. "1.1 · Mole Conversions") holding its own
-// homework/lab assignments, collapsed behind an "Assignments" dropdown so a unit
-// with several sections doesn't turn into one long undifferentiated list.
+// homework/lab/project assignments, collapsed behind an "Assignments" dropdown
+// so a unit with several sections doesn't turn into one long undifferentiated
+// list. Assignments are further split into drag-and-drop category buckets
+// (Homework / Lab / Project, …) — dragging a card between them recategorizes
+// it; dragging one up into the unit's own materials above makes it unit-wide.
 export default function SectionBlock({ unit, section, canManage }) {
   const { addMaterial, deleteSection } = useApp();
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ type: 'homework', title: '', description: '' });
+  const [form, setForm] = useState({ type: SECTION_MATERIAL_TYPES[0], title: '', description: '' });
   const [file, setFile] = useState(null);
 
   const materials = section.materials || [];
+  const sectionBucketTypes = bucketTypesFor(SECTION_MATERIAL_TYPES, materials);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -25,7 +28,7 @@ export default function SectionBlock({ unit, section, canManage }) {
     setBusy(true);
     await addMaterial(unit.id, form, file, section.id);
     setBusy(false);
-    setForm({ type: 'homework', title: '', description: '' });
+    setForm({ type: SECTION_MATERIAL_TYPES[0], title: '', description: '' });
     setFile(null);
     setAdding(false);
   };
@@ -63,15 +66,19 @@ export default function SectionBlock({ unit, section, canManage }) {
 
       {open && (
         <div className="space-y-3 border-t border-white/8 p-3">
-          {materials.length === 0 ? (
-            <EmptyState icon={ListChecks} title="No assignments yet" subtitle={canManage ? 'Add homework or a lab below.' : 'Check back soon.'} />
-          ) : (
-            <div className="space-y-1.5">
-              {materials.map((m) => (
-                <MaterialRow key={m.id} material={m} unitId={unit.id} sectionId={section.id} canManage={canManage} />
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {sectionBucketTypes.map((t) => (
+              <CategoryBucket
+                key={t}
+                unitId={unit.id}
+                sectionId={section.id}
+                type={t}
+                materials={materials.filter((m) => m.type === t)}
+                canManage={canManage}
+                compact
+              />
+            ))}
+          </div>
 
           {canManage && (
             <div>

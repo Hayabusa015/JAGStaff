@@ -24,6 +24,7 @@ const TYPE_RULES = [
   { type: 'study_guide', re: /study\s*guide|review\s*guide|unit\s*review|exam\s*review/i },
   { type: 'guided_notes', re: /guided\s*notes?/i },
   { type: 'presentation', re: /power\s*point|slide\s*deck|slides?\b|presentation/i },
+  { type: 'project', re: /\bproject\b/i },
   { type: 'assessment', re: /\bquiz\b|\btest\b|\bexam\b/i },
   { type: 'lab', re: /\blab\b|\bexperiment\b/i },
   { type: 'homework', re: /\bhomework\b|\bhw\b/i },
