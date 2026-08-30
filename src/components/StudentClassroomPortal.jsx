@@ -1,7 +1,8 @@
 // Phase 5: Student-facing portal.
 // Wraps the ClassroomApp in student mode with a zone toggle for G-Men Period.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Lock } from "lucide-react";
 import { GOLD } from "../constants.js";
 
 function getTeacherName() {
@@ -34,15 +35,18 @@ function SchoolLogo({ size = 36 }) {
   );
 }
 
-function ZoneTab({ active, onClick, children }) {
+function ZoneTab({ active, locked, onClick, children }) {
   return (
     <button
-      onClick={onClick}
+      onClick={locked ? undefined : onClick}
+      disabled={locked}
+      title={locked ? "Ask your teacher to add you to a classroom to unlock this" : undefined}
       style={{
+        display: "flex", alignItems: "center", gap: "0.3rem",
         padding: "0.3rem 0.85rem",
         borderRadius: 999,
         border: "none",
-        cursor: "pointer",
+        cursor: locked ? "default" : "pointer",
         fontSize: "0.68rem",
         fontWeight: 800,
         letterSpacing: "0.06em",
@@ -50,10 +54,11 @@ function ZoneTab({ active, onClick, children }) {
         whiteSpace: "nowrap",
         transition: "all 0.15s",
         background: active ? GOLD : "transparent",
-        color: active ? "#000" : "rgba(255,255,255,0.6)",
+        color: locked ? "rgba(255,255,255,0.3)" : active ? "#000" : "rgba(255,255,255,0.6)",
         boxShadow: active ? "0 0 12px -2px rgba(245,179,1,0.55)" : "none",
       }}
     >
+      {locked && <Lock style={{ width: 10, height: 10, flexShrink: 0 }} />}
       {children}
     </button>
   );
@@ -110,7 +115,29 @@ function StudentClassroomInner({ user, _zone }) {
 }
 
 export default function StudentClassroomPortal({ user, signOut }) {
+  // The provider now wraps the whole shell, not just the classroom zone, so
+  // enrollment (studentNotFound) is known before the tab bar renders — that's
+  // what lets the "My Classroom" tab itself stay locked for students who
+  // aren't on any teacher's roster, instead of only hiding its content.
+  return (
+    <ClassroomProvider user={user} isStaff={false}>
+      <StudentPortalShell user={user} signOut={signOut} />
+    </ClassroomProvider>
+  );
+}
+
+function StudentPortalShell({ user, signOut }) {
   const [zone, setZone] = useState("classroom");
+  const { studentLoading, studentNotFound } = useApp();
+  const enrolled = !studentLoading && !studentNotFound;
+  const classroomLocked = !studentLoading && !enrolled;
+
+  // A student who turns out not to be enrolled anywhere shouldn't land on
+  // (or stay on) the classroom tab by default — steer them to G-Men Period,
+  // the one zone every recognized student can always use.
+  useEffect(() => {
+    if (classroomLocked && zone === "classroom") setZone("gmen");
+  }, [classroomLocked, zone]);
 
   return (
     <div className="app-shell app-backdrop" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -138,7 +165,7 @@ export default function StudentClassroomPortal({ user, signOut }) {
             }}
             role="tablist"
           >
-            <ZoneTab active={zone === "classroom"} onClick={() => setZone("classroom")}>
+            <ZoneTab active={zone === "classroom"} locked={classroomLocked} onClick={() => setZone("classroom")}>
               My Classroom
             </ZoneTab>
             <ZoneTab active={zone === "gmen"} onClick={() => setZone("gmen")}>
@@ -167,13 +194,11 @@ export default function StudentClassroomPortal({ user, signOut }) {
         </div>
       ) : zone === "hallpass" ? (
         <StudentHallPass user={user} />
-      ) : (
+      ) : zone === "classroom" && !classroomLocked ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <ClassroomProvider user={user} isStaff={false}>
-            <StudentClassroomInner user={user} zone={zone} />
-          </ClassroomProvider>
+          <StudentClassroomInner user={user} zone={zone} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
