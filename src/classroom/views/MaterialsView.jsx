@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { FlaskConical, Atom, Mountain, Plus, Library, X, Copy } from 'lucide-react';
+import { FlaskConical, Atom, Mountain, Plus, Library, X, Copy, Link2, Loader2 } from 'lucide-react';
 import { useApp } from '../ClassroomContext.jsx';
 import UnitSection from '../components/UnitSection.jsx';
 import Card, { CardHeader } from '../components/Card.jsx';
@@ -8,7 +8,10 @@ import EmptyState from '../components/EmptyState.jsx';
 const SUBJECT_ICON = { chemistry: FlaskConical, physics: Atom, geology: Mountain };
 
 export default function MaterialsView() {
-  const { role, classes, activeStudent, getClass, getTheme, getUnitsForClass, createSyncedUnits, materialGroups } = useApp();
+  const {
+    role, classes, activeStudent, getClass, getTheme, getUnitsForClass, createSyncedUnits, materialGroups,
+    units: allUnits, addUnit, linkUnitsWithMaterials,
+  } = useApp();
 
   const isTeacher = role === 'teacher';
   const studentClassId = activeStudent?.classId;
@@ -35,6 +38,40 @@ export default function MaterialsView() {
     () => (myGroup ? myGroup.classIds.filter((id) => id !== classId) : []),
     [myGroup, classId]
   );
+
+  // Which group siblings a given (already-existing) unit isn't linked to yet.
+  const unlinkedSiblingsFor = (unit) => {
+    const linkedClassIds = allUnits
+      .filter((u) => unit.syncKey && u.syncKey === unit.syncKey && u.id !== unit.id)
+      .map((u) => u.classId);
+    return groupSiblingIds.filter((id) => !linkedClassIds.includes(id));
+  };
+  const unsyncedUnits = useMemo(
+    () => (myGroup ? units.filter((u) => unlinkedSiblingsFor(u).length > 0) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [myGroup, units, allUnits, groupSiblingIds]
+  );
+  const [syncingClass, setSyncingClass] = useState(false);
+
+  // Links every not-yet-fully-synced unit in this class to its group siblings in
+  // one pass — reuses a matching-titled unit if one already exists, otherwise
+  // creates it — so an existing class with existing units doesn't need to be
+  // remade to join a sync group.
+  const syncClassToGroup = async () => {
+    if (!unsyncedUnits.length || syncingClass) return;
+    setSyncingClass(true);
+    for (const unit of unsyncedUnits) {
+      const targets = unlinkedSiblingsFor(unit);
+      const targetUnitIds = targets.map((targetClassId) => {
+        const existing = allUnits.find(
+          (u) => u.classId === targetClassId && u.title.trim().toLowerCase() === unit.title.trim().toLowerCase()
+        );
+        return existing ? existing.id : addUnit(targetClassId, { title: unit.title, description: unit.description });
+      });
+      await linkUnitsWithMaterials(unit.id, targetUnitIds);
+    }
+    setSyncingClass(false);
+  };
 
   // Other classes the teacher can sync this unit to
   const otherClasses = useMemo(
@@ -104,6 +141,35 @@ export default function MaterialsView() {
                 Notes, worksheets, labs & study tools for your class
               </p>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Teacher: existing units in this class not yet synced with its material group */}
+      {isTeacher && myGroup && unsyncedUnits.length > 0 && (
+        <Card hairline>
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gold-500/15 text-gold-400">
+                <Link2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  {unsyncedUnits.length} of {units.length} unit{units.length === 1 ? '' : 's'} in {cls?.name} {unsyncedUnits.length === 1 ? "isn't" : "aren't"} synced with your &quot;{myGroup.name}&quot; group yet
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Existing content, no need to rebuild it — this links each one to a matching unit in your other group classes (creating it if needed) and copies its materials over.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={syncClassToGroup}
+              disabled={syncingClass}
+              className="font-display flex shrink-0 items-center gap-1.5 rounded-lg bg-gold-500 px-4 py-2 text-xs font-bold uppercase tracking-wide text-ink-950 transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {syncingClass ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              {syncingClass ? 'Syncing…' : 'Sync All Units to Group'}
+            </button>
           </div>
         </Card>
       )}

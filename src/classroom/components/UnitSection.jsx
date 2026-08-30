@@ -140,20 +140,20 @@ export default function UnitSection({ unit, theme, canManage, defaultOpen = fals
           <button
             onClick={handleUnlink}
             title="Unlink from sync group"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-950/70 transition-colors hover:bg-ink-950/20 hover:text-ink-950"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-950/70 transition-colors hover:bg-ink-950/20 hover:text-ink-950"
             aria-label="Unlink from sync group"
           >
-            <Unlink className="h-4 w-4" />
+            <Unlink className="h-3.5 w-3.5" /> Unlink
           </button>
         )}
         {canManage && linkableClasses.length > 0 && (
           <button
             onClick={() => (linking ? setLinking(false) : openLinkPanel())}
             title="Link to group classes — shares future uploads"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-950/70 transition-colors hover:bg-ink-950/20 hover:text-ink-950"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-950/70 transition-colors hover:bg-ink-950/20 hover:text-ink-950"
             aria-label="Link to group classes"
           >
-            <Link2 className="h-4 w-4" />
+            <Link2 className="h-3.5 w-3.5" /> Link
           </button>
         )}
         {canManage && (
