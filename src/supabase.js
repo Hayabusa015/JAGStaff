@@ -336,7 +336,16 @@ export function useStudents() {
       setLoading(false);
     }
     load();
-    return () => { active = false; };
+
+    // Realtime: without this, a student inserted from another tab/hook
+    // instance (e.g. a Classroom roster sync) never shows up here until a
+    // full reload, since this hook only fetches once on mount.
+    const channel = supabase
+      .channel("students-shared")
+      .on("postgres_changes", { event: "*", schema: "public", table: "students" }, load)
+      .subscribe();
+
+    return () => { active = false; supabase.removeChannel(channel); };
   }, []);
 
   const rowToStudent = r => ({
@@ -401,12 +410,16 @@ export function useStudents() {
 
   async function addStudent(s) {
     if (!SUPABASE_READY || !supabase) {
-      setStudents(prev => [...prev, { id: Date.now().toString(), ...s }]);
-      return;
+      const row = { id: Date.now().toString(), ...s };
+      setStudents(prev => [...prev, row]);
+      return row;
     }
     const { data } = await supabase.from("students")
       .insert(studentToRow(s)).select("*").single();
-    if (data) setStudents(prev => [...prev, rowToStudent(data)]);
+    if (!data) return null;
+    const mapped = rowToStudent(data);
+    setStudents(prev => [...prev, mapped]);
+    return mapped;
   }
 
   async function updateStudent(id, s) {
@@ -1616,6 +1629,141 @@ export function useGradebook(teacherEmail) {
     saveGrade, saveProfile, setActiveProfile, deleteProfile,
     saveSettings,
   };
+}
+
+// ─── Gradebook Roster (per-teacher, table: gradebook_roster) ────────────────
+// The Gradebook used to receive the entire shared `students` table with no
+// per-teacher ownership. gradebook_roster is the join that scopes it: "this
+// student is on this teacher's gradebook", with an optional per-teacher
+// `section` label. A student can be on many teachers' rosters at once (they
+// take multiple classes), so this is a join table, not a column on `students`.
+//
+// Every write here is additive or scoped to exactly one row:
+//   - removeFromRoster deletes ONLY the join row — the shared student record
+//     and every gradebook_grades row are untouched, so re-adding the student
+//     brings their full grade history right back.
+//   - syncFromClassroom only ever INSERTs new (teacher, student) pairs. It
+//     never deletes a roster row and never reads or writes gradebook_grades,
+//     so an existing student's scores can't be touched by a resync.
+export function useGradebookRoster(teacherEmail) {
+  const [roster, setRoster] = useState([]); // [{ id, teacher_email, student_id, section, source, created_at }]
+  const [loading, setLoading] = useState(SUPABASE_READY);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) { setLoading(false); return; }
+    let active = true;
+
+    async function load() {
+      const { data } = await supabase.from("gradebook_roster").select("*").eq("teacher_email", teacherEmail);
+      if (!active) return;
+      setRoster(data || []);
+      setLoading(false);
+    }
+    load();
+
+    const channel = supabase
+      .channel("gradebook_roster_" + teacherEmail)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gradebook_roster", filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [teacherEmail]);
+
+  // Add one existing (shared-roster) student to this teacher's gradebook.
+  async function addToRoster(studentId, section = null) {
+    if (!teacherEmail) return;
+    if (!SUPABASE_READY || !supabase) {
+      setRoster(prev => prev.some(r => r.student_id === studentId) ? prev
+        : [...prev, { id: `opt-${Date.now()}`, teacher_email: teacherEmail, student_id: studentId, section, source: "manual" }]);
+      return;
+    }
+    const { data, error } = await supabase.from("gradebook_roster")
+      .insert({ teacher_email: teacherEmail, student_id: studentId, section, source: "manual" })
+      .select("*").single();
+    if (error) {
+      if (error.code === "23505") return; // already on roster — fine, nothing to do
+      throw new Error(error.message);
+    }
+    setRoster(prev => [...prev, data]);
+  }
+
+  // Removes the student from THIS teacher's gradebook only. Never touches the
+  // shared students table or any gradebook_grades row.
+  async function removeFromRoster(studentId) {
+    setRoster(prev => prev.filter(r => r.student_id !== studentId));
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    await supabase.from("gradebook_roster").delete().eq("teacher_email", teacherEmail).eq("student_id", studentId);
+  }
+
+  // Move a student to a different class/section label on this teacher's roster.
+  async function moveToSection(studentId, section) {
+    setRoster(prev => prev.map(r => r.student_id === studentId ? { ...r, section } : r));
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    await supabase.from("gradebook_roster").update({ section }).eq("teacher_email", teacherEmail).eq("student_id", studentId);
+  }
+
+  // Google Classroom roster sync: additive only, matched by student email.
+  //   1. Any incoming student not already in the shared `students` table is
+  //      created — existing students are matched, never modified.
+  //   2. Any matched/created student not already on THIS teacher's roster is
+  //      added, with `section` set only for the new row.
+  // Existing roster rows (and whatever section a teacher manually set) are
+  // left exactly as they are, and gradebook_grades is never read or written.
+  // entries: [{ firstName, lastName, studentEmail, section }]
+  async function syncFromClassroom(entries) {
+    const withEmail = entries.filter(e => e.studentEmail);
+    if (!teacherEmail || !withEmail.length) return { studentsCreated: 0, rosterAdded: 0, alreadyOnRoster: 0 };
+
+    if (!SUPABASE_READY || !supabase) {
+      const existingIds = new Set(roster.map(r => r.student_id));
+      let rosterAdded = 0;
+      const additions = [];
+      for (const e of withEmail) {
+        const id = `mock-${e.studentEmail}`;
+        if (!existingIds.has(id)) {
+          additions.push({ id: `opt-${Date.now()}-${id}`, teacher_email: teacherEmail, student_id: id, section: e.section || null, source: "classroom_sync" });
+          rosterAdded++;
+        }
+      }
+      setRoster(prev => [...prev, ...additions]);
+      return { studentsCreated: 0, rosterAdded, alreadyOnRoster: withEmail.length - rosterAdded };
+    }
+
+    // 1. Match/create shared student rows by email.
+    const emails = withEmail.map(e => e.studentEmail);
+    const { data: existingStudents } = await supabase.from("students").select("id, student_email").in("student_email", emails);
+    const idByEmail = new Map((existingStudents || []).map(r => [r.student_email, r.id]));
+    const newStudents = withEmail.filter(e => !idByEmail.has(e.studentEmail));
+    if (newStudents.length) {
+      const { data: created, error } = await supabase.from("students").insert(
+        newStudents.map(e => ({ first_name: e.firstName, last_name: e.lastName, student_email: e.studentEmail }))
+      ).select("id, student_email");
+      if (error) throw new Error(`Couldn't add new students: ${error.message}`);
+      for (const row of created || []) idByEmail.set(row.student_email, row.id);
+    }
+
+    // 2. Add to this teacher's roster — only pairs not already there.
+    const existingRosterIds = new Set(roster.map(r => r.student_id));
+    const toAdd = withEmail
+      .map(e => ({ studentId: idByEmail.get(e.studentEmail), section: e.section || null }))
+      .filter(r => r.studentId && !existingRosterIds.has(r.studentId));
+    let inserted = [];
+    if (toAdd.length) {
+      const { data, error } = await supabase.from("gradebook_roster").insert(
+        toAdd.map(r => ({ teacher_email: teacherEmail, student_id: r.studentId, section: r.section, source: "classroom_sync" }))
+      ).select("*");
+      if (error) throw new Error(`Couldn't update your roster: ${error.message}`);
+      inserted = data || [];
+      setRoster(prev => [...prev, ...inserted]);
+    }
+
+    return {
+      studentsCreated: newStudents.length,
+      rosterAdded: inserted.length,
+      alreadyOnRoster: withEmail.length - toAdd.length,
+    };
+  }
+
+  return { roster, loading, addToRoster, removeFromRoster, moveToSection, syncFromClassroom };
 }
 
 // ─── Weekly Events (shared, Supabase-backed) ─────────────────────

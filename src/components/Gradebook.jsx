@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { GOLD } from "../constants.js";
-import { useGradebook, useClassroomSync, useGmailSend } from "../supabase.js";
+import { useGradebook, useGradebookRoster, useStudents, useClassroomSync, useGmailSend } from "../supabase.js";
 import { useApp as useClassroomApp } from "../classroom/ClassroomContext.jsx";
 import {
   calcPeriodGrade, letterGrade, gradePct, assignmentStats,
@@ -18,12 +18,46 @@ import GradebookRubric from "./GradebookRubric.jsx";
 import GradebookMissingWork from "./GradebookMissingWork.jsx";
 import GradebookAnalytics from "./GradebookAnalytics.jsx";
 import GradebookStudentDetail from "./GradebookStudentDetail.jsx";
+import GradebookClasses from "./GradebookClasses.jsx";
+import GradebookRosterSyncModal from "./GradebookRosterSyncModal.jsx";
+import GradebookAddStudentModal from "./GradebookAddStudentModal.jsx";
 
-export default function Gradebook({ students, user }) {
+// `allStudents` is the whole shared school roster (Hall Pass/G-Men/Infractions
+// also use it) — kept only for the "add existing student" picker. Everything
+// else in the Gradebook works off `students`, this teacher's own roster.
+export default function Gradebook({ students: allStudents, user }) {
   const { assignments, grades, profiles, settings, addAssignment, updateAssignment, deleteAssignment, saveGrade, saveProfile, setActiveProfile, deleteProfile, saveSettings } = useGradebook(user?.email);
+  const { roster, addToRoster, removeFromRoster, moveToSection, syncFromClassroom } = useGradebookRoster(user?.email);
+  const { addStudent } = useStudents();
   const { requestGmailToken, sendEmail } = useGmailSend();
   const { requestToken: requestGCToken, listCourses, syncGradesToCourse } = useClassroomSync();
   const { moleGradeCredits = [], currentGradingPeriod = 1 } = useClassroomApp();
+
+  // This teacher's own roster — allStudents filtered + joined to the roster's
+  // per-teacher section label. Everything below (sections, grids, analytics,
+  // reports, CSV export) is scoped to this, never the whole school.
+  const rosterSectionByStudentId = useMemo(() => {
+    const m = new Map();
+    roster.forEach(r => m.set(r.student_id, r.section || ""));
+    return m;
+  }, [roster]);
+  const rosterStudentIds = useMemo(() => new Set(roster.map(r => r.student_id)), [roster]);
+  const students = useMemo(
+    () => allStudents.filter(s => rosterStudentIds.has(s.id)).map(s => ({ ...s, section: rosterSectionByStudentId.get(s.id) || "" })),
+    [allStudents, rosterStudentIds, rosterSectionByStudentId]
+  );
+  const rosterEmails = useMemo(() => new Set(students.map(s => s.studentEmail).filter(Boolean)), [students]);
+
+  const [showRosterSync, setShowRosterSync] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+
+  async function handleAddExistingStudent(studentId, section) {
+    await addToRoster(studentId, section);
+  }
+  async function handleAddNewStudent({ firstName, lastName, grade, section }) {
+    const created = await addStudent({ firstName, lastName, grade, parentEmail: "" });
+    if (created?.id) await addToRoster(created.id, section);
+  }
 
   const [subTab, setSubTab] = useState("grades");
   const [period, setPeriod] = useState(1);
@@ -408,6 +442,12 @@ export default function Gradebook({ students, user }) {
       {/* ── GRADES tab ──────────────────────────────────────────────────── */}
       {subTab === "grades" && (
         <div>
+          {students.length === 0 && (
+            <div className="card" style={{ padding: "0.85rem 1rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", border: "1px solid rgba(245,192,37,0.3)" }}>
+              <span style={{ fontSize: "0.85rem" }}>Your roster is empty — this gradebook is yours alone, not the whole school. Add students to get started.</span>
+              <button onClick={() => setSubTab("classes")} style={{ background: GOLD, border: "none", color: "#000", fontWeight: 700, borderRadius: 6, padding: "0.35rem 0.9rem", cursor: "pointer", fontSize: "0.8rem", flexShrink: 0 }}>Add Students →</button>
+            </div>
+          )}
           {showForm && <div style={{ marginBottom: "1rem" }}><AssignmentForm sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} /></div>}
 
           {/* Period selector + quick-entry toggle */}
@@ -562,105 +602,13 @@ export default function Gradebook({ students, user }) {
 
       {/* ── CLASSES tab ─────────────────────────────────────────────────── */}
       {subTab === "classes" && (
-        <div>
-          {/* Period selector */}
-          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-            {[1,2,3,4,5,6].map(p => (
-              <button key={p} onClick={() => setPeriod(p)} style={{ background: period === p ? GOLD : "rgba(255,255,255,0.06)", border: period === p ? "none" : "1px solid rgba(255,255,255,0.12)", color: period === p ? "#000" : "rgba(255,255,255,0.6)", borderRadius: 6, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
-                {p <= 4 ? `P${p}` : p === 5 ? "Mid" : "Final"}
-              </button>
-            ))}
-          </div>
-
-          {sections.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,0.4)" }}>
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>🏫</div>
-              <div style={{ fontWeight: 700, marginBottom: "0.4rem", color: "rgba(255,255,255,0.7)" }}>No class sections set up yet</div>
-              <div style={{ fontSize: "0.83rem", lineHeight: 1.6 }}>
-                Add a <strong style={{ color: GOLD }}>Section</strong> value to students in the Student Roster
-                (e.g. "P1 · Biology") to see per-class breakdowns here.
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {sections.map(sec => {
-                const secStudents = students
-                  .filter(s => s.section === sec)
-                  .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
-                const secAssignments = assignments.filter(
-                  a => a.grading_period === period && (!a.section || a.section === sec)
-                );
-                const studentGrades = secStudents.map(s => {
-                  const sg = gradeMap[s.id] || {};
-                  const { pct } = calcPeriodGrade(secAssignments, sg, categories, autoZeroOpts);
-                  return { s, pct, letter: letterGrade(pct, scale) };
-                });
-                const gradedPcts = studentGrades.map(g => g.pct).filter(v => v != null);
-                const classAvg = gradedPcts.length
-                  ? gradedPcts.reduce((a, b) => a + b, 0) / gradedPcts.length
-                  : null;
-
-                return (
-                  <div key={sec} style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, overflow: "hidden" }}>
-                    {/* Section header */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.65rem 0.85rem", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                        <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>{sec}</span>
-                        <span style={{ background: "rgba(255,255,255,0.08)", borderRadius: 99, padding: "0.1rem 0.5rem", fontSize: "0.72rem", color: "rgba(255,255,255,0.5)" }}>
-                          {secStudents.length} student{secStudents.length !== 1 ? "s" : ""}
-                        </span>
-                        {classAvg != null && (
-                          <span style={{ background: "rgba(245,192,37,0.15)", border: "1px solid rgba(245,192,37,0.35)", borderRadius: 99, padding: "0.1rem 0.55rem", fontSize: "0.72rem", color: GOLD, fontWeight: 700 }}>
-                            {PERIOD_LABELS[period]} avg: {Math.round(classAvg)}%
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => { setActiveSection(sec); setSubTab("grades"); }}
-                        style={{ background: "none", border: `1px solid rgba(245,192,37,0.35)`, color: GOLD, borderRadius: 6, padding: "0.22rem 0.7rem", cursor: "pointer", fontWeight: 700, fontSize: "0.74rem" }}
-                      >
-                        View Full Grades →
-                      </button>
-                    </div>
-
-                    {/* Student rows */}
-                    {secStudents.length === 0 ? (
-                      <div style={{ padding: "0.75rem 0.85rem", fontSize: "0.82rem", color: "rgba(255,255,255,0.35)" }}>No students in this section.</div>
-                    ) : (
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                        <thead>
-                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                            <th style={{ padding: "0.35rem 0.85rem", textAlign: "left", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "40%" }}>Last Name</th>
-                            <th style={{ padding: "0.35rem 0.5rem", textAlign: "left", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "35%" }}>First Name</th>
-                            <th style={{ padding: "0.35rem 0.5rem", textAlign: "center", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "13%" }}>{PERIOD_LABELS[period]}</th>
-                            <th style={{ padding: "0.35rem 0.85rem", textAlign: "center", fontWeight: 600, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", width: "12%" }}>Grade</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {studentGrades.map(({ s, pct, letter }) => {
-                            const tier = pct == null ? "ungraded" : pct >= 90 ? "a" : pct >= 80 ? "b" : pct >= 70 ? "c" : pct >= 60 ? "d" : "f";
-                            return (
-                              <tr key={s.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                <td style={{ padding: "0.3rem 0.85rem", fontWeight: 600 }}>{s.lastName}</td>
-                                <td style={{ padding: "0.3rem 0.5rem" }}>{s.firstName}</td>
-                                <td style={{ padding: "0.3rem 0.5rem", textAlign: "center", color: TIER_COLORS[tier], fontWeight: 700 }}>
-                                  {pct != null ? `${Math.round(pct)}%` : "—"}
-                                </td>
-                                <td style={{ padding: "0.3rem 0.85rem", textAlign: "center", fontWeight: 800, color: TIER_COLORS[tier], fontSize: "0.88rem" }}>
-                                  {pct != null ? letter : "—"}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <GradebookClasses
+          period={period} setPeriod={setPeriod}
+          students={students} gradeMap={gradeMap} assignments={assignments} categories={categories}
+          autoZeroOpts={autoZeroOpts} scale={scale} sections={sections}
+          onMove={moveToSection} onRemove={removeFromRoster}
+          onOpenSync={() => setShowRosterSync(true)} onOpenAddStudent={() => setShowAddStudent(true)}
+        />
       )}
 
       {/* ── ASSIGNMENTS tab ──────────────────────────────────────────────── */}
@@ -673,11 +621,12 @@ export default function Gradebook({ students, user }) {
               </button>
             ))}
             <button onClick={sortByDueDate} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} title="Reorder assignments within each category by due date">↕ Sort by due date</button>
+            <button onClick={() => setSubTab("settings")} className="btn btn-ghost btn-sm" title="Edit how much each category (Tests, Quizzes, Homework…) counts toward the grade">⚖ Edit Weights</button>
             <button onClick={() => { setEditingAssignment(null); setShowForm(true); }} className="btn btn-primary btn-sm">+ Add</button>
           </div>
 
           <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.25rem" }}>
-            Drag an assignment by its <strong>⠿</strong> handle to reorder it, or drop it on another category heading to move it there.
+            Drag an assignment by its <strong>⠿</strong> handle to reorder it, or drop it on another category heading to move it there. Category weights ({categories.map(c => `${c.name} ${c.weight}%`).join(" · ")}) are set in <button onClick={() => setSubTab("settings")} style={{ background: "none", border: "none", color: GOLD, cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>Settings</button>.
           </div>
 
           {showForm && !editingAssignment && <AssignmentForm sections={sections} defaultSection={activeSection} categories={categories} period={period} onSave={handleAddAssignment} onClose={() => setShowForm(false)} />}
@@ -847,6 +796,26 @@ export default function Gradebook({ students, user }) {
           settings={settings}
           user={user}
           onClose={() => setDetailStudent(null)}
+        />
+      )}
+
+      {/* ── Roster: Classroom sync + add student modals ────────────────────── */}
+      {showRosterSync && (
+        <GradebookRosterSyncModal
+          onClose={() => setShowRosterSync(false)}
+          rosterEmails={rosterEmails}
+          syncFromClassroom={syncFromClassroom}
+        />
+      )}
+      {showAddStudent && (
+        <GradebookAddStudentModal
+          onClose={() => setShowAddStudent(false)}
+          allStudents={allStudents}
+          rosterStudentIds={rosterStudentIds}
+          sections={sections}
+          defaultSection={activeSection}
+          onAddExisting={handleAddExistingStudent}
+          onAddNew={handleAddNewStudent}
         />
       )}
     </div>
