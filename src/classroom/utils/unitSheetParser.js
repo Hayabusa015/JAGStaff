@@ -59,6 +59,14 @@ const BULLET_RE = /^[\s]*[-*•–]\s*/;
 const UNIT_RE = /^unit\s*#?\s*(\d+)\b\s*[:\-–.]?\s*(.*)$/i;
 const KEYWORD_SECTION_RE = /^(section|lesson|topic)\s*#?\s*(\d+(?:\.\d+)?)\b\s*[:\-–.]?\s*(.*)$/i;
 const BARE_SECTION_RE = /^(\d+\.\d+)\b\s*[:\-–.]?\s*(.*)$/;
+// A unit-numbering sheet (e.g. a curriculum map's "0  Foundations of Chemistry" /
+// "0.1  Laboratory Equipment") often never spells out the word "Unit" — the
+// number alone is the header. That's too ambiguous to accept on its own (a plain
+// numbered homework list — "1 Do this / 2 Do that" — looks identical), so it's
+// only accepted when the very next content line is that same number's decimal
+// section (e.g. "0" is only a unit header if "0.1" follows) — a numbered list
+// item is never itself followed by "<same number>.<anything>".
+const BARE_UNIT_RE = /^(\d+)\b\s*[:\-–.]?\s*(\S.*)$/;
 
 export function parseOutlineText(text) {
   const units = [];
@@ -66,10 +74,13 @@ export function parseOutlineText(text) {
   let currentUnit = null;
   let currentSection = null;
 
-  const lines = (text || '').split(/\r?\n/);
-  for (const raw of lines) {
-    const stripped = raw.replace(BULLET_RE, '').trim();
-    if (!stripped) continue;
+  const lines = (text || '')
+    .split(/\r?\n/)
+    .map((raw) => raw.replace(BULLET_RE, '').trim())
+    .filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const stripped = lines[i];
 
     const unitMatch = stripped.match(UNIT_RE);
     if (unitMatch) {
@@ -81,17 +92,28 @@ export function parseOutlineText(text) {
     }
 
     const kwMatch = stripped.match(KEYWORD_SECTION_RE);
-    const bareMatch = !kwMatch && stripped.match(BARE_SECTION_RE);
-    if (kwMatch || bareMatch) {
+    const bareSectionMatch = !kwMatch && stripped.match(BARE_SECTION_RE);
+    if (kwMatch || bareSectionMatch) {
       if (!currentUnit) {
         warnings.push(`Skipped "${stripped}" — no unit has started yet.`);
         continue;
       }
       const label = kwMatch ? kwMatch[1][0].toUpperCase() + kwMatch[1].slice(1).toLowerCase() : 'Section';
-      const num = kwMatch ? kwMatch[2] : bareMatch[1];
-      const rest = kwMatch ? kwMatch[3] : bareMatch[2];
+      const num = kwMatch ? kwMatch[2] : bareSectionMatch[1];
+      const rest = kwMatch ? kwMatch[3] : bareSectionMatch[2];
       currentSection = makeSection(rest ? `${label} ${num}: ${rest}` : `${label} ${num}`);
       currentUnit.sections.push(currentSection);
+      continue;
+    }
+
+    const bareUnitMatch = stripped.match(BARE_UNIT_RE);
+    const nextLine = lines[i + 1];
+    const nextIsOwnSection = bareUnitMatch && nextLine && new RegExp(`^${bareUnitMatch[1]}\\.\\d+\\b`).test(nextLine);
+    if (bareUnitMatch && nextIsOwnSection) {
+      const [, num, rest] = bareUnitMatch;
+      currentUnit = makeUnit(`Unit ${num}: ${rest}`);
+      currentSection = null;
+      units.push(currentUnit);
       continue;
     }
 

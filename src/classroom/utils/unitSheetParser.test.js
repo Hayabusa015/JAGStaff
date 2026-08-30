@@ -87,6 +87,49 @@ describe('parseOutlineText', () => {
     ]);
   });
 
+  it('reads a bare "0 Title" / "0.1 Title" curriculum-map style with no "Unit"/"Section" words', () => {
+    // Mirrors Shull Science's printed Chemistry Unit + Section Organizer.
+    const text = `
+      0 Foundations of Chemistry
+      0.1 Laboratory Equipment
+      0.2 Laboratory Safety
+      1 Matter & Atomic Structure
+      1.1 Matter & Changes
+      7 The Mole & Chemical Quantities
+      7.4 Mole Conversions
+    `;
+    const { units, warnings } = parseOutlineText(text);
+    expect(warnings).toHaveLength(0);
+    expect(units.map((u) => u.title)).toEqual([
+      'Unit 0: Foundations of Chemistry',
+      'Unit 1: Matter & Atomic Structure',
+      'Unit 7: The Mole & Chemical Quantities',
+    ]);
+    expect(units[0].sections.map((s) => s.title)).toEqual([
+      'Section 0.1: Laboratory Equipment',
+      'Section 0.2: Laboratory Safety',
+    ]);
+    expect(units[2].sections[0].title).toBe('Section 7.4: Mole Conversions');
+  });
+
+  it('does not mistake a plain numbered list for bare unit headers', () => {
+    const text = `
+      Unit 1: Intro
+      Section 1.1: Getting Started
+      1 Read chapter 3
+      2 Answer the review questions
+      3 Bring goggles tomorrow
+    `;
+    const { units } = parseOutlineText(text);
+    expect(units).toHaveLength(1);
+    expect(units[0].sections).toHaveLength(1);
+    expect(units[0].sections[0].materials.map((m) => m.title)).toEqual([
+      '1 Read chapter 3',
+      '2 Answer the review questions',
+      '3 Bring goggles tomorrow',
+    ]);
+  });
+
   it('strips bullet markers and warns about content before the first unit', () => {
     const text = '- Some stray note\nUnit 1\n* Guided Notes';
     const { units, warnings } = parseOutlineText(text);
