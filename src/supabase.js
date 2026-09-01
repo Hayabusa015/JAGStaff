@@ -43,32 +43,41 @@ export function useSharedHallPasses() {
   const [log, setLog] = useState([]);
   const [ready, setReady] = useState(!SUPABASE_READY);
 
+  const load = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase) return;
+    const [{ data: p }, { data: l }] = await Promise.all([
+      supabase.from("hall_passes").select("*").order("out_time", { ascending: true }),
+      supabase.from("hall_pass_log").select("*").order("created_at", { ascending: false }),
+    ]);
+    setPasses((p || []).map(rowToPass));
+    setLog((l || []).map(rowToPass));
+    setReady(true);
+  }, []);
+
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) return;
-    let active = true;
-
-    async function load() {
-      const [{ data: p }, { data: l }] = await Promise.all([
-        supabase.from("hall_passes").select("*").order("out_time", { ascending: true }),
-        supabase.from("hall_pass_log").select("*").order("created_at", { ascending: false }),
-      ]);
-      if (!active) return;
-      setPasses((p || []).map(rowToPass));
-      setLog((l || []).map(rowToPass));
-      setReady(true);
-    }
     load();
 
     // Realtime: any insert/update/delete on either table triggers a reload.
     // At this app's scale a full reload is simpler and cheaper than diffing.
+    // This is a best-effort *supplementary* sync for other kiosks/tabs — the
+    // client that actually performs a write reloads immediately itself (see
+    // addPass/returnPass/approvePass/denyPass below) rather than waiting on
+    // a round trip through this channel, since a kiosk's websocket can sit
+    // idle for hours and occasionally miss or delay a postgres_changes event.
     const channel = supabase
       .channel("hallpass-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "hall_passes" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "hall_pass_log" }, load)
       .subscribe();
 
-    return () => { active = false; supabase.removeChannel(channel); };
-  }, []);
+    // Backstop poll: if the realtime channel ever silently drops (a kiosk
+    // left open for a full school day is the common case), this keeps every
+    // screen eventually consistent without needing a page refresh.
+    const pollId = setInterval(load, 20000);
+
+    return () => { clearInterval(pollId); supabase.removeChannel(channel); };
+  }, [load]);
 
   async function addPass(passData) {
     if (!SUPABASE_READY || !supabase) {
@@ -84,6 +93,13 @@ export function useSharedHallPasses() {
       teacher_email: passData.teacherEmail ?? null,
       room: passData.room,
     }).select("id").single();
+    // Don't wait on the realtime broadcast to see our own write — reload
+    // now so the kiosk that just signed this student out shows them
+    // immediately instead of only after some later event happens to
+    // trigger a refresh (which is what made passes appear to "wait for
+    // the next student" before this reflected the true, already-elapsed
+    // out_time).
+    await load();
     return data?.id;
   }
 
@@ -110,6 +126,7 @@ export function useSharedHallPasses() {
       room: passData.room,
     });
     await supabase.from("hall_passes").delete().eq("id", passId);
+    await load();
   }
 
   // Approve a student's pending request: flips it to an active pass and
@@ -123,6 +140,7 @@ export function useSharedHallPasses() {
     await supabase.from("hall_passes")
       .update({ status: "active", out_time: new Date().toISOString() })
       .eq("id", passId).eq("status", "pending");
+    await load();
   }
 
   // Decline a pending request outright — it never happened, so it's removed
@@ -133,6 +151,7 @@ export function useSharedHallPasses() {
       return;
     }
     await supabase.from("hall_passes").delete().eq("id", passId).eq("status", "pending");
+    await load();
   }
 
   return { passes, log, ready, addPass, returnPass, approvePass, denyPass };
@@ -904,29 +923,33 @@ export { ROOM_PASS_REASONS };
 export function useRoomPasses(userEmail) {
   const [passes, setPasses] = useState([]);
 
+  const load = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const { data } = await supabase
+      .from("room_passes")
+      .select("*")
+      .gte("created_at", today.toISOString())
+      .order("created_at", { ascending: false });
+    setPasses(data || []);
+  }, []);
+
   useEffect(() => {
     if (!SUPABASE_READY || !supabase) return;
-    let active = true;
-
-    async function load() {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const { data } = await supabase
-        .from("room_passes")
-        .select("*")
-        .gte("created_at", today.toISOString())
-        .order("created_at", { ascending: false });
-      if (!active) return;
-      setPasses(data || []);
-    }
     load();
 
+    // Realtime is a supplementary sync for other kiosks/tabs — see
+    // useSharedHallPasses above for why a write also reloads immediately
+    // rather than waiting on this channel to round-trip back.
     const channel = supabase
       .channel("room-passes-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "room_passes" }, load)
       .subscribe();
 
-    return () => { active = false; supabase.removeChannel(channel); };
-  }, []);
+    const pollId = setInterval(load, 20000);
+
+    return () => { clearInterval(pollId); supabase.removeChannel(channel); };
+  }, [load]);
 
   const sentByMe   = passes.filter(p => p.from_email === userEmail);
   const sentToMe   = passes.filter(p => p.to_email   === userEmail);
@@ -947,6 +970,7 @@ export function useRoomPasses(userEmail) {
       to_teacher: toTeacher.name, to_email: toTeacher.email,
       reason, status: "pending",
     });
+    await load();
   }
 
   async function markArrived(id) {
@@ -955,6 +979,7 @@ export function useRoomPasses(userEmail) {
       return;
     }
     await supabase.from("room_passes").update({ status: "arrived" }).eq("id", id);
+    await load();
   }
 
   async function dismiss(id) {
@@ -963,6 +988,7 @@ export function useRoomPasses(userEmail) {
       return;
     }
     await supabase.from("room_passes").update({ status: "dismissed" }).eq("id", id);
+    await load();
   }
 
   const allActive = passes.filter(p => p.status === "pending" || p.status === "arrived");
