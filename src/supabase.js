@@ -511,6 +511,10 @@ const GC_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.rosters.readonly",
   "https://www.googleapis.com/auth/classroom.coursework.students",
+  // Without this, Students.list/courses.students omits profile.emailAddress
+  // entirely (Google returns name/id only) — every roster sync then has no
+  // way to match or create students, since matching is email-based.
+  "https://www.googleapis.com/auth/classroom.profile.emails",
 ].join(" ");
 
 export function useClassroomSync() {
