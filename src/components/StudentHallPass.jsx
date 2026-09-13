@@ -4,15 +4,19 @@
 // this component only ever reads myPass/myStudentRow and calls its actions.
 import { useEffect, useState } from "react";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useStudentHallPass, useStaffDirectory, getActivePassCount, getMyPassStats } from "../supabase.js";
+import { useStudentHallPass, useStaffDirectory, getActivePassCount, getMyPassStats, nowMs } from "../supabase.js";
 import { pickPassMessage } from "./passMessages.js";
 import { DestIcon, IconClock, IconSend, IconReturn, IconBack, IconAlert } from "./hallPassIcons.jsx";
 
 const LAST_TEACHER_KEY = "student-hallpass-last-teacher";
 
+// nowMs() is corrected for this device's measured clock drift against the
+// Supabase server (see supabase.js) — using the raw device clock here would
+// make a just-signed-out student's timer start already several seconds in
+// whenever the device's own clock runs fast.
 function elapsedMinutes(outTime) {
   if (!outTime) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(outTime).getTime()) / 60000));
+  return Math.max(0, Math.floor((nowMs() - new Date(outTime).getTime()) / 60000));
 }
 
 function fmtElapsed(mins) {

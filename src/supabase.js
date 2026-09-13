@@ -10,8 +10,51 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 export const SUPABASE_READY = !!SUPABASE_URL && !!SUPABASE_ANON_KEY;
 
+// ─── Clock sync ──────────────────────────────────────────────────
+// A kiosk device's own clock isn't guaranteed to be accurate (no NTP sync,
+// a drifted RTC, etc.), but every "elapsed" timer in this app (hall pass,
+// room pass, late arrival) is computed as `Date.now() - serverTimestamp`.
+// If the kiosk's clock is off by even a few tens of seconds, a freshly
+// signed-out student appears to already be N seconds into their pass the
+// instant the card renders — which is exactly what was reported as
+// students "starting" at 46 seconds instead of 0.
+//
+// Every Supabase response carries a standard HTTP `Date` header naming the
+// server's clock at the moment it replied, with no extra request needed.
+// We piggyback on that here to keep a running estimate of the offset
+// between this device's clock and the server's, and expose `nowMs()` so
+// elapsed-time math can use a corrected "now" instead of the raw device
+// clock.
+let clockOffsetMs = 0;
+function trackClockOffset(response) {
+  try {
+    const serverDateHeader = response?.headers?.get?.("date");
+    if (!serverDateHeader) return;
+    const serverMs = new Date(serverDateHeader).getTime();
+    if (Number.isNaN(serverMs)) return;
+    clockOffsetMs = serverMs - Date.now();
+  } catch {
+    // Best-effort only — fall back to the device clock (offset 0) on any
+    // parsing hiccup rather than let this ever throw into a real request.
+  }
+}
+// Best-effort "now", corrected for this device's measured clock drift
+// against the Supabase server. Falls back to the plain device clock until
+// the first response comes back.
+export function nowMs() {
+  return Date.now() + clockOffsetMs;
+}
+
 export const supabase = SUPABASE_READY
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        fetch: async (...args) => {
+          const response = await fetch(...args);
+          trackClockOffset(response);
+          return response;
+        },
+      },
+    })
   : null;
 
 // Map a snake_case DB row to the camelCase shape the UI expects.
@@ -1762,10 +1805,35 @@ export function useGradebookRoster(teacherEmail) {
     const emails = withEmail.map(e => e.studentEmail);
     const { data: existingStudents } = await supabase.from("students").select("id, student_email").in("student_email", emails);
     const idByEmail = new Map((existingStudents || []).map(r => [r.student_email, r.id]));
-    const newStudents = withEmail.filter(e => !idByEmail.has(e.studentEmail));
-    if (newStudents.length) {
+
+    // Anyone not matched by email might still already exist — e.g. from the
+    // original roster import, which has no email on file yet. Match those by
+    // name and backfill the email onto the existing row instead of inserting
+    // a second row for the same real student: that's what previously left
+    // the school with duplicate entries for ~80 students (same name, one row
+    // with a grade and no email, one with an email and no grade) showing up
+    // twice in the hall pass kiosk and elsewhere.
+    let unmatched = withEmail.filter(e => !idByEmail.has(e.studentEmail));
+    if (unmatched.length) {
+      const { data: noEmailStudents } = await supabase.from("students").select("id, first_name, last_name").is("student_email", null);
+      const nameKey = (f, l) => `${(f || "").trim().toLowerCase()}|${(l || "").trim().toLowerCase()}`;
+      const idByName = new Map((noEmailStudents || []).map(r => [nameKey(r.first_name, r.last_name), r.id]));
+      const backfills = [];
+      unmatched = unmatched.filter(e => {
+        const matchId = idByName.get(nameKey(e.firstName, e.lastName));
+        if (!matchId) return true;
+        backfills.push({ id: matchId, email: e.studentEmail });
+        idByEmail.set(e.studentEmail, matchId);
+        return false;
+      });
+      for (const b of backfills) {
+        await supabase.from("students").update({ student_email: b.email }).eq("id", b.id);
+      }
+    }
+
+    if (unmatched.length) {
       const { data: created, error } = await supabase.from("students").insert(
-        newStudents.map(e => ({ first_name: e.firstName, last_name: e.lastName, student_email: e.studentEmail }))
+        unmatched.map(e => ({ first_name: e.firstName, last_name: e.lastName, student_email: e.studentEmail }))
       ).select("id, student_email");
       if (error) throw new Error(`Couldn't add new students: ${error.message}`);
       for (const row of created || []) idByEmail.set(row.student_email, row.id);
@@ -1787,7 +1855,7 @@ export function useGradebookRoster(teacherEmail) {
     }
 
     return {
-      studentsCreated: newStudents.length,
+      studentsCreated: unmatched.length,
       rosterAdded: inserted.length,
       alreadyOnRoster: withEmail.length - toAdd.length,
     };
