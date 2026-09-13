@@ -4,4 +4,8 @@ tmp/
 .env
 .env.local
 .DS_Store
-.claude/
+# Keep local-only Claude Code settings out, but track the shared
+# commands and skills that belong to the project.
+.claude/*
+!.claude/commands/
+!.claude/skills/
