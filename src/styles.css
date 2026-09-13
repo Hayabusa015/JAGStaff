@@ -2,22 +2,51 @@
 
 /* ── Modal ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-card { background: var(--bg-main); border: 1px solid var(--gold-border); border-radius: 12px; padding: 1.5rem; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
+.modal-card { background: var(--surface-2); border: 1px solid var(--hairline-strong); border-radius: 12px; padding: 1.5rem; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
 
 :root {
   --gold:        #F5C025;
   --gold-dim:    rgba(245,192,37,0.6);
   --gold-glow:   rgba(245,192,37,0.12);
   --gold-border: rgba(245,192,37,0.22);
+  /* ── Surfaces ─────────────────────────────────────────────────────────────
+     Elevation comes from lightness, not from shadow: each step up the ladder
+     is a slightly lighter surface over the same canvas. Tinted a touch warm
+     so the ladder still reads as G-Men black rather than a cool grey. */
   --bg-deep:     #000000;
-  --bg-main:     #08080c;
-  --bg-card:     rgba(255,255,255,0.05);
-  --bg-card-hover: rgba(255,255,255,0.08);
-  --border:      rgba(245,192,37,0.13);
-  --text:        #ffffff;
-  --text-muted:  rgba(255,255,255,0.52);
+  --bg-main:     #08080c;   /* canvas */
+  --surface-1:   #0e0e13;   /* cards, inputs, quiet fills */
+  --surface-2:   #14141a;   /* hover, raised cards, modals */
+  --surface-3:   #1b1b22;   /* popovers, menus */
+  --bg-card:       var(--surface-1);
+  --bg-card-hover: var(--surface-2);
+
+  /* ── Hairlines ────────────────────────────────────────────────────────────
+     Edges are neutral. Gold is reserved for things that MEAN something —
+     the primary action, the active tab, focus, live figures. When every
+     border was gold, none of it registered. */
+  --hairline:        rgba(255,255,255,0.07);
+  --hairline-strong: rgba(255,255,255,0.13);
+  --border:          var(--hairline);
+
+  /* ── Ink ladder ── */
+  --text:        #f3f3f5;
+  --text-muted:  #9b9ba5;
+  --text-subtle: #7d7d89;  /* 4.7:1 on --surface-1 — AA for the small labels this drives */
+
   --red:         #ef4444;
   --green:       #22c55e;
+
+  /* ── Radii ── */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+
+  /* ── Motion — quick and flat. No overshoot, no bounce. ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 110ms;
+  --dur:      160ms;
 
   /* ── Typography ───────────────────────────────────────────────────────────
      Trade Gothic Next is licensed (Monotype / Adobe Fonts) and cannot be
@@ -56,8 +85,9 @@ body {
 
 /* ── Keyboard focus ── */
 :focus-visible {
-  outline: 2px solid rgba(245,192,37,0.6);
+  outline: 2px solid rgba(245,192,37,0.55);
   outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none; /* inputs keep their gold focus shadow instead */
@@ -66,21 +96,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* ── Branded page title (main header of each school tab) ── */
 .page-title {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: 1.5rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  line-height: 1.15;
+  letter-spacing: 0.025em;
+  line-height: 1.12;
   color: var(--text);
 }
 .page-title::after {
   content: '';
   display: block;
-  width: 42px;
-  height: 3px;
-  margin-top: 0.3rem;
+  width: 28px;
+  height: 2px;
+  margin-top: 0.45rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--gold), rgba(245,192,37,0.15));
+  background: var(--gold);
 }
 
 /* ── Layout ── */
@@ -97,12 +127,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* ── Top Nav — two-row layout ── */
 .top-nav {
-  background: linear-gradient(180deg, #000000 0%, #0a0a0c 100%);
-  border-bottom: 1px solid rgba(245,192,37,0.18);
+  background: var(--bg-main);
+  border-bottom: 1px solid var(--hairline);
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 24px rgba(0,0,0,0.6), 0 1px 0 rgba(245,192,37,0.06);
 }
 
 /* Row 1: brand + user */
@@ -110,7 +139,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: flex;
   align-items: center;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid rgba(245,192,37,0.08);
+  border-bottom: 1px solid var(--hairline);
   gap: 0.75rem;
 }
 
@@ -201,68 +230,62 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--gold);
-  box-shadow: 0 0 12px rgba(245,192,37,0.65);
   transform: scaleX(0);
   transform-origin: center;
   transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tab-btn:hover { color: rgba(240,234,216,0.85); background: rgba(255,255,255,0.03); }
-.tab-btn.active {
-  color: var(--gold);
-  background: rgba(245,192,37,0.05);
-}
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.tab-btn.active { color: var(--gold); background: none; }
 .tab-btn.active::after { transform: scaleX(1); }
 
 /* ── Cards ── */
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
   padding: 1.25rem;
-  backdrop-filter: blur(10px);
   position: relative;
-  box-shadow: 0 2px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
 }
 .card:hover {
-  border-color: rgba(245,192,37,0.22);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.55), 0 0 18px rgba(245,192,37,0.05), inset 0 1px 0 rgba(255,255,255,0.05);
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
 }
 
+/* One step up the ladder, not a glow. */
 .card-raised {
-  box-shadow: 0 6px 32px rgba(0,0,0,0.5), 0 0 20px rgba(245,192,37,0.08);
-  border-color: rgba(245,192,37,0.25);
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
 }
 
+/* The deliberate accent container — gold earns its place here because this
+   variant is the exception, not the default. */
 .card-gold {
-  background: linear-gradient(135deg, rgba(245,192,37,0.12) 0%, rgba(245,192,37,0.05) 100%);
-  border-color: rgba(245,192,37,0.28);
-  box-shadow: 0 0 32px rgba(245,192,37,0.12);
+  background: rgba(245,192,37,0.055);
+  border-color: var(--gold-border);
 }
 
 /* ── Section titles ── */
 .section-title {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(245,192,37,0.6);
-  margin-bottom: 0.75rem;
+  color: var(--text-subtle);
+  margin-bottom: 0.85rem;
   font-family: var(--font-display);
 }
-.section-title-gold {
-  color: var(--gold);
-  text-shadow: 0 0 12px rgba(245,192,37,0.3);
-}
+/* Opt in when a section genuinely needs the accent. */
+.section-title-gold { color: var(--gold); }
 
 /* ── Tags ── */
 .tag {
   display: inline-block;
-  padding: 0.18rem 0.55rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
   font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 .tag-red    { background: rgba(239,68,68,0.15);  color: #f87171; }
 .tag-amber  { background: rgba(245,158,11,0.15); color: #fbbf24; }
@@ -275,66 +298,71 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 1.1rem;
-  border-radius: 8px;
+  padding: 0.48rem 0.9rem;
+  border-radius: var(--r-sm);
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  border: none;
-  transition: background 0.15s, box-shadow 0.15s, color 0.15s, transform 0.1s;
-  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  letter-spacing: 0;
 }
+/* Flat fill. The one place gold carries a whole surface — which is what
+   makes it read as THE action on the screen. */
 .btn-primary {
-  background: linear-gradient(135deg, #F5C025 0%, #e8b020 100%);
-  color: #000;
-  box-shadow: 0 2px 12px rgba(245,192,37,0.3);
+  background: var(--gold);
+  color: #17130a;
 }
-.btn-primary:hover {
-  background: linear-gradient(135deg, #ffd040 0%, #F5C025 100%);
-  box-shadow: 0 4px 20px rgba(245,192,37,0.45);
-}
+.btn-primary:hover { background: #ffd04a; }
 .btn-danger {
-  background: rgba(239,68,68,0.12);
+  background: rgba(239,68,68,0.1);
   color: #f87171;
-  border: 1px solid rgba(239,68,68,0.3);
+  border-color: rgba(239,68,68,0.28);
 }
-.btn-danger:hover { background: rgba(239,68,68,0.22); }
+.btn-danger:hover { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.45); }
+/* Secondary sits on the surface ladder, not on a gold outline. */
 .btn-ghost {
-  background: transparent;
-  border: 1px solid var(--gold-border);
-  color: var(--gold-dim);
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+  color: var(--text-muted);
 }
-.btn-ghost:hover { background: var(--gold-glow); color: var(--gold); }
-.btn-sm { padding: 0.3rem 0.65rem; font-size: 0.74rem; }
+.btn-ghost:hover { background: var(--surface-3); color: var(--text); }
+.btn-sm { padding: 0.28rem 0.6rem; font-size: 0.74rem; }
 .btn:active:not(:disabled) { transform: translateY(1px); }
-.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:disabled,
+.btn-primary:disabled {
+  background: var(--surface-2);
+  border-color: var(--hairline);
+  color: var(--text-subtle);
+  cursor: not-allowed;
+}
 
 /* ── Inputs ── */
 input, select, textarea {
   width: 100%;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
   font-size: 0.85rem;
-  background: rgba(255,255,255,0.05);
+  background: var(--surface-1);
   color: var(--text);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 input::placeholder, textarea::placeholder { color: var(--text-muted); }
 input:focus, select:focus, textarea:focus {
-  border-color: var(--gold-dim);
-  box-shadow: 0 0 0 3px rgba(245,192,37,0.1);
-  background: rgba(255,255,255,0.07);
+  border-color: rgba(245,192,37,0.55);
+  box-shadow: 0 0 0 2px rgba(245,192,37,0.22);
+  background: var(--surface-2);
 }
 select option { background: #1a1a1a; color: var(--text); }
 label {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 0.25rem;
+  color: var(--text-subtle);
+  margin-bottom: 0.3rem;
   display: block;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -353,38 +381,38 @@ label {
 .progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #F5C025, #ffd040);
-  transition: width 0.4s;
+  background: var(--gold);
+  transition: width 0.4s var(--ease-out);
 }
 
 /* ── Stats ── */
-.stat-num   { font-size: 2rem; font-weight: 800; line-height: 1; color: var(--gold); font-family: var(--font-display); text-shadow: 0 0 20px rgba(245,192,37,0.4); font-variant-numeric: tabular-nums; }
-.stat-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-top: 0.25rem; font-family: var(--font-display); }
+.stat-num   { font-size: 2.1rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: var(--gold); font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-subtle); margin-top: 0.4rem; font-family: var(--font-display); }
 
 /* ── Table ── */
 .stu-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
 .stu-table th {
   text-align: left;
   padding: 0.6rem 0.75rem;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.66rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
+  color: var(--text-subtle);
+  border-bottom: 1px solid var(--hairline);
 }
 .stu-table td {
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--hairline);
   color: var(--text);
 }
-.stu-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
-.stu-table tr:hover td { background: rgba(245,192,37,0.05); }
+.stu-table tbody tr { transition: background var(--dur-fast) var(--ease-out); }
+.stu-table tbody tr:hover td { background: rgba(255,255,255,0.035); }
 
 /* ── Drop zone ── */
 .drop-zone {
-  border: 2px dashed var(--border);
-  border-radius: 10px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--r-md);
   padding: 2.5rem 1rem;
   text-align: center;
   cursor: pointer;
@@ -398,11 +426,10 @@ label {
 
 /* ── Gold glow box ── */
 .gold-glow-box {
-  background: rgba(245,192,37,0.07);
+  background: rgba(245,192,37,0.055);
   border: 1px solid var(--gold-border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 1.25rem;
-  box-shadow: 0 0 24px rgba(245,192,37,0.12);
 }
 
 /* ── Event ticker ── */
@@ -1014,11 +1041,11 @@ label {
   position: absolute;
   top: calc(100% + 3px);
   left: 0; right: 0;
-  background: #1a1a1a;
-  border: 1px solid var(--gold-border);
-  border-radius: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
   z-index: 200;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.55);
   overflow: hidden;
 }
 .autocomplete-item {
@@ -1158,8 +1185,9 @@ label {
 }
 
 /* A card with an open autocomplete must float above sibling cards.
-   backdrop-filter gives every .card its own stacking context, so the
-   dropdown itself can never escape — lift the host card instead. The
+   a .card can sit above a following sibling, so an absolutely positioned
+   dropdown inside it gets clipped by the next card — lift the host card
+   instead of fighting it per-dropdown. The
    list only exists in the DOM while the user is typing, so this never
    affects resting layout. */
 .card:has(.autocomplete-list) { z-index: 30; }
@@ -1498,17 +1526,19 @@ label {
 }
 
 /* ── Keyboard chip ─────────────────────────────────────────────────────────
-   For inline shortcut hints: <kbd class="kbd">Esc</kbd> */
+   Borrowed from Linear, where shortcuts are shown inline rather than hidden
+   in a help page. Use next to any action that has a key bound to it:
+   <kbd class="kbd">Esc</kbd> */
 .kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.4rem;
   padding: 0.1rem 0.35rem;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid var(--hairline-strong);
   border-bottom-width: 2px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.06);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   font-size: 0.68rem;
@@ -1516,10 +1546,27 @@ label {
   white-space: nowrap;
 }
 
+/* ── Status dot ────────────────────────────────────────────────────────────
+   A 6px dot carries state in a list row without spending a whole chip on it.
+   Pair with text: <span class="status-dot is-out"></span> Out of room */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-subtle);
+}
+.status-dot.is-live { background: var(--green); }
+.status-dot.is-out  { background: var(--gold); }
+.status-dot.is-late { background: var(--red); }
+
 /* ── Command palette (Cmd/Ctrl+K) ──────────────────────────────────────────
-   Jump to any tab or sub-tab without a mouse. Styled to match the existing
-   .modal-card / .autocomplete-list surfaces (solid dark panel, gold hairline)
-   rather than introducing a new visual language. */
+   Jump to any tab or sub-tab without a mouse. Restyled onto the surface
+   ladder + neutral hairlines (was written against main's pre-redesign
+   literals before the two branches merged) — the active row highlight is a
+   neutral surface step, not a gold wash, matching "gold marks only what's
+   significant" everywhere else in this system. */
 .cmdk-overlay {
   position: fixed;
   inset: 0;
@@ -1529,27 +1576,27 @@ label {
   align-items: flex-start;
   justify-content: center;
   padding: 12vh 1rem 1rem;
-  animation: cmdk-fade 0.16s ease-out;
+  animation: cmdk-fade var(--dur) var(--ease-out);
 }
 .cmdk-panel {
   width: min(560px, 100%);
   max-height: min(420px, 70vh);
   display: flex;
   flex-direction: column;
-  background: var(--bg-main);
-  border: 1px solid var(--gold-border);
-  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-xl);
   box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7);
   overflow: hidden;
-  animation: cmdk-rise 0.16s ease-out;
+  animation: cmdk-rise var(--dur) var(--ease-out);
 }
 .cmdk-input-row {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   padding: 0.9rem 1rem;
-  border-bottom: 1px solid var(--border);
-  color: rgba(255,255,255,0.4);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text-subtle);
   flex-shrink: 0;
 }
 .cmdk-input {
@@ -1562,14 +1609,14 @@ label {
 }
 .cmdk-input:focus { outline: none; box-shadow: none; }
 .cmdk-list { overflow-y: auto; padding: 0.4rem; }
-.cmdk-empty { padding: 1.5rem; text-align: center; color: rgba(255,255,255,0.35); font-size: 0.85rem; }
+.cmdk-empty { padding: 1.5rem; text-align: center; color: var(--text-subtle); font-size: 0.85rem; }
 .cmdk-group-label {
   padding: 0.5rem 0.6rem 0.3rem;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.35);
+  color: var(--text-subtle);
 }
 .cmdk-item {
   width: 100%;
@@ -1577,7 +1624,7 @@ label {
   align-items: center;
   gap: 0.65rem;
   padding: 0.55rem 0.6rem;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -1585,17 +1632,17 @@ label {
   text-align: left;
   cursor: pointer;
 }
-.cmdk-item.is-active { background: rgba(245,192,37,0.1); color: var(--text); }
+.cmdk-item.is-active { background: var(--surface-3); color: var(--text); }
 .cmdk-item-icon { flex-shrink: 0; display: flex; color: inherit; opacity: 0.8; }
 .cmdk-item-label { flex: 1; }
-.cmdk-item-hint { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
+.cmdk-item-hint { font-size: 0.72rem; color: var(--text-subtle); }
 .cmdk-footer {
   display: flex;
   gap: 1rem;
   padding: 0.55rem 1rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   font-size: 0.7rem;
-  color: rgba(255,255,255,0.35);
+  color: var(--text-subtle);
   flex-shrink: 0;
 }
 .cmdk-footer span { display: inline-flex; align-items: center; gap: 0.3rem; }
