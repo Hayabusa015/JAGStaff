@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { SEED_EVENTS, SEED_TRIPS, SEED_CEU, SEED_STUDENTS, SEED_GRADEBOOK_PROFILE, SEED_GRADEBOOK_ASSIGNMENTS, SEED_GRADEBOOK_GRADES } from "./constants.js";
 
@@ -172,6 +172,45 @@ export function useSharedHallPasses() {
     await load();
   }
 
+  // Silently close out a hall pass nobody manually returned — e.g. the
+  // student's period ended and they never tapped back in at the kiosk. Looks
+  // exactly like an ordinary return in the log (same fields, no "auto"
+  // marker): the point is the count/timer don't stay stuck, not to call
+  // attention to the miss.
+  //
+  // Every open kiosk/tab independently notices the same overdue pass, so
+  // this deletes first and only logs if the delete actually removed a row —
+  // whichever screen's delete wins the race is the only one that writes the
+  // log entry, instead of two tabs both logging the same return.
+  const autoReturnPass = useCallback(async (passId, returnTime) => {
+    if (!SUPABASE_READY || !supabase) {
+      setPasses(p => {
+        const pass = p.find(x => x.id === passId);
+        if (!pass) return p;
+        const outTime = pass.outTime ? new Date(pass.outTime) : returnTime;
+        const duration = Math.max(0, Math.round((returnTime - outTime) / 60000));
+        setLog(l => [{ ...pass, returnTime: returnTime.toISOString(), duration }, ...l]);
+        return p.filter(x => x.id !== passId);
+      });
+      return;
+    }
+    const { data: deleted } = await supabase.from("hall_passes").delete().eq("id", passId).select().single();
+    if (!deleted) return; // another open screen already closed this one out
+    const outTime = new Date(deleted.out_time);
+    const duration = Math.max(0, Math.round((returnTime - outTime) / 60000));
+    await supabase.from("hall_pass_log").insert({
+      student_id: deleted.student_id,
+      student_name: deleted.student_name,
+      destination: deleted.destination,
+      out_time: deleted.out_time,
+      return_time: returnTime.toISOString(),
+      duration,
+      teacher_name: deleted.teacher_name,
+      room: deleted.room,
+    });
+    await load();
+  }, [load]);
+
   // Approve a student's pending request: flips it to an active pass and
   // stamps out_time now (the request's created_at is when they asked, not
   // when they were cleared to leave).
@@ -197,7 +236,7 @@ export function useSharedHallPasses() {
     await load();
   }
 
-  return { passes, log, ready, addPass, returnPass, approvePass, denyPass };
+  return { passes, log, ready, addPass, returnPass, autoReturnPass, approvePass, denyPass };
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -1292,6 +1331,22 @@ export function periodForTime(periods, at = new Date()) {
   }) || null;
 }
 
+// Pure helper: the real Date/time a hall pass's period ends, given when the
+// student signed out — i.e. `outTime`'s own calendar date at that period's
+// end clock-time, not "today". Used to auto-return a forgotten hall pass
+// once its period is over, even if the pass has been sitting open since a
+// previous day. Returns null when outTime doesn't fall inside any period.
+export function periodEndDateTime(outTimeRaw, periods) {
+  const period = periodForTime(periods, outTimeRaw);
+  if (!period) return null;
+  const endMin = toMin(period.end);
+  if (endMin == null) return null;
+  const out = outTimeRaw?.toDate ? outTimeRaw.toDate() : new Date(outTimeRaw);
+  const end = new Date(out);
+  end.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
+  return end;
+}
+
 // Pure helper: current period status — in a period, before the next, or after the day.
 export function currentPeriodInfo(periods, at = new Date()) {
   if (!periods?.length) return null;
@@ -1351,8 +1406,10 @@ export function useBellSchedule() {
     return () => supabase.removeChannel(ch);
   }, []);
 
-  // The schedule for today based on day of week
-  const periodsToday = daySchedule(schedules);
+  // The schedule for today based on day of week — memoized so consumers
+  // that use it as an effect dependency (e.g. the hall pass auto-return
+  // check) don't re-run on every unrelated render.
+  const periodsToday = useMemo(() => daySchedule(schedules), [schedules]);
 
   async function saveSchedule(key, periods, userEmail) {
     const next = { ...schedules, [key]: periods };
