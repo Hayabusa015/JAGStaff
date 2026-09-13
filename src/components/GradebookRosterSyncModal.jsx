@@ -50,13 +50,19 @@ export default function GradebookRosterSyncModal({ onClose, rosterEmails, syncFr
         listStudents(token, c.id).then(rows => rows.map(r => ({ ...r, section: cleanName(c.name) })))
       ));
       const flat = results.flat();
+      // Dedupe by email when we have one; students without an email (Google
+      // Classroom only returns it when the OAuth grant includes the
+      // classroom.profile.emails scope) still get listed below — just
+      // flagged as unsyncable instead of silently vanishing, since matching
+      // and creating a student record needs an email to key off of.
       const seen = new Set();
       const deduped = flat.filter(s => {
-        if (!s.studentEmail || seen.has(s.studentEmail)) return false;
-        seen.add(s.studentEmail);
+        const key = s.studentEmail || `${s.firstName}|${s.lastName}|${s.section}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
-      setPreview(deduped.map(s => ({ ...s, isNew: !rosterEmails.has(s.studentEmail) })));
+      setPreview(deduped.map(s => ({ ...s, isNew: !!s.studentEmail && !rosterEmails.has(s.studentEmail) })));
       setStep("previewing");
     } catch (e) {
       setError(e.message);
@@ -77,8 +83,9 @@ export default function GradebookRosterSyncModal({ onClose, rosterEmails, syncFr
   }
 
   const selectedCount = courses.filter(c => selected[c.id]).length;
+  const noEmailCount = preview.filter(s => !s.studentEmail).length;
   const newCount = preview.filter(s => s.isNew).length;
-  const skipCount = preview.length - newCount;
+  const skipCount = preview.length - newCount - noEmailCount;
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -168,10 +175,17 @@ export default function GradebookRosterSyncModal({ onClose, rosterEmails, syncFr
 
         {step === "previewing" && (
           <div>
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "0.9rem", fontSize: "0.85rem" }}>
+            <div style={{ display: "flex", gap: "1rem", marginBottom: "0.9rem", fontSize: "0.85rem", flexWrap: "wrap" }}>
               <span style={{ color: "var(--green)", fontWeight: 600 }}>+{newCount} new to your roster</span>
               {skipCount > 0 && <span style={{ color: "var(--text-muted)" }}>{skipCount} already on your roster</span>}
+              {noEmailCount > 0 && <span style={{ color: "#f97316" }}>{noEmailCount} have no email on file in Classroom — can't be added</span>}
             </div>
+            {noEmailCount > 0 && newCount === 0 && (
+              <div style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: 8, padding: "0.6rem 0.8rem", fontSize: "0.78rem", color: "#fdba74", marginBottom: "0.9rem", lineHeight: 1.5 }}>
+                Google Classroom isn't returning email addresses for these students. If this keeps happening after re-syncing,
+                the school Google Workspace account may need to grant the app permission to see student emails.
+              </div>
+            )}
 
             {preview.length > 0 ? (
               <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: "1.25rem" }}>
@@ -192,7 +206,9 @@ export default function GradebookRosterSyncModal({ onClose, rosterEmails, syncFr
                           <td style={{ padding: "0.4rem 0.75rem" }}>{s.firstName}</td>
                           <td style={{ padding: "0.4rem 0.75rem", color: "var(--text-muted)" }}>{s.section}</td>
                           <td style={{ padding: "0.4rem 0.75rem", textAlign: "right" }}>
-                            {s.isNew
+                            {!s.studentEmail
+                              ? <span style={{ color: "#f97316", fontSize: "0.75rem", fontWeight: 600 }} title="Google Classroom didn't return an email for this student — can't add them without one">NO EMAIL</span>
+                              : s.isNew
                               ? <span style={{ color: "var(--green)", fontSize: "0.75rem", fontWeight: 600 }}>NEW</span>
                               : <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>exists</span>}
                           </td>
