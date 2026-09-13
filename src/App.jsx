@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal } from "lucide-react";
+import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal, LayoutDashboard, CalendarDays, MapPinned, AlertTriangle, Briefcase, Settings, LogOut, Command } from "lucide-react";
 import "./styles.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
@@ -7,6 +7,7 @@ import Dashboard from "./components/Dashboard.jsx";
 import ErrorBoundary, { TabLoading } from "./components/ErrorBoundary.jsx";
 import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
 import RoleChooser from "./components/RoleChooser.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
 
 // Every tab except the Dashboard landing view is lazy-loaded so the initial
 // bundle stays small — chunks download on first visit to each tab.
@@ -26,15 +27,15 @@ const Infractions            = lazy(() => import("./components/Infractions.jsx")
 const ClassroomZone          = lazy(() => import("./classroom/ClassroomZone.jsx"));
 
 const TABS = [
-  { key: "dashboard",   label: "Dashboard"        },
-  { key: "events",      label: "Events"           },
-  { key: "trips",       label: "Trip Rosters"     },
-  { key: "gmen",        label: "G-Men Period"     },
-  { key: "hallpass",    label: "Hall Pass"        },
-  { key: "infractions", label: "Infractions"      },
-  { key: "resources",   label: "Teacher Resources"},
-  { key: "messages",    label: "Messages"          },
-  { key: "admin",       label: "⚙ Admin", adminOnly: true },
+  { key: "dashboard",   label: "Dashboard",         Icon: LayoutDashboard },
+  { key: "events",      label: "Events",            Icon: CalendarDays },
+  { key: "trips",       label: "Trip Rosters",      Icon: MapPinned },
+  { key: "gmen",        label: "G-Men Period",      Icon: Calendar },
+  { key: "hallpass",    label: "Hall Pass",         Icon: DoorOpen },
+  { key: "infractions", label: "Infractions",       Icon: AlertTriangle },
+  { key: "resources",   label: "Teacher Resources", Icon: Briefcase },
+  { key: "messages",    label: "Messages",          Icon: MessageSquare },
+  { key: "admin",       label: "⚙ Admin", adminOnly: true, Icon: Settings },
 ];
 
 // Primary tabs shown in the mobile bottom bar (4 + "More")
@@ -321,6 +322,19 @@ export default function App() {
   const { staffList } = useAdminStaff();
   const messaging = useStaffMessaging(user?.email);
 
+  // ── Command palette (Cmd/Ctrl+K) ────────────────────────────────────────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const resetTimer = useCallback(() => {
     clearTimeout(window._jagTimeout);
     window._jagTimeout = setTimeout(() => signOut(), SESSION_TIMEOUT_MS);
@@ -384,8 +398,60 @@ export default function App() {
 
   const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
+  // Palette commands are cheap to rebuild every render (a few plain
+  // objects) — no memoization needed, and it keeps this in sync with
+  // isAdmin/zone without a dependency array to maintain.
+  const paletteCommands = zone === "school" ? [
+    ...TABS.filter(t => !t.adminOnly || isAdmin).map(t => ({
+      id: `tab-${t.key}`,
+      section: "Go to",
+      label: t.label.replace(/^⚙\s*/, ""), // strip the emoji glyph used in the tab bar itself
+      icon: t.Icon ? <t.Icon size={15} /> : null,
+      keywords: [t.key],
+      run: () => goToTab(t.key),
+    })),
+    ...RESOURCE_TABS.map(t => ({
+      id: `resource-${t.key}`,
+      section: "Teacher Resources",
+      label: t.label,
+      keywords: [t.key, "resources"],
+      run: () => { goToTab("resources"); setResourceTab(t.key); },
+    })),
+    {
+      id: "zone-classroom",
+      section: "Zone",
+      label: "Switch to My Classroom",
+      icon: <Lock size={15} />,
+      run: () => setZone("classroom"),
+    },
+    {
+      id: "sign-out",
+      section: "Account",
+      label: "Sign Out",
+      icon: <LogOut size={15} />,
+      run: () => signOut(),
+    },
+  ] : [
+    {
+      id: "zone-school",
+      section: "Zone",
+      label: "Switch to School Portal",
+      icon: <Command size={15} />,
+      run: () => setZone("school"),
+    },
+    {
+      id: "sign-out",
+      section: "Account",
+      label: "Sign Out",
+      icon: <LogOut size={15} />,
+      run: () => signOut(),
+    },
+  ];
+
   return (
     <div className="app-shell app-backdrop">
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
+
       {showTour && (
         <StaffWelcomeTour
           userEmail={user.email}
@@ -409,6 +475,14 @@ export default function App() {
             <ZoneToggle zone={zone} setZone={setZone} isClassroomOwner={isClassroomOwner} />
           </div>
           <div className="nav-user">
+            <button
+              className="btn btn-sm btn-ghost hide-mobile"
+              onClick={() => setPaletteOpen(true)}
+              title="Search and jump to anything"
+              style={{ gap: "0.4rem" }}
+            >
+              <Command size={13} /> <kbd className="kbd">K</kbd>
+            </button>
             {user.avatarUrl && (
               <img src={user.avatarUrl} alt="" className="nav-avatar" />
             )}

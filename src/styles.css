@@ -1560,3 +1560,102 @@ label {
 .status-dot.is-live { background: var(--green); }
 .status-dot.is-out  { background: var(--gold); }
 .status-dot.is-late { background: var(--red); }
+
+/* ── Command palette (Cmd/Ctrl+K) ──────────────────────────────────────────
+   Jump to any tab or sub-tab without a mouse. Restyled onto the surface
+   ladder + neutral hairlines (was written against main's pre-redesign
+   literals before the two branches merged) — the active row highlight is a
+   neutral surface step, not a gold wash, matching "gold marks only what's
+   significant" everywhere else in this system. */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 1rem 1rem;
+  animation: cmdk-fade var(--dur) var(--ease-out);
+}
+.cmdk-panel {
+  width: min(560px, 100%);
+  max-height: min(420px, 70vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-xl);
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7);
+  overflow: hidden;
+  animation: cmdk-rise var(--dur) var(--ease-out);
+}
+.cmdk-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+.cmdk-input {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.cmdk-input:focus { outline: none; box-shadow: none; }
+.cmdk-list { overflow-y: auto; padding: 0.4rem; }
+.cmdk-empty { padding: 1.5rem; text-align: center; color: var(--text-subtle); font-size: 0.85rem; }
+.cmdk-group-label {
+  padding: 0.5rem 0.6rem 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.cmdk-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--r-md);
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.cmdk-item.is-active { background: var(--surface-3); color: var(--text); }
+.cmdk-item-icon { flex-shrink: 0; display: flex; color: inherit; opacity: 0.8; }
+.cmdk-item-label { flex: 1; }
+.cmdk-item-hint { font-size: 0.72rem; color: var(--text-subtle); }
+.cmdk-footer {
+  display: flex;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+.cmdk-footer span { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+@keyframes cmdk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cmdk-rise { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-overlay, .cmdk-panel { animation: none; }
+}
+
+/* Desktop-only affordances (e.g. the ⌘K hint) — mirrors .hide-desktop. */
+.hide-mobile { display: inline-flex; }
+@media (max-width: 640px) {
+  .hide-mobile { display: none !important; }
+}
