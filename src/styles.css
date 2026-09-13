@@ -281,7 +281,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   font-weight: 700;
   cursor: pointer;
   border: none;
-  transition: all 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, color 0.15s, transform 0.1s;
   letter-spacing: 0.02em;
 }
 .btn-primary {
@@ -358,7 +358,7 @@ label {
 }
 
 /* ── Stats ── */
-.stat-num   { font-size: 2rem; font-weight: 800; line-height: 1; color: var(--gold); font-family: var(--font-display); text-shadow: 0 0 20px rgba(245,192,37,0.4); }
+.stat-num   { font-size: 2rem; font-weight: 800; line-height: 1; color: var(--gold); font-family: var(--font-display); text-shadow: 0 0 20px rgba(245,192,37,0.4); font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-top: 0.25rem; font-family: var(--font-display); }
 
 /* ── Table ── */
@@ -388,7 +388,7 @@ label {
   padding: 2.5rem 1rem;
   text-align: center;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, background 0.15s;
   color: var(--text-muted);
 }
 .drop-zone:hover, .drop-zone.drag-over {
