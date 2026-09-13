@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY, saveMaxOut, nowMs } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, periodEndDateTime, SUPABASE_READY, saveMaxOut, nowMs } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
 import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 import StudentPassInspector from "./StudentPassInspector.jsx";
@@ -606,7 +606,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
 }
 
 export default function HallPass({ user, students }) {
-  const { passes, log, ready, addPass, returnPass, approvePass, denyPass } = useSharedHallPasses();
+  const { passes, log, ready, addPass, returnPass, autoReturnPass, approvePass, denyPass } = useSharedHallPasses();
   const [kioskMode, setKioskMode] = useState(false);
   const [subTab, setSubTab] = useState("overview");
   const [settings, setSettings] = useState({
@@ -741,6 +741,30 @@ export default function HallPass({ user, students }) {
   const activePasses = passes.filter(p => p.status !== "pending");
   const pendingPasses = passes.filter(p => p.status === "pending");
   const [approvingId, setApprovingId] = useState(null);
+
+  // Fallback for students who forget to tap back in: once the period they
+  // signed out during has ended, silently close their pass out (return time
+  // stamped as the bell, not whenever this happens to run) so the "Currently
+  // Out" count and their elapsed timer don't stay stuck forever. Runs from
+  // whichever screen(s) happen to be open — same best-effort model as the
+  // rest of this app's syncing — so it's checked on a short interval rather
+  // than relying on any one tab. A hard 6-hour ceiling also catches passes a
+  // period couldn't be matched for (e.g. one still open from days ago).
+  useEffect(() => {
+    const AUTO_RETURN_MAX_MS = 6 * 60 * 60 * 1000;
+    function checkOverdue() {
+      const now = new Date();
+      passes.filter(p => p.status !== "pending").forEach(p => {
+        const periodEnd = periodEndDateTime(p.outTime, bellPeriods);
+        if (periodEnd && now >= periodEnd) { autoReturnPass(p.id, periodEnd); return; }
+        const outTime = p.outTime?.toDate ? p.outTime.toDate() : new Date(p.outTime);
+        if (!periodEnd && now - outTime > AUTO_RETURN_MAX_MS) autoReturnPass(p.id, now);
+      });
+    }
+    checkOverdue();
+    const id = setInterval(checkOverdue, 20000);
+    return () => clearInterval(id);
+  }, [passes, bellPeriods, autoReturnPass]);
 
   async function handleApprove(passId) {
     setApprovingId(passId);
