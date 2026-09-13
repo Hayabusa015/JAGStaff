@@ -282,7 +282,33 @@ export function useTeacherClassroom(teacherEmail) {
         .select('student_email')
         .in('student_email', validRows.map(r => r.studentEmail));
       const schoolEmails = new Set((schoolExisting || []).map(s => s.student_email));
-      const schoolToInsert = validRows.filter(r => !schoolEmails.has(r.studentEmail));
+      let schoolToInsert = validRows.filter(r => !schoolEmails.has(r.studentEmail));
+
+      // Anyone still unmatched might already exist under the original roster
+      // import, which has no email on file yet — match those by name and
+      // backfill the email instead of inserting a second row for the same
+      // real student (the cause of the school's duplicate student entries:
+      // one row with a grade and no email, one with an email and no grade).
+      if (schoolToInsert.length > 0) {
+        const { data: noEmailStudents } = await supabase
+          .from('students')
+          .select('id, first_name, last_name')
+          .is('student_email', null);
+        const nameKey = (f, l) => `${(f || '').trim().toLowerCase()}|${(l || '').trim().toLowerCase()}`;
+        const idByName = new Map((noEmailStudents || []).map(s => [nameKey(s.first_name, s.last_name), s.id]));
+        const backfills = [];
+        schoolToInsert = schoolToInsert.filter(r => {
+          const parts = r.studentName.trim().split(/\s+/);
+          const matchId = idByName.get(nameKey(parts[0], parts.slice(1).join(' ')));
+          if (!matchId) return true;
+          backfills.push({ id: matchId, email: r.studentEmail });
+          return false;
+        });
+        for (const b of backfills) {
+          await supabase.from('students').update({ student_email: b.email }).eq('id', b.id);
+        }
+      }
+
       if (schoolToInsert.length > 0) {
         await supabase.from('students').insert(
           schoolToInsert.map(r => {

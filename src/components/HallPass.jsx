@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
-import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY, saveMaxOut } from "../supabase.js";
+import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, SUPABASE_READY, saveMaxOut, nowMs } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
 import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 import StudentPassInspector from "./StudentPassInspector.jsx";
 
 const timeToMin = (s) => { if (!s || !s.includes(":")) return null; const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
+// Uses the server-clock-corrected nowMs() rather than the raw device clock —
+// a kiosk whose own clock has drifted would otherwise show a just-signed-out
+// student already several seconds (or more) into their pass.
 function elapsed(outTime) {
   if (!outTime) return 0;
   const t = outTime?.toDate ? outTime.toDate() : new Date(outTime);
-  return Math.floor((Date.now() - t.getTime()) / 1000);
+  return Math.max(0, Math.floor((nowMs() - t.getTime()) / 1000));
 }
 function fmtElapsed(secs) {
   const m = Math.floor(secs / 60), s = secs % 60;
@@ -81,13 +84,13 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const [flash, setFlash] = useState(null); // {type:'in'|'out', name, dest}
   const [focused, setFocused] = useState(false);
   const [, setTick] = useState(0);
-  const [clockStr, setClockStr] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
+  const [clockStr, setClockStr] = useState(new Date(nowMs()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
   const { isFs, toggle: toggleFs } = useFullscreen();
 
   useEffect(() => {
     const id = setInterval(() => {
       setTick(t => t + 1);
-      setClockStr(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
+      setClockStr(new Date(nowMs()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -403,7 +406,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                     {roomOut.length === 0 ? (
                       <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", padding: "0.5rem 0", letterSpacing: "0.04em" }}>No room passes active</div>
                     ) : roomOut.map(p => {
-                      const secs = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000);
+                      const secs = Math.max(0, Math.floor((nowMs() - new Date(p.created_at).getTime()) / 1000));
                       const flagSecs = settings.flagAfter * 60;
                       const critical = secs > flagSecs * 1.5;
                       const flagged = secs > flagSecs;
@@ -1256,7 +1259,7 @@ export default function HallPass({ user, students }) {
               <div style={{ marginTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.5rem" }}>
                 <div style={{ fontSize: "0.7rem", color: "rgba(240,234,216,0.35)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>SENT TODAY</div>
                 {sentByMe.slice(0, 8).map(p => {
-                  const ageMin = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000);
+                  const ageMin = Math.floor((nowMs() - new Date(p.created_at).getTime()) / 60000);
                   // Prefer the real bell schedule: a pass expires when its period has ended.
                   const sentPeriod = periodForTime(bellPeriods, p.created_at);
                   const expired = sentPeriod
