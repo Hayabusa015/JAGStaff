@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, periodEndDateTime, SUPABASE_READY, saveMaxOut, nowMs } from "../supabase.js";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
-import { Ico, DestIcon, IconSearch, IconLock, IconWalk, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
+import { Ico, DestIcon, IconSearch, IconLock, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 import StudentPassInspector from "./StudentPassInspector.jsx";
 
 const timeToMin = (s) => { if (!s || !s.includes(":")) return null; const [h, m] = s.split(":").map(Number); return h * 60 + m; };
@@ -81,7 +81,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const [screen, setScreen] = useState("home"); // home | destination | confirm-return | locator
   const [selected, setSelected] = useState(null);
   const [kioskSearch, setKioskSearch] = useState("");
-  const [flash, setFlash] = useState(null); // {type:'in'|'out', name, dest}
+  const [filing, setFiling] = useState(null); // {type:'in'|'out', name, dest, at, flyX, flyY}
+  const outGridRef = useRef(null);
   const [focused, setFocused] = useState(false);
   const [, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date(nowMs()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
@@ -118,7 +119,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
       teacherName: settings.teacherName,
       room: settings.room,
     });
-    triggerFlash("out", `${selected.firstName} ${selected.lastName}`, dest);
+    triggerFiling("out", `${selected.firstName} ${selected.lastName}`, dest);
     setScreen("home"); setSelected(null);
   }
 
@@ -131,13 +132,25 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
       teacherName: settings.teacherName,
       room: settings.room,
     });
-    triggerFlash("in", `${selected.firstName} ${selected.lastName}`, selected.dest);
+    triggerFiling("in", `${selected.firstName} ${selected.lastName}`, selected.dest);
     setScreen("home"); setSelected(null);
   }
 
-  function triggerFlash(type, name, dest) {
-    setFlash({ type, name, dest });
-    setTimeout(() => setFlash(null), 2200);
+  // Aim the flying file card at the Currently Out grid — offsets are measured
+  // from the middle of the screen, which is where the card sits mid-flight.
+  // Before the first student is out there's no grid yet, so fall back to
+  // roughly where that section is about to appear.
+  function triggerFiling(type, name, dest) {
+    const grid = outGridRef.current;
+    let flyX = Math.round(window.innerWidth * -0.3);
+    let flyY = Math.round(window.innerHeight * -0.24);
+    if (grid) {
+      const r = grid.getBoundingClientRect();
+      flyX = Math.round(Math.min(r.left + 98, r.right - 60) - window.innerWidth / 2);
+      flyY = Math.round(r.top + 72 - window.innerHeight / 2);
+    }
+    setFiling({ type, name, dest, at: fmtClock(new Date(nowMs())), flyX, flyY });
+    setTimeout(() => setFiling(null), 2650);
   }
 
   const initials = (name) => (name || "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -158,27 +171,53 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         filter: "grayscale(0.3)",
       }} />
 
-      {flash && (
-        <div style={{
-          position: "fixed", inset: 0, display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center", gap: "1.25rem", zIndex: 2000,
-          background: flash.type === "in"
-            ? "radial-gradient(60% 50% at 50% 50%, rgba(22,163,74,0.97), rgba(8,60,30,0.98))"
-            : "radial-gradient(60% 50% at 50% 50%, rgba(202,42,42,0.97), rgba(70,10,10,0.98))",
-          animation: "kiosk-flash-in 0.22s ease-out",
-        }}>
-          <div style={{
-            width: 92, height: 92, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-            border: "2px solid rgba(255,255,255,0.55)", color: "#fff",
-          }}>
-            {flash.type === "in" ? <IconCheck size={44} stroke={2.4} /> : <IconWalk size={44} stroke={2.2} />}
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "2.4rem", fontWeight: 800, letterSpacing: "0.02em", lineHeight: 1.1 }}>{flash.name}</div>
-            <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", fontWeight: 600, letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)" }}>
-              {flash.type === "in" ? "Welcome back" : `Signed out · ${flash.dest}`}
+      {/* Sign-out / return: a file card is flung in, trips, gets stamped, and
+          files itself into the Currently Out grid — or, on a return, flies
+          back out of the grid and drops into a folder that shuts over it.
+          Purely decorative and pointer-transparent, so the next student can
+          start typing while it plays. */}
+      {filing && (
+        <div className="kiosk-filing" aria-hidden
+          style={{ "--fly-x": `${filing.flyX}px`, "--fly-y": `${filing.flyY}px` }}>
+          <div className={`kiosk-filing-scrim kiosk-filing-scrim-${filing.type}`} />
+
+          {filing.type === "in" && (
+            <div className="kiosk-filing-row kiosk-filing-row-folder kiosk-filing-row-back">
+              <div className="kiosk-folder-back" />
+            </div>
+          )}
+
+          <div className="kiosk-filing-row kiosk-filing-row-card">
+            <div className={`kiosk-file-fly kiosk-file-fly-${filing.type}`}>
+              <div className="kiosk-file-glow" />
+              <div className="kiosk-file-card">
+                <div className="kiosk-file-head">
+                  <span>G-Men Hall Pass</span>
+                  <span>Room {settings.room}</span>
+                </div>
+                <div className="kiosk-file-rule" />
+                <div className="kiosk-file-name">{filing.name}</div>
+                <div className="kiosk-file-meta">
+                  <DestIcon dest={filing.dest} size={15} /> {filing.dest} · {filing.at}
+                </div>
+                <div className={`kiosk-file-stamp kiosk-file-stamp-${filing.type}`}>
+                  {filing.type === "in" ? "Returned" : "Signed Out"}
+                </div>
+              </div>
             </div>
           </div>
+
+          {filing.type === "in" && (
+            <div className="kiosk-filing-row kiosk-filing-row-folder kiosk-filing-row-flap">
+              <div className="kiosk-folder-flap" />
+            </div>
+          )}
+
+          {filing.type === "out" && (
+            <div className="kiosk-filing-row kiosk-filing-row-ring">
+              <div className="kiosk-land-ring" />
+            </div>
+          )}
         </div>
       )}
 
@@ -244,7 +283,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         {screen !== "locator" && activePasses.length > 0 ? (
           <div style={{ marginBottom: "2.25rem" }}>
             <Rule tone="#fca5a5" dot={<span className="pulse-dot" />}>Currently Out</Rule>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(196px,1fr))", gap: "1rem" }}>
+            <div ref={outGridRef} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(196px,1fr))", gap: "1rem" }}>
               {activePasses.map(p => {
                 const secs = elapsed(p.outTime);
                 const flagSecs = settings.flagAfter * 60;
