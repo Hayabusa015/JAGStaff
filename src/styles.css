@@ -1081,12 +1081,6 @@ label {
   @page { size: portrait; margin: 1.2cm; }
 }
 
-/* Hall Pass kiosk — sign-out / return confirmation overlay */
-@keyframes kiosk-flash-in {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
 /* ── Hall Pass kiosk ──────────────────────────────────────────────────────────
    The kiosk is built for a wall-mounted display, but staff open it on a phone
    too. Wide layout centres the clock absolutely between the brand and the
@@ -1169,3 +1163,336 @@ label {
    list only exists in the DOM while the user is typing, so this never
    affects resting layout. */
 .card:has(.autocomplete-list) { z-index: 30; }
+
+/* ── Hall Pass kiosk — "file card" sign-out / return animation ────────────────
+   Replaces the old full-screen green/red flash. A manila file card is flung in
+   from the side of the screen, trips as it lands, gets stamped, and then files
+   itself away into the Currently Out grid (sign-out) — or flies back out of
+   that grid and drops into a folder that closes over it (sign-in).
+
+   The overlay never takes pointer events, so the next student can start typing
+   their name while the card is still in flight.
+
+   --fly-x / --fly-y are set inline per play: the offset from the middle of the
+   screen to wherever the Currently Out grid actually is at that moment. */
+
+.kiosk-filing {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  perspective: 1400px;
+  perspective-origin: 50% 42%;
+}
+
+.kiosk-filing-scrim {
+  position: absolute;
+  inset: 0;
+  animation: kiosk-scrim 2.6s ease-out forwards;
+}
+.kiosk-filing-scrim-out {
+  background: radial-gradient(70% 60% at 50% 50%, rgba(120,18,18,0.55), rgba(8,4,3,0.88) 70%);
+}
+.kiosk-filing-scrim-in {
+  background: radial-gradient(70% 60% at 50% 50%, rgba(13,105,56,0.5), rgba(3,10,6,0.88) 70%);
+}
+
+/* Each layer gets its own centring row, so the animations below stay pure
+   offsets instead of having to carry a -50% centring translate around. */
+.kiosk-filing-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+.kiosk-filing-row-card   { top: 0; bottom: 0; align-items: center; z-index: 2; }
+.kiosk-filing-row-folder { bottom: 6vh; align-items: flex-end; }
+.kiosk-filing-row-back   { z-index: 1; }
+.kiosk-filing-row-flap   { z-index: 3; }
+.kiosk-filing-row-ring   { top: 0; bottom: 0; align-items: center; z-index: 4; }
+
+/* The flight wrapper carries the motion; the glow and the card ride along
+   inside it so the halo stays behind the card's own background. */
+.kiosk-file-fly {
+  position: relative;
+  transform-style: preserve-3d;
+}
+.kiosk-file-fly-out { animation: kiosk-card-out 2.6s cubic-bezier(0.22, 0.72, 0.3, 1) forwards; }
+.kiosk-file-fly-in  { animation: kiosk-card-in  2.6s cubic-bezier(0.22, 0.72, 0.3, 1) forwards; }
+
+/* Colour + glow live on a blurred halo rather than an animated box-shadow, so
+   the pulse stays cheap to composite on a wall-mounted panel. */
+.kiosk-file-glow {
+  position: absolute;
+  inset: -58px;
+  z-index: 0;
+  border-radius: 30px;
+  filter: blur(30px);
+  animation: kiosk-glow 2.6s ease-out forwards;
+}
+.kiosk-file-fly-out .kiosk-file-glow {
+  background:
+    radial-gradient(50% 46% at 50% 50%, rgba(255,146,146,0.98), rgba(239,68,68,0.55) 46%, transparent 72%),
+    radial-gradient(82% 74% at 50% 54%, rgba(245,192,37,0.5), transparent 70%);
+}
+.kiosk-file-fly-in .kiosk-file-glow {
+  background:
+    radial-gradient(50% 46% at 50% 50%, rgba(134,239,172,0.98), rgba(34,197,94,0.55) 46%, transparent 72%),
+    radial-gradient(82% 74% at 50% 54%, rgba(245,192,37,0.34), transparent 70%);
+}
+
+/* ── The card itself ── */
+.kiosk-file-card {
+  position: relative;
+  z-index: 1;
+  width: min(430px, 88vw);
+  padding: 1.5rem 1.6rem 1.35rem;
+  border-radius: 6px 6px 8px 8px;
+  background: linear-gradient(158deg, #f8efd9 0%, #efe3c4 48%, #e0d1ab 100%);
+  color: #241d11;
+  box-shadow:
+    0 26px 60px -18px rgba(0,0,0,0.75),
+    0 2px 0 rgba(255,255,255,0.55) inset,
+    0 -14px 28px -18px rgba(0,0,0,0.5) inset;
+  backface-visibility: hidden;
+}
+/* Folder tab on the top edge, so it reads as a file pulled from a drawer. */
+.kiosk-file-card::before {
+  content: '';
+  position: absolute;
+  top: -17px;
+  right: 26px;
+  width: 108px;
+  height: 18px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #f4c64a 0%, #d9a52c 100%);
+  box-shadow: 0 -3px 12px -4px rgba(245,192,37,0.7);
+}
+/* Punch holes down the left edge. */
+.kiosk-file-card::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 7px;
+  height: 78px;
+  margin-top: -39px;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(0,0,0,0.28) 0 3.2px, transparent 3.4px),
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.28) 0 3.2px, transparent 3.4px),
+    radial-gradient(circle at 50% 88%, rgba(0,0,0,0.28) 0 3.2px, transparent 3.4px);
+}
+
+.kiosk-file-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: 1.6rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(36,29,17,0.5);
+}
+.kiosk-file-rule {
+  margin: 0.7rem 0 0.85rem 1.6rem;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(36,29,17,0.42), rgba(36,29,17,0.06));
+}
+.kiosk-file-name {
+  padding-left: 1.6rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 4.4vw, 1.95rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.kiosk-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  padding-left: 1.6rem;
+  padding-right: 8.5rem; /* clear of the stamp */
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(36,29,17,0.62);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rubber stamp — multiply blend over the manila reads as real ink. */
+.kiosk-file-stamp {
+  position: absolute;
+  right: 0.9rem;
+  bottom: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border: 2.5px solid currentColor;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0;
+  mix-blend-mode: multiply;
+  animation: kiosk-stamp 2.6s cubic-bezier(0.3, 1.4, 0.5, 1) forwards;
+}
+.kiosk-file-stamp-out { color: #b91c1c; }
+.kiosk-file-stamp-in  { color: #15803d; }
+
+/* ── The folder the card is filed into on a return ── */
+.kiosk-folder-back,
+.kiosk-folder-flap { position: relative; width: min(580px, 94vw); }
+
+.kiosk-folder-back {
+  height: 232px;
+  border-radius: 10px 10px 6px 6px;
+  background: linear-gradient(180deg, #9d7629 0%, #7d5c1e 100%);
+  box-shadow: 0 -10px 44px -10px rgba(245,192,37,0.3), 0 -2px 0 rgba(255,226,150,0.28) inset;
+  animation: kiosk-folder 2.6s cubic-bezier(0.22, 0.72, 0.3, 1) forwards;
+}
+.kiosk-folder-back::before { /* drawer tab */
+  content: '';
+  position: absolute;
+  top: -16px;
+  left: 34px;
+  width: 128px;
+  height: 17px;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(180deg, #d8b35c 0%, #bb9038 100%);
+}
+.kiosk-folder-flap {
+  height: 172px;
+  border-radius: 7px 7px 10px 10px;
+  background: linear-gradient(180deg, #f0cd77 0%, #d8ab48 38%, #b68c33 100%);
+  /* Hard highlight along the opening edge + a cast shadow onto the back panel,
+     so the flap reads as a separate leaf in front rather than one flat slab. */
+  box-shadow:
+    0 -3px 0 rgba(255,240,198,0.55) inset,
+    0 -20px 34px -14px rgba(0,0,0,0.78),
+    0 -1px 26px -6px rgba(245,192,37,0.5);
+  transform-origin: bottom center;
+  animation: kiosk-folder-flap 2.6s cubic-bezier(0.3, 1.2, 0.4, 1) forwards;
+}
+
+/* On a phone the stamp and the destination line fight for the same row —
+   tighten both rather than letting "09:42 AM" break across two lines. */
+@media (max-width: 520px) {
+  .kiosk-file-card { padding: 1.3rem 1.15rem 1.2rem; }
+  .kiosk-file-meta { padding-right: 6.4rem; font-size: 0.74rem; white-space: nowrap; }
+  .kiosk-file-stamp { right: 0.7rem; font-size: 0.6rem; padding: 0.24rem 0.5rem; letter-spacing: 0.1em; border-width: 2px; }
+  .kiosk-file-card::before { width: 84px; right: 18px; }
+}
+
+/* Ring that blooms where the card lands in the grid. */
+.kiosk-land-ring {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 3px solid rgba(245,192,37,0.9);
+  box-shadow: 0 0 44px rgba(245,192,37,0.65), 0 0 24px rgba(245,192,37,0.5) inset;
+  opacity: 0;
+  animation: kiosk-land-ring 2.6s ease-out forwards;
+}
+
+@keyframes kiosk-scrim {
+  0%   { opacity: 0; }
+  9%   { opacity: 1; }
+  76%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Flung in from the left, trips on landing, stamped, then filed into the grid. */
+@keyframes kiosk-card-out {
+  0%   { opacity: 0; transform: translate3d(-118vw, 11vh, 0) rotate(-26deg) rotateX(34deg) scale(0.8); }
+  9%   { opacity: 1; }
+  19%  { transform: translate3d(4vw, -1vh, 0) rotate(9deg) rotateX(-20deg) scale(1.08); }
+  25%  { transform: translate3d(0, 0, 0) rotate(-6deg) rotateX(26deg) scale(1); }
+  30%  { transform: translate3d(0, 1.4vh, 0) rotate(4deg) rotateX(-13deg) scale(0.975); }
+  35%  { transform: translate3d(0, 0, 0) rotate(-1.5deg) rotateX(5deg) scale(1); }
+  40%  { transform: none; }
+  66%  { opacity: 1; transform: none; }
+  72%  { transform: translate3d(0, 2.4vh, 0) rotate(-5deg) scale(1.05); }
+  96%  { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 0) rotate(15deg) scale(0.12); }
+}
+
+/* Pulled back out of the grid, stamped, then tipped down into the folder. */
+@keyframes kiosk-card-in {
+  0%   { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 0) rotate(12deg) scale(0.12); }
+  7%   { opacity: 1; }
+  24%  { transform: translate3d(0, -1.6vh, 0) rotate(-4deg) rotateX(-14deg) scale(1.07); }
+  30%  { transform: translate3d(0, 0, 0) rotate(1deg) scale(1); }
+  34%  { transform: none; }
+  62%  { opacity: 1; transform: none; }
+  70%  { transform: translate3d(0, -2.6vh, 0) rotateX(-12deg) scale(1.03); }
+  88%  { opacity: 1; transform: translate3d(0, 27vh, 0) rotateX(60deg) scale(0.82); }
+  96%  { opacity: 1; transform: translate3d(0, 31vh, 0) rotateX(72deg) scale(0.78); }
+  100% { opacity: 0; transform: translate3d(0, 32vh, 0) rotateX(74deg) scale(0.77); }
+}
+
+@keyframes kiosk-glow {
+  0%   { opacity: 0; transform: scale(0.7); }
+  20%  { opacity: 0.5; transform: scale(1.04); }
+  28%  { opacity: 0.95; transform: scale(1); }   /* flare on the landing thud */
+  44%  { opacity: 0.55; transform: scale(0.98); }
+  56%  { opacity: 0.9; transform: scale(1.03); } /* pulse under the stamp */
+  76%  { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes kiosk-stamp {
+  0%, 41% { opacity: 0; transform: rotate(-15deg) scale(2.7); }
+  49%     { opacity: 0.95; transform: rotate(-15deg) scale(1); }
+  53%     { transform: rotate(-15deg) scale(1.07); }
+  57%     { transform: rotate(-15deg) scale(1); }
+  92%     { opacity: 0.95; transform: rotate(-15deg) scale(1); }
+  100%    { opacity: 0.8; transform: rotate(-15deg) scale(1); }
+}
+
+@keyframes kiosk-folder {
+  0%   { opacity: 0; transform: translate3d(0, 58vh, 0) scale(0.92); }
+  16%  { opacity: 1; transform: none; }
+  89%  { opacity: 1; transform: translate3d(0, -1.2vh, 0) scale(1.03); } /* gulp as the card drops in */
+  94%  { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translate3d(0, 42vh, 0) scale(0.94); }
+}
+
+@keyframes kiosk-folder-flap {
+  0%   { opacity: 0; transform: translate3d(0, 58vh, 0) rotateX(-48deg); }
+  16%  { opacity: 1; transform: rotateX(-48deg); }
+  78%  { opacity: 1; transform: rotateX(-48deg); }
+  90%  { opacity: 1; transform: rotateX(-4deg); }   /* snaps shut over the card */
+  95%  { opacity: 1; transform: rotateX(-13deg); }
+  100% { opacity: 0; transform: translate3d(0, 42vh, 0) rotateX(-9deg); }
+}
+
+@keyframes kiosk-land-ring {
+  0%, 85% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 0) scale(0.25); }
+  90%     { opacity: 0.9; transform: translate3d(var(--fly-x), var(--fly-y), 0) scale(1); }
+  100%    { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 0) scale(2.1); }
+}
+
+/* Paper flying across the screen is exactly what motion sensitivity flags —
+   hold the card still and fade it through instead. */
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-file-fly-out,
+  .kiosk-file-fly-in,
+  .kiosk-folder-back,
+  .kiosk-file-glow,
+  .kiosk-file-stamp { animation: kiosk-file-hold 2.6s ease-out forwards; }
+  .kiosk-file-stamp { transform: rotate(-15deg); }
+  .kiosk-folder-flap { animation: kiosk-file-hold 2.6s ease-out forwards; transform: rotateX(-20deg); }
+  .kiosk-land-ring { display: none; }
+}
+@keyframes kiosk-file-hold {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; }
+}
