@@ -1428,6 +1428,21 @@ label {
   animation: kiosk-land-ring 2.6s ease-out forwards;
 }
 
+/* One-shot glow the instant a Currently-Out card crosses into "critical" —
+   the red border already reads as urgent up close, this is what catches it
+   from across the room. Fires once per card via kiosk-card-flash being
+   added/removed in HallPass.jsx, not a continuous loop. */
+@keyframes kiosk-critical-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(248,113,113,0); transform: translateY(0) scale(1); }
+  18%  { box-shadow: 0 0 48px 8px rgba(248,113,113,0.55); transform: translateY(-3px) scale(1.035); }
+  60%  { box-shadow: 0 0 28px 3px rgba(248,113,113,0.28); transform: translateY(0) scale(1); }
+  100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); transform: translateY(0) scale(1); }
+}
+.kiosk-card-flash { animation: kiosk-critical-flash 1.7s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-card-flash { animation: none; }
+}
+
 @keyframes kiosk-scrim {
   0%   { opacity: 0; }
   9%   { opacity: 1; }

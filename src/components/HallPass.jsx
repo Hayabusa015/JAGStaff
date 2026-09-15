@@ -25,6 +25,28 @@ function fmtClock(d) {
   const t = d?.toDate ? d.toDate() : new Date(d);
   return t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
+// Digital mm:ss countdown — distinct look from fmtElapsed's "Xm Ys" so a
+// period timer counting down doesn't read like an out-of-room timer counting up.
+function fmtCountdown(secs) {
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function isSameLocalDay(dateVal, ref) {
+  const d = dateVal?.toDate ? dateVal.toDate() : new Date(dateVal);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
+}
+// Whether "now" falls before the first period, between two periods, or
+// after the last one — only used when periodForTime finds no exact match,
+// to tell "passing period" apart from "before/after school".
+function schoolDayStatus(periods, now) {
+  if (!periods?.length) return null;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const sorted = [...periods].filter(p => timeToMin(p.start) != null && timeToMin(p.end) != null).sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
+  if (!sorted.length) return null;
+  if (mins < timeToMin(sorted[0].start)) return "before";
+  if (mins >= timeToMin(sorted[sorted.length - 1].end)) return "after";
+  return "passing";
+}
 
 function useFullscreen() {
   const [isFs, setIsFs] = useState(!!document.fullscreenElement);
@@ -77,14 +99,14 @@ function Rule({ children, tone = "rgba(255,255,255,0.4)", dot }) {
   );
 }
 
-function KioskScreen({ passes, addPass, returnPass, settings, students, onClose, allRoomPasses = [] }) {
+function KioskScreen({ passes, addPass, returnPass, settings, students, onClose, allRoomPasses = [], bellPeriods = [], log = [] }) {
   const [screen, setScreen] = useState("home"); // home | destination | confirm-return | locator
   const [selected, setSelected] = useState(null);
   const [kioskSearch, setKioskSearch] = useState("");
   const [filing, setFiling] = useState(null); // {type:'in'|'out', name, dest, at, flyX, flyY}
   const outGridRef = useRef(null);
   const [focused, setFocused] = useState(false);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date(nowMs()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
   const { isFs, toggle: toggleFs } = useFullscreen();
 
@@ -100,6 +122,61 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   // Only an explicit 'pending' (an unapproved student request) is excluded.
   const activePasses = passes.filter(p => p.status !== "pending");
   const maxReached = activePasses.length >= settings.maxOut;
+
+  // ── Current period + time left in it ── reuses periodEndDateTime (the
+  // same helper the auto-return fallback is built on) so the countdown shown
+  // here and the moment a forgotten pass actually auto-closes always agree.
+  const now = new Date(nowMs());
+  const curPeriod = periodForTime(bellPeriods, now);
+  const periodSecsLeft = curPeriod ? Math.max(0, Math.round((periodEndDateTime(now, bellPeriods)?.getTime() - now.getTime()) / 1000)) : null;
+  const dayStatus = curPeriod ? null : schoolDayStatus(bellPeriods, now);
+
+  // ── Today's activity strip (footer) ── counts every pass whose out_time
+  // falls on today's calendar date, active ones plus already-returned log
+  // rows, and averages duration over the returned ones.
+  const todaysReturned = log.filter(p => p.outTime && isSameLocalDay(p.outTime, now));
+  const todaysActiveCount = activePasses.filter(p => p.outTime && isSameLocalDay(p.outTime, now)).length;
+  const todaysTotal = todaysActiveCount + todaysReturned.length;
+  const todaysAvgMin = todaysReturned.length
+    ? Math.round(todaysReturned.reduce((sum, p) => sum + (p.duration || 0), 0) / todaysReturned.length)
+    : null;
+
+  // ── One-shot "just went critical" flash ── a brief glow pulse the instant
+  // a card crosses the critical threshold, so it catches your eye from
+  // across the room instead of relying on you already looking at the color.
+  // Fires once per pass id, not on every render while it stays critical.
+  const criticalFlaggedRef = useRef(new Set());
+  const initializedRef = useRef(false);
+  const [flashIds, setFlashIds] = useState(() => new Set());
+
+  useEffect(() => {
+    const flagSecs = settings.flagAfter * 60;
+    const seenIds = new Set();
+    const newlyCritical = [];
+    passes.filter(p => p.status !== "pending").forEach(p => {
+      seenIds.add(p.id);
+      const critical = elapsed(p.outTime) > flagSecs * 1.5;
+      if (critical && !criticalFlaggedRef.current.has(p.id)) {
+        criticalFlaggedRef.current.add(p.id);
+        // Don't flash cards that were already critical the moment the kiosk
+        // mounted (e.g. reopening a stale window) — only real crossings.
+        if (initializedRef.current) newlyCritical.push(p.id);
+      }
+    });
+    criticalFlaggedRef.current.forEach(id => { if (!seenIds.has(id)) criticalFlaggedRef.current.delete(id); });
+    initializedRef.current = true;
+
+    if (newlyCritical.length === 0) return;
+    setFlashIds(prev => new Set([...prev, ...newlyCritical]));
+    const timer = setTimeout(() => {
+      setFlashIds(prev => {
+        const next = new Set(prev);
+        newlyCritical.forEach(id => next.delete(id));
+        return next;
+      });
+    }, 1700);
+    return () => clearTimeout(timer);
+  }, [tick, passes, settings.flagAfter]);
 
   const filteredStudents = kioskSearch.trim()
     ? students.filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(kioskSearch.toLowerCase()))
@@ -247,6 +324,20 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
           <div className="kiosk-date" style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", marginTop: "0.3rem", letterSpacing: "0.14em" }}>
             {fmtDayShort()}
           </div>
+          {curPeriod ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.45rem", marginTop: "0.4rem", fontSize: "0.72rem", letterSpacing: "0.06em" }}>
+              <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>{curPeriod.name}</span>
+              {periodSecsLeft != null && (
+                <span style={{ color: periodSecsLeft <= 60 ? "#fb923c" : "rgba(255,255,255,0.35)", ...NUM }}>
+                  · {fmtCountdown(periodSecsLeft)} left
+                </span>
+              )}
+            </div>
+          ) : dayStatus === "passing" ? (
+            <div style={{ marginTop: "0.4rem", fontSize: "0.68rem", color: "rgba(255,255,255,0.32)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+              Passing Period
+            </div>
+          ) : null}
         </div>
 
         <div className="kiosk-actions">
@@ -292,6 +383,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                 const ac = critical ? "#f87171" : flagged ? "#fb923c" : GOLD;
                 return (
                   <div key={p.id}
+                    className={flashIds.has(p.id) ? "kiosk-card-flash" : undefined}
                     onClick={() => { setSelected({ id: p.studentId, firstName: p.studentName?.split(" ")[0] || "", lastName: p.studentName?.split(" ").slice(1).join(" ") || "", passId: p.id, dest: p.destination, outTime: p.outTime }); setScreen("confirm-return"); setKioskSearch(""); }}
                     style={{
                       position: "relative", overflow: "hidden", background: SURFACE,
@@ -637,6 +729,9 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 1,
           background: `linear-gradient(90deg, transparent, ${GOLD}22 20%, ${GOLD}22 80%, transparent)` }} />
         <span>Garfield G-Men · Room {settings.room}</span>
+        <span style={NUM}>
+          {todaysTotal > 0 ? `${todaysTotal} pass${todaysTotal === 1 ? "" : "es"} today${todaysAvgMin != null ? ` · avg ${todaysAvgMin}m` : ""}` : "No passes yet today"}
+        </span>
         <span style={NUM}>{activePasses.length} out · max {settings.maxOut}</span>
       </div>
     </div>,
@@ -837,7 +932,7 @@ export default function HallPass({ user, students }) {
   if (kioskMode) return (
     <KioskScreen passes={passes} addPass={addPass} returnPass={returnPass}
       settings={settings} students={students} onClose={() => setKioskMode(false)}
-      allRoomPasses={allActiveRoomPasses} />
+      allRoomPasses={allActiveRoomPasses} bellPeriods={bellPeriods} log={log} />
   );
 
   function fmtShortTime(iso) {
