@@ -371,41 +371,15 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
 
   return (
     <div>
-      {/* Header */}
-      <div className="card mb2" style={{
-        background: "linear-gradient(135deg, #000000 0%, #0a0a0a 60%, #050505 100%)",
-        borderColor: "rgba(245,192,37,0.28)",
-        boxShadow: "0 4px 32px rgba(0,0,0,0.55), 0 0 40px rgba(245,192,37,0.07), inset 0 1px 0 rgba(245,192,37,0.08)",
-        overflow: "hidden",
-        position: "relative",
-      }}>
-        {/* Watermark */}
-        <img src="/logo.png" aria-hidden="true" style={{
-          position: "absolute", right: "-1.5rem", bottom: "-1.5rem",
-          width: "10rem", opacity: 0.06, pointerEvents: "none",
-          filter: "grayscale(0.2)", mixBlendMode: "luminosity",
-        }} />
-        <div className="flex items-center justify-between" style={{ position: "relative" }}>
-          <div>
-            <div style={{
-              fontSize: "0.62rem", color: "rgba(245,192,37,0.65)",
-              letterSpacing: "0.22em", textTransform: "uppercase",
-              fontFamily: "var(--font-display)", fontWeight: 700,
-            }}>
-              G-Men · Command Center
-            </div>
-            <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.25rem", color: "rgba(255,255,255,0.9)", letterSpacing: "0.01em" }}>
-              {now.date}
-            </div>
-            <div style={{
-              color: GOLD, fontWeight: 900, fontSize: "2.2rem",
-              fontFamily: "var(--font-display)", letterSpacing: "0.04em",
-              textShadow: "0 0 22px rgba(245,179,1,0.55)", lineHeight: 1.1, marginTop: "0.1rem",
-            }}>
-              {now.time}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
+      {/* The studio artwork is decorative; all schedule data stays live. */}
+      <section className="dashboard-hero mb2" aria-label="School day overview">
+        <div className="dashboard-hero-copy">
+          <div className="dashboard-eyebrow">G-Men Command Center</div>
+          <h1>Your school day.<br /><span>Connected.</span></h1>
+          <div className="dashboard-date">{now.date}</div>
+          <div className="dashboard-clock-row">
+            <div className="dashboard-clock">{now.time}</div>
+            <div className="dashboard-period">
             {periodInfo?.status === "in" ? (
               <div style={{
                 background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
@@ -438,9 +412,15 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
                 {offDay ? "NO SCHOOL" : periodInfo?.status === "after" ? "DAY ENDED" : "SCHOOL DAY"}
               </div>
             )}
+            </div>
           </div>
         </div>
-      </div>
+        <div className="dashboard-art" aria-hidden="true">
+          <div className="dashboard-art-halo" />
+          <img src="/gg-surface.webp" alt="" width="1122" height="1402" />
+          <span className="dashboard-art-glint" />
+        </div>
+      </section>
 
       <TodaySchedule periods={periodsToday} weeklyEvents={weeklyEvents} />
 
@@ -562,7 +542,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
         );
       })()}
 
-      <div className="grid2">
+      <div className="grid2 dashboard-upcoming">
         {/* Upcoming Events — next 14 days only */}
         <div className="card">
           <div className="section-title">Upcoming Events</div>

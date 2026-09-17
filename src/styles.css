@@ -13,11 +13,11 @@
      Elevation comes from lightness, not from shadow: each step up the ladder
      is a slightly lighter surface over the same canvas. Tinted a touch warm
      so the ladder still reads as G-Men black rather than a cool grey. */
-  --bg-deep:     #000000;
-  --bg-main:     #08080c;   /* canvas */
-  --surface-1:   #0e0e13;   /* cards, inputs, quiet fills */
-  --surface-2:   #14141a;   /* hover, raised cards, modals */
-  --surface-3:   #1b1b22;   /* popovers, menus */
+  --bg-deep:     #0a0b0d;
+  --bg-main:     #101113;   /* canvas */
+  --surface-1:   #161719;   /* cards, inputs, quiet fills */
+  --surface-2:   #1b1c1f;   /* hover, raised cards, modals */
+  --surface-3:   #232427;   /* popovers, menus */
   --bg-card:       var(--surface-1);
   --bg-card-hover: var(--surface-2);
 
@@ -31,17 +31,17 @@
 
   /* ── Ink ladder ── */
   --text:        #f3f3f5;
-  --text-muted:  #9b9ba5;
-  --text-subtle: #7d7d89;  /* 4.7:1 on --surface-1 — AA for the small labels this drives */
+  --text-muted:  #adaeb5;
+  --text-subtle: #9799a1;  /* 4.7:1 on --surface-1 — AA for the small labels this drives */
 
   --red:         #ef4444;
   --green:       #22c55e;
 
   /* ── Radii ── */
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 14px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
 
   /* ── Motion — quick and flat. No overshoot, no bounce. ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -55,12 +55,12 @@
      near-identical proportions — is what actually ships today. Swapping the
      whole app over is these two lines and nothing else. */
   --font-sans: 'Trade Gothic Next', 'Archivo', -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
-  --font-display: 'Trade Gothic Next Condensed', 'Trade Gothic Next', 'Archivo Narrow', 'Archivo', ui-sans-serif, sans-serif;
+  --font-display: var(--font-sans);
 }
 
 body {
   font-family: var(--font-sans);
-  background: #08080c;
+  background: var(--bg-main);
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;

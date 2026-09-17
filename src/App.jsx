@@ -1,6 +1,9 @@
+import LoginScreen from "./components/LoginScreen.jsx";
+import SchoolLogo from "./components/SchoolLogo.jsx";
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal, LayoutDashboard, CalendarDays, MapPinned, AlertTriangle, Briefcase, Settings, LogOut, Command } from "lucide-react";
 import "./styles.css";
+import "./portal-theme.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
 import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
 import Dashboard from "./components/Dashboard.jsx";
@@ -54,21 +57,6 @@ const RESOURCE_TABS = [
   { key: "roster",      label: "Student Roster"       },
 ];
 
-function SchoolLogo({ size = 42 }) {
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%",
-      border: `2px solid ${GOLD}`,
-      background: "#000",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      overflow: "hidden", flexShrink: 0,
-      boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.3)`,
-    }}>
-      <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-    </div>
-  );
-}
-
 // When VITE_CLASSROOM_OWNER_EMAIL is set, only that address can access the Classroom zone.
 // Leave it unset (or empty) to allow all staff in — useful during dev / initial rollout.
 const CLASSROOM_OWNER_EMAIL = import.meta.env.VITE_CLASSROOM_OWNER_EMAIL || "";
@@ -76,6 +64,7 @@ const CLASSROOM_OWNER_EMAIL = import.meta.env.VITE_CLASSROOM_OWNER_EMAIL || "";
 function ZoneToggle({ zone, setZone, isClassroomOwner }) {
   return (
     <div
+      className="zone-toggle"
       role="tablist"
       aria-label="Switch zone"
       style={{
@@ -141,117 +130,6 @@ function ZoneToggle({ zone, setZone, isClassroomOwner }) {
         <span className="zone-label-full">My Classroom</span>
         <span className="zone-label-short">Class</span>
       </button>
-    </div>
-  );
-}
-
-function LoginScreen({ signInWithGoogle, loading, error }) {
-  return (
-    <div className="login-bg">
-      {/* Breathing background orbs */}
-      <div className="login-orb login-orb-1" aria-hidden="true" />
-      <div className="login-orb login-orb-2" aria-hidden="true" />
-      <div className="login-orb login-orb-3" aria-hidden="true" />
-
-      <div className="login-mascot" aria-hidden="true" />
-
-      <div className="login-card">
-        {/* Logo with pulse ring */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
-          <div className="login-logo">
-            <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </div>
-        </div>
-
-        <h1 className="login-enter-1" style={{
-          fontSize: "2rem", fontWeight: 900, letterSpacing: "0.1em",
-          color: GOLD, marginBottom: "0.45rem", textTransform: "uppercase",
-        }}>
-          James A. Garfield
-        </h1>
-
-        {/* Gold divider */}
-        <div className="login-enter-1" style={{
-          height: 1,
-          background: "linear-gradient(90deg, transparent, rgba(245,192,37,0.3), transparent)",
-          margin: "0 auto 0.6rem",
-          width: "65%",
-        }} />
-
-        <p className="login-enter-2" style={{
-          color: "rgba(240,234,216,0.5)", fontSize: "0.72rem",
-          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "0.25rem",
-        }}>
-          G-Men Portal
-        </p>
-        <p className="login-enter-2" style={{
-          color: "rgba(255,255,255,0.2)", fontSize: "0.58rem",
-          letterSpacing: "0.22em", textTransform: "uppercase", marginBottom: "0.7rem",
-        }}>
-          powered by G-MEN COMMAND
-        </p>
-
-        <div className="login-enter-3" style={{
-          display: "inline-block",
-          border: "1px solid rgba(245,192,37,0.25)",
-          borderRadius: "999px", padding: "0.22rem 0.9rem",
-          fontSize: "0.65rem", color: "rgba(245,192,37,0.5)",
-          letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2.25rem",
-        }}>
-          Students &amp; Staff
-        </div>
-
-        {error && (
-          <div style={{
-            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: "8px", padding: "0.65rem 0.9rem", marginBottom: "1.25rem",
-            fontSize: "0.82rem", color: "#f87171", textAlign: "left",
-          }}>
-            {error}
-          </div>
-        )}
-
-        {SUPABASE_READY ? (
-          <div className="login-btn-shimmer login-enter-4">
-            <button
-              className="btn w-full"
-              style={{
-                justifyContent: "center", gap: "0.75rem",
-                background: "linear-gradient(135deg, #F5C025 0%, #e8b020 100%)",
-                color: "#000", fontSize: "0.92rem", fontWeight: 700,
-                padding: "0.9rem 1rem", borderRadius: "10px",
-                boxShadow: "0 4px 24px rgba(245,192,37,0.4)",
-                opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer",
-              }}
-              onClick={signInWithGoogle}
-              disabled={loading}
-            >
-              <svg width="20" height="20" viewBox="0 0 48 48">
-                <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.2 0 24 0 14.7 0 6.7 5.4 2.8 13.3l7.9 6.1C12.6 13 17.9 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.4 6.7l6.9 5.4c4-3.7 6.2-9.2 6.2-16.1z"/>
-                <path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.2-6z"/>
-                <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-6.9-5.4c-2.1 1.4-4.8 2.3-8.3 2.3-6.1 0-11.4-4-13.3-9.4l-8.2 6.1C6.6 42.5 14.7 48 24 48z"/>
-              </svg>
-              {loading ? "Signing in…" : "Sign in with School Google Account"}
-            </button>
-          </div>
-        ) : (
-          <div className="login-enter-4" style={{
-            background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
-            borderRadius: "8px", padding: "0.85rem 1rem", fontSize: "0.82rem",
-            color: "rgba(245,192,37,0.8)", textAlign: "left",
-          }}>
-            <strong>Supabase not configured.</strong><br />
-            Copy <code>.env.example</code> to <code>.env.local</code>, add your
-            project URL + anon key, then restart the dev server.
-          </div>
-        )}
-
-        <p className="login-enter-5" style={{ marginTop: "1.5rem", fontSize: "0.7rem", color: "rgba(255,255,255,0.25)", lineHeight: 1.7 }}>
-          Use your <strong style={{ color: "rgba(245,192,37,0.5)" }}>@{ALLOWED_DOMAIN}</strong> school Google account.<br />
-          Sessions expire after 7 hours of inactivity.
-        </p>
-      </div>
     </div>
   );
 }
@@ -353,7 +231,7 @@ export default function App() {
 
   if (loading) return <FullScreenLoader />;
 
-  if (!user) return <LoginScreen signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
+  if (!user) return <LoginScreen configured={SUPABASE_READY} signInWithGoogle={signInWithGoogle} loading={loading} error={error} />;
 
   // While checking staff status, show spinner
   if (isStaff === null) return <FullScreenLoader />;
@@ -461,14 +339,14 @@ export default function App() {
       )}
 
       {/* Top nav — two rows */}
-      <nav className="top-nav">
+      <nav className="top-nav" aria-label="School portal">
         {/* Row 1: brand + zone toggle + user */}
         <div className="nav-row1">
           <div className="nav-brand">
             <SchoolLogo size={36} />
             <div className="nav-school-name">
-              <span className="name-line1">James A. Garfield</span>
-              <span className="name-line2">G-Men Portal</span>
+              <span className="name-line1">JAG Portal</span>
+              <span className="name-line2">James A. Garfield</span>
             </div>
           </div>
           <div className="nav-zone-wrap" style={{ marginLeft: "1rem" }}>
@@ -499,8 +377,10 @@ export default function App() {
                 key={t.key}
                 className={`tab-btn${tab === t.key ? " active" : ""}`}
                 onClick={() => goToTab(t.key)}
+                aria-current={tab === t.key ? "page" : undefined}
               >
-                {t.label}
+                <t.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                {t.label.replace(/^⚙\s*/, "")}
                 {t.key === "messages" && messaging.totalUnread > 0 && (
                   <span style={{
                     marginLeft: 5, background: GOLD, color: "#000",
@@ -539,19 +419,7 @@ export default function App() {
         </div>
       ) : (
       /* Page content */
-      <div className="content-area">
-        {/* Mascot watermark */}
-        <img
-          src="/logo.png"
-          aria-hidden="true"
-          style={{
-            position: "fixed", bottom: "-60px", right: "-60px",
-            width: 420, height: 420, objectFit: "contain",
-            opacity: 0.045, pointerEvents: "none", zIndex: 0,
-            userSelect: "none",
-          }}
-        />
-
+      <main className="content-area" id="school-content">
         <div key={tab} className="page-enter">
         <ErrorBoundary resetKey={`${tab}/${resourceTab}`}>
         <Suspense fallback={<TabLoading />}>
@@ -567,13 +435,12 @@ export default function App() {
         {tab === "resources" && (
           <>
             {/* Sub-tab bar */}
-            <div style={{
-              display: "flex", gap: 0, marginBottom: "1.25rem",
-              borderBottom: "1px solid var(--gold-border)",
-            }}>
+            <div className="resource-tabs" role="tablist" aria-label="Teacher resources">
               {RESOURCE_TABS.map(t => (
                 <button
                   key={t.key}
+                  role="tab"
+                  aria-selected={resourceTab === t.key}
                   onClick={() => setResourceTab(t.key)}
                   style={{
                     padding: "0.55rem 1.1rem",
@@ -598,7 +465,7 @@ export default function App() {
         </Suspense>
         </ErrorBoundary>
         </div>
-      </div>
+      </main>
       )}
 
       {/* ── Mobile bottom navigation (school zone, staff only) ─────────── */}

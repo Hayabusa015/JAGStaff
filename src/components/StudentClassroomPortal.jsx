@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { Lock } from "lucide-react";
+import SchoolLogo from "./SchoolLogo.jsx";
 import { GOLD } from "../constants.js";
 
 function getTeacherName() {
@@ -19,21 +20,6 @@ import { AppProvider as ClassroomProvider, useApp } from "../classroom/Classroom
 import ClassroomApp from "../classroom/ClassroomApp.jsx";
 import GmenEnrollmentView from "./GmenEnrollmentView.jsx";
 import StudentHallPass from "./StudentHallPass.jsx";
-
-function SchoolLogo({ size = 36 }) {
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%",
-      border: `2px solid ${GOLD}`,
-      background: "#000",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      overflow: "hidden", flexShrink: 0,
-      boxShadow: `0 0 ${size * 0.35}px rgba(245,192,37,0.3)`,
-    }}>
-      <img src="/logo.png" alt="JAG" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-    </div>
-  );
-}
 
 function ZoneTab({ active, locked, onClick, children }) {
   return (
@@ -147,13 +133,14 @@ function StudentPortalShell({ user, signOut }) {
           <div className="nav-brand">
             <SchoolLogo size={36} />
             <div className="nav-school-name">
-              <span className="name-line1">James A. Garfield</span>
+              <span className="name-line1">JAG Portal</span>
               <span className="name-line2">Student Portal</span>
             </div>
           </div>
 
           {/* Zone toggle */}
           <div
+            className="nav-zone-wrap zone-toggle student-zone-toggle"
             style={{
               display: "inline-flex",
               gap: 2,

@@ -10,7 +10,7 @@ export default function Card({
   return (
     <div
       className={[
-        'relative rounded-2xl border border-white/10 bg-ink-850/70 backdrop-blur-sm shadow-lg shadow-black/40',
+        'classroom-card relative rounded-2xl border border-white/10 bg-ink-850/70 backdrop-blur-sm shadow-lg shadow-black/40',
         hairline ? 'brand-hairline' : '',
         accent ? `border-l-4 ${accent}` : '',
         hover

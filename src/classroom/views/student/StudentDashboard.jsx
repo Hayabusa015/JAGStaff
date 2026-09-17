@@ -49,7 +49,7 @@ export default function StudentDashboard() {
       {/* Hero greeting */}
       <Card className="overflow-hidden" hairline>
         <div className={`relative flex items-center justify-between gap-4 bg-gradient-to-r ${theme.gradient} px-6 py-6`}>
-          <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
+          <img src="/gg-surface.webp" alt="" className="mascot-watermark" />
           <SubjectFlair subject={cls?.subject} color="#0a0500" opacity={0.11} />
           <div className="relative" style={{ color: classroomDesign.heroText }}>
             <p className="font-display text-xs font-bold uppercase tracking-widest opacity-80">

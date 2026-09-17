@@ -1,0 +1,63 @@
+.portal-entry {
+  min-height: 100svh; display: flex; flex-direction: column; overflow: clip;
+  background: #08080c url('/gg-studio.jpg') center center / cover no-repeat;
+  color: #f3f3f5; font-family: var(--font-sans); position: relative; isolation: isolate;
+}
+.portal-entry::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #08080c22 0%, transparent 70%); }
+.entry-header, .entry-footer { width: calc(100% - 6.4vw); max-width: 1600px; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 3; }
+.entry-header { min-height: 114px; }
+.entry-brand { display: flex; align-items: center; gap: 23px; font-size: clamp(25px, 2.2vw, 36px); font-weight: 400; letter-spacing: -.5px; }
+.entry-brand img { width: 67px; height: 67px; object-fit: contain; padding-right: 18px; border-right: 1px solid #ffffff65; }
+.entry-school { font-size: clamp(14px, 1.35vw, 21px); color: #b5b3b3; }
+.entry-main { width: calc(100% - 8.4vw); max-width: 1570px; margin: auto; flex: 1; display: grid; grid-template-columns: 49% 51%; align-items: center; min-height: 620px; position: relative; }
+.entry-copy { position: relative; z-index: 3; padding-block: 55px; transform: translateY(8px); }
+.entry-copy h1 { font-family: var(--font-sans); font-size: clamp(50px, 5.4vw, 88px); font-weight: 700; line-height: 1.13; letter-spacing: -.045em; margin: 0; }
+.entry-description { color: #b9b8bf; font-size: clamp(17px, 2.03vw, 32px); line-height: 1.45; margin: 20px 0 35px; letter-spacing: -.02em; white-space: nowrap; }
+.entry-signin { display: inline-flex; align-items: center; justify-content: center; gap: 18px; background: linear-gradient(110deg,#f8c822,#f5c025); color: #17130a; border: 1px solid #ffd65780; border-radius: 12px; padding: 22px 26px; font: inherit; font-size: clamp(14px, 1.52vw, 24px); font-weight: 650; cursor: pointer; min-height: 66px; box-shadow: 0 4px 26px #f5c0250a; transition: background 180ms, box-shadow 180ms, transform 180ms; }
+.entry-signin svg { flex-shrink: 0; width: clamp(25px,2.6vw,40px); height: clamp(25px,2.6vw,40px); }
+.entry-signin:hover:not(:disabled) { background: #ffcf44; box-shadow: 0 5px 30px #f5c02520; transform: translateY(-1px); }
+.entry-signin:active:not(:disabled) { transform: translateY(1px); }
+.entry-signin:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }
+.entry-signin:disabled { opacity: .65; cursor: wait; }
+.entry-help { margin-top: 17px; color: #b3b2b9; font-size: clamp(12px, 1.27vw, 20px); line-height: 1.65; }
+.entry-help strong { font-weight: 400; color: inherit; }
+.entry-error { font-size: 14px; line-height: 1.6; color: #fecaca; border: 1px solid #ef44444d; border-radius: 8px; padding: 12px 16px; margin: 0 0 18px; max-width: 520px; background: #241616e8; }
+.entry-footer { min-height: 80px; border-top: 1px solid #ffffff65; font-size: clamp(11px, .96vw, 15px); color: #aaa9ae; }
+.entry-footer strong { font-weight: 400; }
+.gg-scene { position: relative; width: 120%; margin-left: -8%; height: min(780px, calc(100svh - 135px)); min-height: 660px; isolation: isolate; }
+.gg-canvas { position: absolute; inset: -2% -2% -7%; z-index: 2; opacity: 0; transition: opacity 700ms; mask-image: linear-gradient(#000 85%, transparent 99%); }
+.gg-canvas canvas { display: block; width: 100%; height: 100%; }
+.gg-scene-ready .gg-canvas { opacity: 1; }
+.gg-fallback { position: absolute; width: 85%; height: 88%; object-fit: contain; top: 0; left: 7%; filter: drop-shadow(12px 15px 3px #000a) drop-shadow(0 0 25px #f5c02538); transition: opacity 500ms; }
+.gg-scene-ready .gg-fallback { opacity: 0; }
+.gg-halo { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse, #f5c02514 0%, transparent 65%); }
+.gg-reflection { position: absolute; left: 23%; right: 14%; bottom: 8%; height: 30px; background: radial-gradient(ellipse, #f5c02555, #f5c02510 42%, transparent 70%); filter: blur(18px); transform: scaleY(.5); }
+@media (max-height: 780px) and (min-width: 901px) { .entry-header { min-height: 90px; } .entry-footer { min-height: 66px; } .entry-main { min-height: 540px; } .gg-scene { min-height: 560px; height: calc(100svh - 130px); } }
+@media (max-width: 900px) {
+  .entry-header, .entry-main, .entry-footer { width: calc(100% - 3rem); }
+  .entry-header { min-height: 92px; } .entry-brand { font-size: 24px; gap: 15px; } .entry-brand img { width: 48px; height: 50px; padding-right: 12px; }
+  .entry-main { grid-template-columns: 49% 51%; min-height: 570px; }
+  .entry-copy h1 { font-size: clamp(36px, 5.3vw, 50px); }
+  .entry-description { white-space: normal; font-size: 17px; margin: 20px 0 28px; }
+  .entry-signin { padding: 16px 12px; font-size: 12px; gap: 10px; min-height: 56px; border-radius: 9px; }
+  .entry-signin svg { width: 22px; height: 22px; } .entry-help { font-size: 11px; }
+  .gg-scene { min-height: 550px; height: 550px; width: 140%; margin-left: -14%; }
+}
+@media (max-width: 620px) {
+  .portal-entry { background-position: 68% center; background-size: auto 100%; }
+  .portal-entry::before { background: linear-gradient(#08080cee 0%,#08080cc9 40%,transparent 73%); }
+  .entry-header { min-height: 83px; } .entry-brand { font-size: 23px; gap: 13px; } .entry-brand img { width: 43px; height: 46px; padding-right: 11px; }
+  .entry-school { font-size: 11px; max-width: 105px; text-align: right; line-height: 1.5; }
+  .entry-main { grid-template-columns: 1fr; min-height: auto; }
+  .entry-copy { padding: 30px 0 0; transform: none; }
+  .entry-copy h1 { font-size: clamp(37px, 10vw, 59px); }
+  .entry-description { font-size: 16px; margin: 16px 0 23px; }
+  .entry-signin { width: 100%; font-size: 13px; min-height: 58px; } .entry-signin svg { width: 25px; height: 25px; }
+  .entry-help { font-size: 11px; margin-top: 15px; }
+  .gg-scene { width: 118%; margin: 2px 0 -15px -9%; height: 455px; min-height: 455px; }
+  .entry-footer { min-height: 62px; font-size: 10px; gap: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-entry *, .portal-entry *::before, .portal-entry *::after { animation: none !important; transition: none !important; }
+  .entry-signin:hover:not(:disabled) { transform: none; }
+}

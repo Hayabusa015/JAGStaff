@@ -40,10 +40,10 @@ export default function TeacherDashboard() {
     <div className="space-y-5">
       {/* Brand strip */}
       <Card className="overflow-hidden" hairline>
-        <div className="relative flex items-center gap-4 bg-gradient-to-r from-ink-850 to-ink-900 px-6 py-5">
-          <img src="/gmen-logo.png" alt="" className="mascot-watermark" />
+        <div className="classroom-brand-strip relative flex items-center gap-4 bg-gradient-to-r from-ink-850 to-ink-900 px-6 py-5">
+          <img src="/gg-surface.webp" alt="" className="mascot-watermark" />
           <img
-            src="/gmen-logo.png"
+            src="/gg-surface.webp"
             alt="G-MEN"
             className="relative h-14 w-14 shrink-0 object-contain drop-shadow-[0_0_12px_rgba(245,179,1,0.35)]"
           />

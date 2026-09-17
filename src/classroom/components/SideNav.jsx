@@ -57,14 +57,14 @@ export default function SideNav({ open, onClose }) {
 
       <aside
         className={[
-          'fixed z-40 flex h-full w-64 flex-col border-r border-white/10 bg-ink-950/95 backdrop-blur transition-transform lg:static lg:z-0 lg:translate-x-0',
+          'classroom-side-nav fixed z-40 flex h-full w-64 flex-col border-r border-white/10 bg-ink-950/95 backdrop-blur transition-transform lg:static lg:z-0 lg:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
         <div className="flex items-center justify-between gap-2 border-b border-white/5 px-5 py-5">
           <div className="flex items-center gap-3">
             <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-ink-850 ring-1 ring-gold-500/30 shadow-gold-sm">
-              <img src="/gmen-logo.png" alt="G-MEN" className="h-11 w-11 object-contain" />
+              <img src="/gg-emblem.svg" alt="G-MEN" className="h-11 w-11 object-contain" />
             </div>
             <div className="leading-tight">
               <p className="font-display text-lg font-bold uppercase tracking-wide text-zinc-50">

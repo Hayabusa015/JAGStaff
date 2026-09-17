@@ -17,7 +17,7 @@ export default function TopControlBar({ onMenu }) {
   const title = viewTitles[activeView]?.[role] || 'Command Center';
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-ink-950/80 px-4 py-3 backdrop-blur">
+    <header className="classroom-control-bar sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-ink-950/80 px-4 py-3 backdrop-blur">
       <button
         onClick={onMenu}
         className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/5 lg:hidden"
@@ -28,7 +28,7 @@ export default function TopControlBar({ onMenu }) {
 
       {/* Compact logo mark (visible on mobile where the sidebar is hidden) */}
       <img
-        src="/gmen-logo.png"
+        src="/gg-emblem.svg"
         alt="G-MEN"
         className="h-9 w-9 shrink-0 object-contain lg:hidden"
       />
