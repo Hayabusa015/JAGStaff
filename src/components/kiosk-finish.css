@@ -1,0 +1,73 @@
+/* Same typography as .portal-entry; the kiosk portal mounts on document.body. */
+.kiosk-surface, .kiosk-surface button, .kiosk-surface input {
+  font-family: var(--font-sans);
+}
+.kiosk-surface {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: radial-gradient(ellipse at 50% -20%, #262522, #131517 48%, #0d0f11 100%);
+}
+.kiosk-atmosphere { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.kiosk-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .13;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23grain)' opacity='.15' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+}
+.kiosk-atmosphere svg { width: 100%; height: 100%; }
+.kiosk-atmosphere path { fill: none; vector-effect: non-scaling-stroke; }
+.kiosk-groove-shadow { stroke: #060708; stroke-width: 2.5; opacity: .7; }
+.kiosk-groove-edge { stroke: #ffffff; stroke-width: .8; opacity: .1; }
+.kiosk-groove-light { stroke: #ebc16b; stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 28 972; opacity: 0; animation: groove-travel 18s linear infinite; filter: drop-shadow(0 0 3px #f5c02570); }
+.kiosk-groove-light-5 { animation-delay: -9s; }
+@keyframes groove-travel {
+  0% { stroke-dashoffset: 30; opacity: 0; }
+  8%, 38% { opacity: .5; }
+  48%, 100% { stroke-dashoffset: -990; opacity: 0; }
+}
+.kiosk-surface .kiosk-header { background: linear-gradient(#202123cc, #111315d9); border-bottom: 1px solid #ffffff07; }
+.kiosk-surface .kiosk-brand-title { font-size: 1rem; font-weight: 650; letter-spacing: -.015em; color: var(--gold); line-height: 1.2; }
+.kiosk-surface .kiosk-brand-detail { font-size: .72rem; color: #a4a5aa; letter-spacing: 0; margin-top: .3rem; }
+.kiosk-surface .kiosk-clock-time { letter-spacing: -.035em; font-weight: 500; text-shadow: none !important; }
+.kiosk-surface .kiosk-date { letter-spacing: .015em !important; color: #a4a5aa !important; }
+.kiosk-surface .kiosk-footer { background: #121416b8; color: #8d9097; letter-spacing: .045em; text-transform: none; }
+.kiosk-surface .kiosk-search { background: linear-gradient(160deg, #242629e8, #17191ced) !important; box-shadow: inset 0 1px 0 #ffffff09, 0 6px 16px #00000024 !important; letter-spacing: -.015em !important; }
+.kiosk-surface .kiosk-search:focus { border-color: #f5c02599 !important; box-shadow: 0 0 0 3px #f5c02512, inset 0 1px 0 #ffffff12 !important; }
+.kiosk-raised { box-shadow: inset 0 1px 0 #ffffff13, inset 0 -1px 0 #00000050, 0 8px 22px #00000035; }
+.kiosk-raised::after { content: ''; position: absolute; pointer-events: none; inset: 1px; border: 1px solid #ffffff03; border-radius: inherit; }
+.kiosk-raised:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.kiosk-destination { position: relative; }
+
+/* Two half-faces hinge around the middle; unchanged digits stay completely still. */
+.metal-clock, .metal-clock-digits { display: inline-flex; align-items: center; }
+.metal-clock { font-size: inherit; font-weight: 500; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.metal-clock-digits { gap: .075em; }
+.metal-digit { position: relative; display: inline-block; width: .72em; height: 1.18em; perspective: 240px; border-radius: 5px; background: linear-gradient(160deg,#343639,#181a1d 54%,#232528); box-shadow: 0 2px 4px #0008, inset 0 1px 0 #ffffff29, inset 0 -1px 0 #000b; }
+.metal-digit::after { content: ''; position: absolute; z-index: 4; top: 50%; left: 0; right: 0; height: 1px; background: #0009; box-shadow: 0 1px 0 #ffffff08; pointer-events: none; }
+.metal-digit-rest { display: block; text-align: center; line-height: 1.18em; }
+.metal-half { position: absolute; left: 0; right: 0; height: .59em; overflow: hidden; backface-visibility: hidden; background: linear-gradient(160deg,#343639,#1c1e21); }
+.metal-half > span { position: absolute; inset: 0; height: 1.18em; line-height: 1.18em; text-align: center; }
+.metal-flip-top { top: 0; z-index: 3; border-radius: 5px 5px 0 0; transform-origin: bottom; animation: metal-flip-top 280ms ease-in forwards; }
+.metal-old-bottom, .metal-flip-bottom { top: 50%; border-radius: 0 0 5px 5px; background: linear-gradient(#1b1d20,#242629); }
+.metal-old-bottom > span, .metal-flip-bottom > span { top: -.59em; }
+.metal-old-bottom { animation: metal-old-bottom 560ms steps(1,end) forwards; }
+.metal-flip-bottom { z-index: 2; transform-origin: top; animation: metal-flip-bottom 280ms 280ms ease-out both; }
+.metal-clock-colon { padding: 0 .015em; opacity: .65; }
+.metal-clock-meridiem { font-size: .33em; margin: .8em 0 0 .5em; letter-spacing: .035em; color: #b8bac0; }
+@keyframes metal-flip-top { to { transform: rotateX(-90deg); filter: brightness(.65); } }
+@keyframes metal-flip-bottom { from { transform: rotateX(90deg); filter: brightness(.65); } to { transform: rotateX(0); filter: brightness(1); } }
+@keyframes metal-old-bottom { to { visibility: hidden; } }
+.kiosk-effects-paused .kiosk-groove-light { animation-play-state: paused; opacity: 0; }
+.kiosk-effects-paused .metal-digit-transition { display: none; }
+@media (max-width: 900px) { .kiosk-atmosphere { opacity: .65; } }
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-groove-light { animation: none; opacity: 0; }
+  .metal-digit-transition { display: none; }
+  .kiosk-raised { transition: none !important; }
+}

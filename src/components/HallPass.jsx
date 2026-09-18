@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { GOLD, DESTINATIONS } from "../constants.js";
 import { useSharedHallPasses, useStaffDirectory, useRoomPasses, ROOM_PASS_REASONS, useLateArrivals, useBellSchedule, periodForTime, periodEndDateTime, SUPABASE_READY, saveMaxOut, nowMs } from "../supabase.js";
+import KioskClock from "./KioskClock.jsx";
+import KioskBackdrop from "./KioskBackdrop.jsx";
+import "./kiosk-finish.css";
 import HallPassAnalytics from "./HallPassAnalytics.jsx";
 import { Ico, DestIcon, IconSearch, IconLock, IconSwap, IconBack, IconReturn, IconCheck, IconAlert } from "./hallPassIcons.jsx";
 import StudentPassInspector from "./StudentPassInspector.jsx";
@@ -64,9 +67,9 @@ function useFullscreen() {
 
 // Shared surface tokens — one set of values so every panel in the kiosk
 // shares the same glass, radius and hairline.
-const SURFACE = "linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018))";
+const SURFACE = "linear-gradient(155deg, rgba(40,42,46,0.96), rgba(23,25,28,0.96))";
 const HAIRLINE = "1px solid rgba(255,255,255,0.09)";
-const LABEL = { fontSize: "0.63rem", fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.38)" };
+const LABEL = { fontSize: "0.63rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)" };
 const NUM = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum"' };
 
 function GhostButton({ onClick, active, title, children, style }) {
@@ -106,6 +109,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const [filing, setFiling] = useState(null); // {type:'in'|'out', name, dest, at, flyX, flyY}
   const outGridRef = useRef(null);
   const [focused, setFocused] = useState(false);
+  const [effectsPaused, setEffectsPaused] = useState(false);
   const [tick, setTick] = useState(0);
   const [clockStr, setClockStr] = useState(new Date(nowMs()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
   const { isFs, toggle: toggleFs } = useFullscreen();
@@ -234,12 +238,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
   const fmtDayShort = () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   return createPortal(
-    <div style={{
-      position: "fixed", inset: 0, color: "#fff", display: "flex", flexDirection: "column",
-      fontFamily: "inherit", zIndex: 1000,
-      // Layered ground: a warm pool of light at the top edge falling to true black.
-      background: "radial-gradient(120% 80% at 50% -10%, #17130a 0%, #0a0908 40%, #050505 70%, #000 100%)",
-    }}>
+    <div className={`kiosk-surface${effectsPaused ? " kiosk-effects-paused" : ""}`}>
+      <KioskBackdrop />
 
       {/* Crest watermark */}
       <img src="/logo.png" alt="" aria-hidden style={{
@@ -307,19 +307,15 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         <div className="kiosk-brand">
           <img src="/logo.png" alt="G-Men" />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: "0.98rem", letterSpacing: "0.18em", color: GOLD, lineHeight: 1.2, textTransform: "uppercase" }}>
-              Hall Pass
-            </div>
-            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", marginTop: "0.1rem" }}>
-              Room {settings.room} · {settings.teacherName}
-            </div>
+            <div className="kiosk-brand-title">Hall Pass</div>
+            <div className="kiosk-brand-detail">Room {settings.room} · {settings.teacherName}</div>
           </div>
         </div>
 
         {/* Clock */}
         <div className="kiosk-clock">
           <div className="kiosk-clock-time" style={{ color: GOLD, textShadow: `0 0 34px ${GOLD}44`, ...NUM }}>
-            {clockStr}
+            <KioskClock time={clockStr} paused={effectsPaused} />
           </div>
           <div className="kiosk-date" style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", marginTop: "0.3rem", letterSpacing: "0.14em" }}>
             {fmtDayShort()}
@@ -359,6 +355,9 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
           <GhostButton onClick={() => setScreen(s => s === "locator" ? "home" : "locator")} active={screen === "locator"}>
             <IconSearch size={15} /> <span className="kiosk-btn-label">Locator</span>
           </GhostButton>
+          <GhostButton onClick={() => setEffectsPaused(value => !value)} title={effectsPaused ? "Resume visual effects" : "Pause visual effects"} active={effectsPaused}>
+            <Ico size={15}>{effectsPaused ? <path d="m8 4 12 8-12 8Z" /> : <><path d="M8 5v14" /><path d="M16 5v14" /></>}</Ico>
+          </GhostButton>
           <GhostButton onClick={toggleFs} title={isFs ? "Exit fullscreen" : "Fullscreen"} style={{ padding: "0.5rem 0.6rem" }}>
             {isFs
               ? <Ico size={16}><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></Ico>
@@ -383,7 +382,11 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                 const ac = critical ? "#f87171" : flagged ? "#fb923c" : GOLD;
                 return (
                   <div key={p.id}
-                    className={flashIds.has(p.id) ? "kiosk-card-flash" : undefined}
+                    className={`kiosk-raised${flashIds.has(p.id) ? " kiosk-card-flash" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Return ${p.studentName}`}
+                    onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
                     onClick={() => { setSelected({ id: p.studentId, firstName: p.studentName?.split(" ")[0] || "", lastName: p.studentName?.split(" ").slice(1).join(" ") || "", passId: p.id, dest: p.destination, outTime: p.outTime }); setScreen("confirm-return"); setKioskSearch(""); }}
                     style={{
                       position: "relative", overflow: "hidden", background: SURFACE,
@@ -391,8 +394,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                       textAlign: "center", cursor: "pointer", backdropFilter: "blur(8px)",
                       transition: "transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = ac; e.currentTarget.style.boxShadow = `0 12px 34px -12px ${ac}66`; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = `${ac}55`; e.currentTarget.style.boxShadow = "none"; }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = ac; e.currentTarget.style.boxShadow = `0 12px 34px -12px ${ac}66`; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = `${ac}55`; e.currentTarget.style.boxShadow = ""; }}
                   >
                     {/* Accent bar reads the urgency before any text does */}
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${ac}, transparent)` }} />
@@ -446,8 +449,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
               background: "radial-gradient(circle at 50% 30%, rgba(74,222,128,0.14), transparent 70%)",
               color: "#4ade80",
             }}><IconCheck size={28} stroke={1.8} /></div>
-            <div style={{ fontWeight: 500, fontSize: "0.82rem", color: "rgba(74,222,128,0.85)", letterSpacing: "0.26em", textTransform: "uppercase" }}>
-              All students present
+            <div style={{ fontWeight: 500, fontSize: "0.82rem", color: "rgba(74,222,128,0.85)", letterSpacing: "0.065em", textTransform: "none" }}>
+              No active hall passes
             </div>
           </div>
         ) : null}
@@ -584,7 +587,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
         {screen === "home" && (
           <div style={{ maxWidth: 560, margin: "0 auto" }}>
             <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-              <div style={{ ...LABEL, fontSize: "0.7rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.55)" }}>
+              <div style={{ ...LABEL, fontSize: "0.75rem", letterSpacing: "0.04em", color: "rgba(255,255,255,0.55)" }}>
                 Type your name to sign out or return
               </div>
             </div>
@@ -607,6 +610,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                 transition: "color 0.2s ease", display: "flex",
               }}><IconSearch size={20} /></span>
               <input
+                className="kiosk-search"
+                aria-label="Find your name to sign out or return"
                 value={kioskSearch}
                 onChange={e => setKioskSearch(e.target.value)}
                 onFocus={() => setFocused(true)}
@@ -663,7 +668,7 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(142px,1fr))", gap: "0.85rem" }}>
               {DESTINATIONS.map(d => (
-                <button key={d.key} onClick={() => signOut(d.key)}
+                <button className="kiosk-raised kiosk-destination" key={d.key} onClick={() => signOut(d.key)}
                   style={{
                     display: "flex", flexDirection: "column", alignItems: "center", gap: "0.7rem",
                     background: SURFACE, border: HAIRLINE, borderRadius: 16, padding: "1.5rem 0.5rem",
@@ -671,8 +676,8 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
                     letterSpacing: "0.05em", backdropFilter: "blur(6px)",
                     transition: "transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = `${GOLD}77`; e.currentTarget.style.color = GOLD; e.currentTarget.style.boxShadow = `0 14px 34px -16px ${GOLD}88`; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"; e.currentTarget.style.color = "rgba(255,255,255,0.85)"; e.currentTarget.style.boxShadow = "none"; }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = `${GOLD}77`; e.currentTarget.style.color = GOLD; e.currentTarget.style.boxShadow = `0 14px 34px -16px ${GOLD}88`; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"; e.currentTarget.style.color = "rgba(255,255,255,0.85)"; e.currentTarget.style.boxShadow = ""; }}
                 >
                   <DestIcon dest={d.key} size={30} />
                   {d.key}
