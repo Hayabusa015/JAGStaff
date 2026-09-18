@@ -241,13 +241,6 @@ function KioskScreen({ passes, addPass, returnPass, settings, students, onClose,
     <div className={`kiosk-surface${effectsPaused ? " kiosk-effects-paused" : ""}`}>
       <KioskBackdrop />
 
-      {/* Crest watermark */}
-      <img src="/logo.png" alt="" aria-hidden style={{
-        position: "absolute", top: "52%", left: "50%", transform: "translate(-50%,-50%)",
-        width: "min(64vw,560px)", opacity: 0.045, pointerEvents: "none", userSelect: "none",
-        filter: "grayscale(0.3)",
-      }} />
-
       {/* Sign-out / return: a file card is flung in, trips, gets stamped, and
           files itself into the Currently Out grid — or, on a return, flies
           back out of the grid and drops into a folder that shuts over it.
