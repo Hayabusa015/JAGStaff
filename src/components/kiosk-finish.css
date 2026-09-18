@@ -24,11 +24,11 @@
 .kiosk-atmosphere path { fill: none; vector-effect: non-scaling-stroke; }
 .kiosk-groove-shadow { stroke: #060708; stroke-width: 2.5; opacity: .7; }
 .kiosk-groove-edge { stroke: #ffffff; stroke-width: .8; opacity: .1; }
-.kiosk-groove-light { stroke: #ebc16b; stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 28 972; opacity: 0; animation: groove-travel 18s linear infinite; filter: drop-shadow(0 0 3px #f5c02570); }
+.kiosk-groove-light { stroke: #f6cf76; stroke-width: 1.7; stroke-linecap: round; stroke-dasharray: 48 952; opacity: 0; animation: groove-travel 18s linear infinite; filter: drop-shadow(0 0 5px #f5c025aa); }
 .kiosk-groove-light-5 { animation-delay: -9s; }
 @keyframes groove-travel {
   0% { stroke-dashoffset: 30; opacity: 0; }
-  8%, 38% { opacity: .5; }
+  8%, 38% { opacity: .85; }
   48%, 100% { stroke-dashoffset: -990; opacity: 0; }
 }
 .kiosk-surface .kiosk-header { background: linear-gradient(#202123cc, #111315d9); border-bottom: 1px solid #ffffff07; }
@@ -71,3 +71,17 @@
   .metal-digit-transition { display: none; }
   .kiosk-raised { transition: none !important; }
 }
+
+/* Recessed linework shares the wall surface instead of overlaying a colored image. */
+.kiosk-atmosphere .kiosk-engraving {
+  position: absolute; top: 52%; left: 50%; width: min(64vw, 560px); height: auto;
+  aspect-ratio: 912 / 1184; transform: translate(-50%, -50%);
+  opacity: .8; filter: drop-shadow(0 1px 0 #ffffff18);
+}
+.kiosk-crest-light { opacity: .24; filter: blur(35px); }
+.kiosk-crest-light-a { animation: crest-light-a 17s ease-in-out infinite alternate; }
+.kiosk-crest-light-b { animation: crest-light-b 26s ease-in-out -13s infinite alternate; }
+@keyframes crest-light-a { from { transform: translate(-170px, -200px); } to { transform: translate(450px, 420px); } }
+@keyframes crest-light-b { from { transform: translate(120px, -320px); } to { transform: translate(-470px, 170px); } }
+.kiosk-effects-paused .kiosk-crest-light { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .kiosk-crest-light { animation: none; } }
