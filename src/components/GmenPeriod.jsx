@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { GOLD } from "../constants.js";
 import {
-  useGmenRequests, useGmenClasses, useGmenEnrollments,
+  useGmenPullRequests, useGmenClasses, useGmenEnrollments,
   useGmenChangeRequests, useGmenSettings, useGmailSend, useBellSchedule,
   useStaffDirectory, useGmenAttendance,
 } from "../supabase.js";
@@ -171,7 +171,10 @@ function KioskDisplay({ requests, onClose }) {
 }
 
 export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
-  const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
+  const {
+    requests: pullRequests, pullsForStudent, requestPull,
+    markSent, markArrived: markPullArrived, markNoShow, declinePull,
+  } = useGmenPullRequests();
   const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
   const { enrollments, enroll, seedPeriod, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
@@ -186,6 +189,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
 
   const [subTab, setSubTab] = useState("today");
   const [search, setSearch] = useState("");
+  const [pullReason, setPullReason] = useState("");
   const [kioskMode, setKioskMode] = useState(false);
 
   const period = settings.active_period || 1;
@@ -200,26 +204,58 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
     ? students.filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase())).slice(0, 8)
     : [];
 
-  async function addRequest(student) {
-    if (gmenRequests.find(r => r.student.id === student.id)) return;
+  // This teacher's own pulls today — the live board surface 1 asks for.
+  // Building-wide visibility lives on the kiosk (surface 3) instead.
+  const myPulls = pullRequests.filter(r => r.requested_by_email === user?.email);
+
+  async function addPullRequest(student) {
+    // Already requested (and not declined) today — don't double up. The DB's
+    // own unique constraint would refuse this anyway; this just avoids a
+    // round trip and an error toast for the common case of a double-click.
+    if (myPulls.some(r => r.student_id === student.id && r.status !== "declined")) return;
     const teacherName = user?.name || "Staff";
-    const id = await addRequestDB(student, teacherName);
-    setAlerts(a => [...a, { id, gmenId: id, student: `${student.firstName} ${student.lastName}`, teacher: teacherName }]);
+    const { data } = await requestPull({
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.lastName}`,
+      requestedByEmail: user.email,
+      requestedByName: teacherName,
+      toClassId: myClass?.id || null,
+      toRoom: myClass?.room || null,
+      reason: pullReason.trim() || null,
+    });
+    if (data) {
+      setAlerts(a => [...a, { id: data.id, gmenId: data.id, student: `${student.firstName} ${student.lastName}`, teacher: teacherName }]);
+    }
     setSearch("");
   }
 
-  async function markArrived(id) {
-    await markArrivedDB(id);
+  async function handlePullArrived(id) {
+    await markPullArrived(id);
     setAlerts(a => a.filter(x => x.gmenId !== id));
   }
 
-  const pending = gmenRequests.filter(r => !r.arrived);
-  const arrived = gmenRequests.filter(r => r.arrived);
+  async function handleNoShow(id) {
+    await markNoShow(id);
+    setAlerts(a => a.filter(x => x.gmenId !== id));
+  }
 
   // Change requests pending approval
   const pendingChanges = changeRequests.filter(r => r.status === "pending");
 
-  if (kioskMode) return <KioskDisplay requests={gmenRequests} onClose={() => setKioskMode(false)} />;
+  // Kiosk display predates pull_requests' richer lifecycle and only knows
+  // "requested" vs "arrived" — map onto that shape rather than rewriting it.
+  // Declined pulls never happened as far as the projector is concerned.
+  const kioskRequests = pullRequests
+    .filter(r => r.status !== "declined")
+    .map(r => ({
+      id: r.id,
+      student: { name: r.student_name },
+      arrived: r.status === "arrived",
+      requestedBy: r.requested_by_name,
+      requestedAt: new Date(r.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    }));
+
+  if (kioskMode) return <KioskDisplay requests={kioskRequests} onClose={() => setKioskMode(false)} />;
 
   // Red dot: it's a G-Men day, this teacher has a class, and today's
   // attendance for it hasn't been submitted yet.
@@ -309,7 +345,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           {isRequestDay && myClass && isGmenDay && (
             <RemediationDayView
               myStudents={enrollments.filter(e => e.class_id === myClass.id)}
-              gmenRequests={gmenRequests}
+              pullRequests={pullRequests}
             />
           )}
 
@@ -342,63 +378,88 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
             )}
           </div>
 
-          <div className="grid2">
-            {/* Remediation Request */}
-            <div className="card" style={{ position: "relative", zIndex: 10 }}>
-              <div className="section-title">Remediation Request</div>
-              <div style={{ position: "relative" }}>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student name…" />
-                {results.length > 0 && (
-                  <div className="autocomplete-list">
-                    {results.map(s => (
-                      <div key={s.id} onClick={() => addRequest(s)} className="autocomplete-item">
-                        {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {students.length === 0 && <p className="text-muted mt1" style={{ fontSize: "0.8rem" }}>Import a student roster first.</p>}
-            </div>
-
-            {/* Today's Summary */}
-            <div className="card">
-              <div className="section-title">Today's Summary</div>
+          {/* Pull Students for Enrichment — only on your own enrichment day.
+              Requirement D: the teacher whose class doesn't meet today is
+              the one doing the requesting, not any staff member any day. */}
+          {isRequestDay && isGmenDay && (
+            <>
               <div className="grid2">
-                <div style={{ textAlign: "center" }}>
-                  <div className="stat-num" style={{ color: GOLD }}>{pending.length}</div>
-                  <div className="stat-label">Pending</div>
+                <div className="card" style={{ position: "relative", zIndex: 10 }}>
+                  <div className="section-title">Pull Students for Enrichment</div>
+                  <input
+                    value={pullReason} onChange={e => setPullReason(e.target.value)}
+                    placeholder="Reason (optional) — e.g. Biology help" className="mb1"
+                  />
+                  <div style={{ position: "relative" }}>
+                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student name…" />
+                    {results.length > 0 && (
+                      <div className="autocomplete-list">
+                        {results.map(s => (
+                          <div key={s.id} onClick={() => addPullRequest(s)} className="autocomplete-item">
+                            {s.firstName} {s.lastName} <span className="tag tag-amber">{s.grade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {students.length === 0 && <p className="text-muted mt1" style={{ fontSize: "0.8rem" }}>Import a student roster first.</p>}
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div className="stat-num" style={{ color: "#16a34a" }}>{arrived.length}</div>
-                  <div className="stat-label">Arrived</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Attendance Grid */}
-          {gmenRequests.length > 0 && (
-            <div className="card mt2">
-              <div className="section-title">Today's Attendance Grid</div>
-              {gmenRequests.map(r => (
-                <div key={r.id} className="flex items-center justify-between" style={{ padding: "0.5rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
-                  <div className="flex items-center gap1">
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: r.arrived ? "#16a34a" : GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.8rem", color: r.arrived ? "#fff" : "#000" }}>
-                      {initials(r.student)}
+                {/* Today's Summary */}
+                <div className="card">
+                  <div className="section-title">Today's Summary</div>
+                  <div className="grid2">
+                    <div style={{ textAlign: "center" }}>
+                      <div className="stat-num" style={{ color: GOLD }}>{myPulls.filter(r => r.status === "requested" || r.status === "sent").length}</div>
+                      <div className="stat-label">Pending</div>
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{r.student.name}</div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>Grade {r.student.grade} · {r.requestedBy} · {r.requestedAt}</div>
+                    <div style={{ textAlign: "center" }}>
+                      <div className="stat-num" style={{ color: "#16a34a" }}>{myPulls.filter(r => r.status === "arrived").length}</div>
+                      <div className="stat-label">Arrived</div>
                     </div>
                   </div>
-                  {r.arrived
-                    ? <span className="tag tag-green">✓ Arrived</span>
-                    : <button className="btn btn-primary btn-sm" onClick={() => markArrived(r.id)}>Mark Arrived</button>
-                  }
                 </div>
-              ))}
-            </div>
+              </div>
+
+              {/* My Pull Requests board */}
+              {myPulls.length > 0 && (
+                <div className="card mt2">
+                  <div className="section-title">Today's Pull Requests</div>
+                  {myPulls.map(r => (
+                    <div key={r.id} className="flex items-center justify-between" style={{ padding: "0.5rem 0", borderBottom: "1px solid rgba(200,200,200,0.2)" }}>
+                      <div className="flex items-center gap1">
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: r.status === "arrived" ? "#16a34a" : GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.8rem", color: r.status === "arrived" ? "#fff" : "#000" }}>
+                          {initials({ name: r.student_name })}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{r.student_name}</div>
+                          <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                            {r.reason ? `${r.reason} · ` : ""}
+                            {r.status === "requested" && "Requested — awaiting the home teacher"}
+                            {r.status === "sent" && "Sent — on the way"}
+                            {r.status === "arrived" && "Arrived"}
+                            {r.status === "declined" && "Declined by the home teacher"}
+                            {r.status === "no_show" && "Didn't show"}
+                          </div>
+                        </div>
+                      </div>
+                      {r.status === "arrived" ? (
+                        <span className="tag tag-green">✓ Arrived</span>
+                      ) : r.status === "declined" ? (
+                        <span className="tag tag-red">Declined</span>
+                      ) : r.status === "no_show" ? (
+                        <span className="tag tag-red">No-show</span>
+                      ) : (
+                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => handlePullArrived(r.id)}>Mark Arrived</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => handleNoShow(r.id)}>No-show</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -421,6 +482,9 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           recordsForClass={recordsForClass}
           hasSubmitted={hasSubmittedAttendance}
           submitAttendance={submitAttendance}
+          pullsForStudent={pullsForStudent}
+          markSent={markSent}
+          declinePull={declinePull}
         />
       )}
 
@@ -451,7 +515,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   );
 }
 
-function RemediationDayView({ myStudents, gmenRequests }) {
+function RemediationDayView({ myStudents, pullRequests }) {
   return (
     <div className="card mb2">
       <div className="section-title">Your Students Today</div>
@@ -464,7 +528,9 @@ function RemediationDayView({ myStudents, gmenRequests }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
           {myStudents.map(s => {
-            const pull = gmenRequests.find(r => r.student?.name === s.student_name);
+            // By student_id, not name — two students sharing a first name and
+            // last initial used to collide here.
+            const pull = s.student_id ? pullRequests.find(r => r.student_id === s.student_id && r.status !== "declined") : null;
             return (
               <div key={s.id || s.student_email} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -472,7 +538,7 @@ function RemediationDayView({ myStudents, gmenRequests }) {
               }}>
                 <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{s.student_name}</span>
                 {pull
-                  ? <span className="tag tag-amber">Pulled by {pull.requestedBy}</span>
+                  ? <span className="tag tag-amber">Pulled by {pull.requested_by_name}</span>
                   : <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.35)" }}>→ Commons</span>
                 }
               </div>

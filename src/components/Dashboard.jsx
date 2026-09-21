@@ -1,12 +1,22 @@
 import { useState, useEffect } from "react";
 import { GOLD } from "../constants.js";
-import { useInfractions, useGmenRequests, useLateArrivals, useBellSchedule, currentPeriodInfo, todayScheduleKey, noSchoolDay } from "../supabase.js";
+import { useInfractions, useGmenPullRequests, useLateArrivals, useBellSchedule, currentPeriodInfo, todayScheduleKey, noSchoolDay } from "../supabase.js";
 
 function fmtDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 }
 function fmtTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+// gmen_pull_requests stores one denormalized student_name, not separate
+// first/last fields — split it for the avatar initials and first-name label.
+function pullInitials(name) {
+  const parts = (name || "").trim().split(/\s+/);
+  return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : (parts[0]?.[0] || "?").toUpperCase();
+}
+function firstNameOf(name) {
+  return (name || "").trim().split(/\s+/)[0] || "";
 }
 
 function toMin(hhmm) {
@@ -343,7 +353,7 @@ function UnreadMessages({ messaging, staffList = [], user, onNavigate }) {
 
 export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user, messaging, staffList, onNavigate }) {
   const { infractions } = useInfractions();
-  const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenRequests();
+  const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenPullRequests();
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
   const { periodsToday } = useBellSchedule();
   const [now, setNow] = useState({ date: fmtDate(), time: fmtTime() });
@@ -361,8 +371,8 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
   // Don't run live period tracking on a day with no classes.
   const periodInfo = offDay ? null : currentPeriodInfo(periodsToday);
 
-  const pending = gmenRequests.filter(r => !r.arrived);
-  const arrived = gmenRequests.filter(r => r.arrived);
+  const pending = gmenRequests.filter(r => r.status === "requested" || r.status === "sent");
+  const arrived = gmenRequests.filter(r => r.status === "arrived");
 
   async function markArrived(id) {
     await markArrivedDB(id);
@@ -490,7 +500,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 800, fontSize: "0.85rem", color: "#000",
               }}>
-                {r.student.firstName[0]}{r.student.lastName[0]}
+                {pullInitials(r.student_name)}
               </div>
             ))}
             {pending.length > 4 && (
@@ -502,13 +512,13 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
             {pending.map(r => (
               <button key={r.id} className="btn btn-primary btn-sm" onClick={() => markArrived(r.id)}>
-                ✓ {r.student.firstName} Arrived
+                ✓ {firstNameOf(r.student_name)} Arrived
               </button>
             ))}
           </div>
           {arrived.length > 0 && (
             <div className="mt1 text-muted" style={{ fontSize: "0.75rem" }}>
-              {arrived.length} arrived: {arrived.map(r => r.student.firstName).join(", ")}
+              {arrived.length} arrived: {arrived.map(r => firstNameOf(r.student_name)).join(", ")}
             </div>
           )}
         </div>

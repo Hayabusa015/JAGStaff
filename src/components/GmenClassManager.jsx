@@ -295,6 +295,7 @@ export default function GmenClassManager({
   user, classes, enrollments, settings, addGmenClass, updateGmenClass,
   deleteGmenClass, toggleOpen, students, enroll, pendingChangeRequests,
   recordsForClass, hasSubmitted, submitAttendance,
+  pullsForStudent, markSent, declinePull,
 }) {
   const period = settings.active_period || 1;
   const myClass = classes.find(c => c.teacher_email === user?.email && c.grading_period === period);
@@ -390,6 +391,19 @@ export default function GmenClassManager({
     const entries = markableRoster.map(r => ({ studentId: r.student_id, status: statusFor(r.student_id) }));
     await submitAttendance(myClass.id, entries, user.email);
     setAttendanceSubmitting(false);
+  }
+
+  // A student on this roster was requested by another teacher's enrichment
+  // pull. Sending them confirms it and — in the same tap — records today's
+  // attendance as "pulled" from this class, so the teacher doesn't also
+  // have to remember to set that by hand later.
+  async function handleSendPull(pull) {
+    await markSent(pull.id, user.email);
+    await submitAttendance(myClass.id, [{ studentId: pull.student_id, status: "pulled" }], user.email);
+  }
+
+  async function handleDeclinePull(pull) {
+    await declinePull(pull.id);
   }
 
   function startEdit() {
@@ -586,6 +600,7 @@ export default function GmenClassManager({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
             {roster.map(e => {
               const previousClassName = e.previous_class_id ? classes.find(c => c.id === e.previous_class_id)?.class_name : null;
+              const pulls = e.student_id ? pullsForStudent(e.student_id).filter(p => p.status === "requested" || p.status === "sent") : [];
               return (
                 <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                   <div>
@@ -594,6 +609,21 @@ export default function GmenClassManager({
                     {previousClassName && (
                       <div style={{ fontSize: "0.72rem", color: "rgba(245,192,37,0.7)", marginTop: 1 }}>← moved from {previousClassName}</div>
                     )}
+                    {pulls.map(p => (
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", marginTop: 3 }}>
+                        <span className="tag tag-amber" style={{ fontSize: "0.68rem" }}>
+                          → {p.requested_by_name}{p.reason ? ` · ${p.reason}` : ""}
+                        </span>
+                        {p.status === "requested" ? (
+                          <>
+                            <button className="btn btn-primary btn-sm" style={{ padding: "0.1rem 0.55rem", fontSize: "0.7rem" }} onClick={() => handleSendPull(p)}>Send</button>
+                            <button className="btn btn-ghost btn-sm" style={{ padding: "0.1rem 0.55rem", fontSize: "0.7rem" }} onClick={() => handleDeclinePull(p)}>Decline</button>
+                          </>
+                        ) : (
+                          <span className="tag tag-green" style={{ fontSize: "0.68rem" }}>✓ Sent</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                   <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
                     Joined {e.assigned_at ? new Date(e.assigned_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}

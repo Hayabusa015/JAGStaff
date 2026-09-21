@@ -1739,6 +1739,80 @@ export function useGmenAttendance(period) {
   return { records, recordsForClass, hasSubmitted, submitAttendance };
 }
 
+// ─── G-Men Enrichment Pulls (Phase 3) ─────────────────────────────────────
+// Table: gmen_pull_requests — supersedes gmen_requests, which matched
+// students by comparing name strings and had no lifecycle beyond a single
+// "arrived" boolean. gmen_requests is left in place (table untouched,
+// dropping it is a later follow-up); nothing in the app calls this table's
+// old hook anymore after Phase 3.
+//
+// Scoped to today only, building-wide (not filtered by requester) — the
+// kiosk and the Dashboard widget both need everyone's pulls; each surface
+// that only wants its own filters requests itself (e.g. by
+// requested_by_email for a teacher's own board).
+export function useGmenPullRequests() {
+  const [requests, setRequests] = useState([]);
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    let active = true;
+    function load() {
+      supabase.from("gmen_pull_requests").select("*")
+        .eq("date", today).order("created_at", { ascending: true })
+        .then(({ data }) => { if (active && data) setRequests(data); });
+    }
+    load();
+    const ch = supabase.channel(`gmen_pull_requests_${today}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_pull_requests" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, [today]);
+
+  function pullsForStudent(studentId) {
+    return requests.filter(r => r.student_id === studentId);
+  }
+
+  async function requestPull({ studentId, studentName, requestedByEmail, requestedByName, toClassId, toRoom, reason }) {
+    if (!SUPABASE_READY || !supabase) return { data: null, error: { message: "Supabase not ready" } };
+    const { data, error } = await supabase.from("gmen_pull_requests").insert([{
+      student_id: studentId, student_name: studentName,
+      requested_by_email: requestedByEmail, requested_by_name: requestedByName,
+      to_class_id: toClassId || null, to_room: toRoom || null, reason: reason || null,
+    }]).select().single();
+    return { data, error };
+  }
+
+  // Home teacher confirms: the student is actually being sent. Attendance
+  // (status 'pulled') is written separately by the caller, since that needs
+  // the home teacher's own class id, which this hook doesn't know.
+  async function markSent(pullId, sentByEmail) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_pull_requests").update({
+      status: "sent", sent_by: sentByEmail, sent_at: new Date().toISOString(),
+    }).eq("id", pullId);
+  }
+
+  async function markArrived(pullId) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_pull_requests").update({
+      status: "arrived", arrived_at: new Date().toISOString(),
+    }).eq("id", pullId);
+  }
+
+  async function markNoShow(pullId) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_pull_requests").update({ status: "no_show" }).eq("id", pullId);
+  }
+
+  async function declinePull(pullId) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("gmen_pull_requests").update({ status: "declined" }).eq("id", pullId);
+  }
+
+  return { requests, pullsForStudent, requestPull, markSent, markArrived, markNoShow, declinePull };
+}
+
 // ─── Gradebook ───────────────────────────────────────────────────────────────
 export function useGradebook(teacherEmail) {
   const [assignments, setAssignments] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_ASSIGNMENTS : []);
