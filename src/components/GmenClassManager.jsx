@@ -135,6 +135,7 @@ export function GmenRosterImport({ classes, enrollments, addGmenClass, students,
         student_name: e.student_name,
         class_id: idByKey.get(e.classKey),
         grading_period: period,
+        choice_rank: "admin",
       })).filter(r => r.class_id);
       const { added, error } = await bulkEnrollGmen(rows);
       if (error) throw new Error(`Enrollment failed partway: ${error.message}. Classes already created were kept; re-running the import is safe.`);

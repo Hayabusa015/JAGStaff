@@ -1538,6 +1538,10 @@ export function useGmenEnrollments(period) {
   // the shared students list) to skip the lookup; otherwise it's resolved by
   // email. gmen_enrollments.student_id is nullable, so a student not yet on
   // the roster (or an unresolved lookup) still enrolls rather than failing.
+  // This is a direct, unchecked placement — a teacher or admin putting a
+  // specific student in a specific class. A student choosing their own class
+  // goes through enroll_gmen below instead, which is the one that enforces
+  // seats atomically and hides the teacher until after assignment.
   async function enroll(studentEmail, studentName, classId, gradingPeriod, studentId = null) {
     if (!SUPABASE_READY || !supabase) return { error: "Supabase not ready" };
     let resolvedId = studentId;
@@ -1548,9 +1552,38 @@ export function useGmenEnrollments(period) {
     const { data, error } = await supabase.from("gmen_enrollments").insert([{
       student_id: resolvedId,
       student_email: studentEmail, student_name: studentName,
-      class_id: classId, grading_period: gradingPeriod,
+      class_id: classId, grading_period: gradingPeriod, choice_rank: "admin",
     }]).select().single();
     return { data, error };
+  }
+
+  // Self-service signup: first choice, then second, then the period's
+  // Commons/overflow class — decided and written atomically inside the RPC,
+  // never by reading enrollments client-side (see gmen_claim_seat). Also
+  // backfills the student's email onto their roster row on a unique name
+  // match when they aren't found by email yet, so the ~300 students whose
+  // roster row predates emails don't need any separate fix-up step —
+  // signing up is what resolves it, once, the first time they do.
+  // profile: { givenName, familyName, fullName } — from user.user_metadata.
+  async function enrollGmen(choiceAId, choiceBId, profile = {}) {
+    if (!SUPABASE_READY || !supabase) return { data: null, error: { message: "Supabase not ready" } };
+    const { data, error } = await supabase.rpc("enroll_gmen", {
+      p_choice_a: choiceAId,
+      p_choice_b: choiceBId || null,
+      p_given_name: profile.givenName || null,
+      p_family_name: profile.familyName || null,
+      p_full_name: profile.fullName || null,
+    });
+    return { data: data?.[0] || null, error };
+  }
+
+  // Staff-only. Seeds every student with an email on file and no enrollment
+  // yet this period into the period's Commons/default class. Safe to run
+  // more than once — see gmen_seed_period's own comment.
+  async function seedPeriod() {
+    if (!SUPABASE_READY || !supabase) return { count: 0, error: { message: "Supabase not ready" } };
+    const { data, error } = await supabase.rpc("gmen_seed_period", { p_period: period });
+    return { count: data ?? 0, error };
   }
 
   async function unenroll(studentEmail, gradingPeriod) {
@@ -1582,7 +1615,7 @@ export function useGmenEnrollments(period) {
     return { data, error };
   }
 
-  return { enrollments, enroll, unenroll, seatCount, adminMoveStudent };
+  return { enrollments, enroll, enrollGmen, seedPeriod, unenroll, seatCount, adminMoveStudent };
 }
 
 // Bulk-enroll for the class roster import. Upsert with ignoreDuplicates

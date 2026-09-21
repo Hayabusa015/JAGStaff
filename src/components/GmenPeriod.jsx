@@ -174,7 +174,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { requests: gmenRequests, addRequest: addRequestDB, markArrived: markArrivedDB } = useGmenRequests();
   const { settings, setEnrollmentOpen, setActivePeriod, setPeriodEndDate } = useGmenSettings();
   const { classes, addGmenClass, updateGmenClass, deleteGmenClass, toggleOpen } = useGmenClasses();
-  const { enrollments, enroll, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
+  const { enrollments, enroll, seedPeriod, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
   const { changeRequests, requestChange, approveChange, denyChange } = useGmenChangeRequests();
   const { schedules } = useBellSchedule();
   const staffDirectory = useStaffDirectory(user);
@@ -421,6 +421,8 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           denyChange={denyChange}
           adminMoveStudent={adminMoveStudent}
           addGmenClass={addGmenClass}
+          updateGmenClass={updateGmenClass}
+          seedPeriod={seedPeriod}
           user={user}
           students={students}
           isAdmin={isAdmin}
@@ -491,7 +493,7 @@ function EnrollmentLinkBox({ appUrl }) {
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, user, students, isAdmin, staffDirectory }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, updateGmenClass, seedPeriod, user, students, isAdmin, staffDirectory }) {
   const [expandedClass, setExpandedClass] = useState(null);
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
@@ -506,6 +508,9 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
   const [moveSelections, setMoveSelections] = useState({}); // studentEmail → classId
   const [movingStudent, setMovingStudent] = useState(null);
   const [seedingDemo, setSeedingDemo] = useState(false);
+  const [settingDefault, setSettingDefault] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState(null); // { count } | { error }
   const { requestGmailToken, sendEmail } = useGmailSend();
   const period = settings.active_period || 1;
   const appUrl = window.location.origin;
@@ -541,6 +546,26 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
       await addGmenClass(cls);
     }
     setSeedingDemo(false);
+  }
+
+  // Marks cls as the period's Commons/overflow class, clearing whichever
+  // class previously held that spot — the DB only allows one per period.
+  async function handleSetDefault(cls) {
+    if (settingDefault) return;
+    setSettingDefault(true);
+    const current = classes.find(c => c.grading_period === period && c.is_default && c.id !== cls.id);
+    if (current) await updateGmenClass(current.id, { is_default: false });
+    await updateGmenClass(cls.id, { is_default: true });
+    setSettingDefault(false);
+  }
+
+  async function handleSeedPeriod() {
+    if (seeding) return;
+    setSeeding(true);
+    setSeedResult(null);
+    const { count, error } = await seedPeriod();
+    setSeeding(false);
+    setSeedResult(error ? { error: error.message } : { count });
   }
 
   async function handleApprove(id) {
@@ -670,6 +695,44 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Commons / Overflow Class ─────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Commons / Overflow Class — Period {period}</div>
+        <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.45)", marginBottom: "0.9rem", lineHeight: 1.5 }}>
+          Every student who doesn't sign up (or whose two choices are both full) lands here automatically.
+          Pick one class per period to hold that overflow — usually a large study hall.
+        </div>
+        {classes.filter(c => c.grading_period === period).length === 0 ? (
+          <div className="text-muted" style={{ fontSize: "0.85rem" }}>Add a class below first, then mark one as Commons.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "1rem" }}>
+            {classes.filter(c => c.grading_period === period).map(cls => (
+              <div key={cls.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.3rem 0" }}>
+                <span style={{ fontSize: "0.85rem" }}>{cls.class_name}{cls.is_default && <span className="tag tag-amber" style={{ marginLeft: "0.5rem" }}>🏠 Commons</span>}</span>
+                {!cls.is_default && (
+                  <button className="btn btn-ghost btn-sm" disabled={settingDefault} onClick={() => handleSetDefault(cls)}>Set as Commons</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.85rem" }}>
+          <button className="btn btn-primary btn-sm" disabled={seeding || !classes.some(c => c.grading_period === period && c.is_default)} onClick={handleSeedPeriod}>
+            {seeding ? "Seeding…" : "🌱 Seed All Students to Commons"}
+          </button>
+          <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>
+            Adds every student who has an email on file and isn't enrolled yet this period. Safe to run more than once.
+          </span>
+        </div>
+        {seedResult && (
+          <div className="mt1" style={{ fontSize: "0.82rem" }}>
+            {seedResult.error
+              ? <span className="text-red">⚠ {seedResult.error}</span>
+              : <span className="text-green">✓ {seedResult.count} student{seedResult.count !== 1 ? "s" : ""} added to Commons.</span>}
+          </div>
+        )}
       </div>
 
       {/* ── Grading Period End Dates ─────────────────────────────────────── */}
@@ -972,7 +1035,9 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
                     }}
                   >
                     <div style={{ flexGrow: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: "0.92rem", color: "#fff" }}>{cls.class_name}</div>
+                      <div style={{ fontWeight: 600, fontSize: "0.92rem", color: "#fff" }}>
+                        {cls.class_name}{cls.is_default && <span className="tag tag-amber" style={{ marginLeft: "0.5rem" }}>🏠 Commons</span>}
+                      </div>
                       <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)" }}>{cls.teacher_name}{cls.room ? ` · Room ${cls.room}` : ""}</div>
                     </div>
                     <div style={{ width: 100 }}>
