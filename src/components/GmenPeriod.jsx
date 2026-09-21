@@ -4,7 +4,7 @@ import { GOLD } from "../constants.js";
 import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
   useGmenChangeRequests, useGmenSettings, useGmailSend, useBellSchedule,
-  useStaffDirectory,
+  useStaffDirectory, useGmenAttendance,
 } from "../supabase.js";
 import GmenClassManager, { AddGmenClassForm, GmenRosterImport } from "./GmenClassManager.jsx";
 
@@ -178,6 +178,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { changeRequests, requestChange, approveChange, denyChange } = useGmenChangeRequests();
   const { schedules } = useBellSchedule();
   const staffDirectory = useStaffDirectory(user);
+  const { hasSubmitted: hasSubmittedAttendance, recordsForClass, submitAttendance } = useGmenAttendance(settings.active_period || 1);
 
   // G-Men is 4th period on Tue/Wed/Thu — pull its real time from the bell schedule
   const gmenBlock = (schedules?.twt || []).find(p => /g-?men/i.test(p.name));
@@ -220,9 +221,13 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
 
   if (kioskMode) return <KioskDisplay requests={gmenRequests} onClose={() => setKioskMode(false)} />;
 
+  // Red dot: it's a G-Men day, this teacher has a class, and today's
+  // attendance for it hasn't been submitted yet.
+  const needsAttendance = isGmenDay && !!myClass && !hasSubmittedAttendance(myClass.id);
+
   const subTabs = [
     { key: "today", label: "Today" },
-    { key: "myclass", label: "My Class" },
+    { key: "myclass", label: "My Class", badge: needsAttendance },
     { key: "admin", label: `Admin${pendingChanges.length > 0 ? ` (${pendingChanges.length})` : ""}` },
   ];
 
@@ -284,7 +289,16 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
             key={t.key}
             className={`btn btn-sm ${subTab === t.key ? "btn-primary" : "btn-ghost"}`}
             onClick={() => setSubTab(t.key)}
-          >{t.label}</button>
+            style={{ position: "relative" }}
+          >
+            {t.label}
+            {t.badge && (
+              <span title="Attendance not submitted yet" style={{
+                position: "absolute", top: 2, right: 2, width: 8, height: 8,
+                borderRadius: "50%", background: "#ef4444",
+              }} />
+            )}
+          </button>
         ))}
       </div>
 
@@ -404,6 +418,9 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           enroll={enroll}
           requestChange={requestChange}
           pendingChangeRequests={changeRequests}
+          recordsForClass={recordsForClass}
+          hasSubmitted={hasSubmittedAttendance}
+          submitAttendance={submitAttendance}
         />
       )}
 
@@ -423,6 +440,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           addGmenClass={addGmenClass}
           updateGmenClass={updateGmenClass}
           seedPeriod={seedPeriod}
+          hasSubmittedAttendance={hasSubmittedAttendance}
           user={user}
           students={students}
           isAdmin={isAdmin}
@@ -493,7 +511,7 @@ function EnrollmentLinkBox({ appUrl }) {
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, updateGmenClass, seedPeriod, user, students, isAdmin, staffDirectory }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, updateGmenClass, seedPeriod, hasSubmittedAttendance, user, students, isAdmin, staffDirectory }) {
   const [expandedClass, setExpandedClass] = useState(null);
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
@@ -695,6 +713,36 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Attendance Today ─────────────────────────────────────────────── */}
+      <div className="card">
+        <div className="section-title">Attendance Today — {todayName()}</div>
+        {!["Tuesday", "Wednesday", "Thursday"].includes(todayName()) ? (
+          <div className="text-muted" style={{ fontSize: "0.85rem" }}>G-Men doesn't meet today — nothing to check.</div>
+        ) : (() => {
+          const periodClasses = classes.filter(c => c.grading_period === period);
+          const notSubmitted = periodClasses.filter(c => !hasSubmittedAttendance(c.id));
+          if (periodClasses.length === 0) {
+            return <div className="text-muted" style={{ fontSize: "0.85rem" }}>No classes set up for this period yet.</div>;
+          }
+          if (notSubmitted.length === 0) {
+            return <div className="text-green" style={{ fontSize: "0.85rem" }}>✓ Every class has submitted attendance today.</div>;
+          }
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+              <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.45)", marginBottom: "0.3rem" }}>
+                {notSubmitted.length} of {periodClasses.length} class{periodClasses.length !== 1 ? "es" : ""} haven't submitted yet:
+              </div>
+              {notSubmitted.map(c => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.85rem", padding: "0.25rem 0" }}>
+                  <span>{c.class_name}</span>
+                  <span className="text-muted">{c.teacher_name}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Commons / Overflow Class ─────────────────────────────────────── */}

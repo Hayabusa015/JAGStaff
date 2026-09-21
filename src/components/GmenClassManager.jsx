@@ -17,6 +17,18 @@ import { buildImportPlan } from "./gmenImport.js";
 const DAYS = ["", "Tuesday", "Wednesday", "Thursday"];
 const REQUEST_DAYS = ["Tuesday", "Wednesday", "Thursday"];
 
+// G-Men only meets Tue/Wed/Thu — attendance has nothing to do on Mon/Fri.
+function isGmenDayToday() {
+  const day = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  return REQUEST_DAYS.includes(day);
+}
+
+const ATTENDANCE_STATUSES = [
+  { key: "present", label: "P", color: "#22c55e" },
+  { key: "absent", label: "A", color: "#ef4444" },
+  { key: "tardy", label: "T", color: "#f59e0b" },
+];
+
 export function AddGmenClassForm({ addGmenClass, period, staffDirectory }) {
   const blank = { teacherEmail: "", class_name: "", room: "", request_day: "", max_seats: 25, description: "" };
   const [form, setForm] = useState(blank);
@@ -282,6 +294,7 @@ function SetupMyClassForm({ addGmenClass, period, user }) {
 export default function GmenClassManager({
   user, classes, enrollments, settings, addGmenClass, updateGmenClass,
   deleteGmenClass, toggleOpen, students, enroll, pendingChangeRequests,
+  recordsForClass, hasSubmitted, submitAttendance,
 }) {
   const period = settings.active_period || 1;
   const myClass = classes.find(c => c.teacher_email === user?.email && c.grading_period === period);
@@ -293,8 +306,35 @@ export default function GmenClassManager({
   const [addSearch, setAddSearch] = useState("");
   const [addBusy, setAddBusy] = useState(false);
   const [addErr, setAddErr] = useState("");
+  const [copyingPrevious, setCopyingPrevious] = useState(false);
+  const [copyErr, setCopyErr] = useState("");
+  const [attendanceEdits, setAttendanceEdits] = useState({}); // studentId -> status, local taps only
+  const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
+
+  async function handleCopyPrevious(prevCls) {
+    if (copyingPrevious) return;
+    setCopyingPrevious(true);
+    setCopyErr("");
+    const { error } = await addGmenClass({
+      class_name: prevCls.class_name,
+      teacher_email: user.email,
+      teacher_name: user.name || user.email,
+      room: prevCls.room || "",
+      request_day: prevCls.request_day || null,
+      max_seats: prevCls.max_seats,
+      description: prevCls.description || "",
+      grading_period: period,
+      is_open: true,
+    });
+    setCopyingPrevious(false);
+    if (error) setCopyErr(error.message);
+  }
 
   if (!myClass) {
+    const previousClass = classes
+      .filter(c => c.teacher_email === user?.email && c.grading_period !== period)
+      .sort((a, b) => b.grading_period - a.grading_period)[0];
+
     return (
       <div className="card">
         <div className="section-title">Set Up Your G-Men Class — Period {period}</div>
@@ -302,6 +342,21 @@ export default function GmenClassManager({
           You haven't picked a class to run this grading period yet. Once created, open it for enrollment
           from here (or from Admin) so students can sign up.
         </div>
+        {previousClass && (
+          <div style={{
+            background: "rgba(245,192,37,0.05)", border: `1px solid ${GOLD}33`, borderRadius: 8,
+            padding: "0.75rem 1rem", marginBottom: "1rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem",
+          }}>
+            <span style={{ fontSize: "0.85rem" }}>
+              You ran <strong>{previousClass.class_name}</strong> in Period {previousClass.grading_period} — copy it forward?
+            </span>
+            <button className="btn btn-primary btn-sm" disabled={copyingPrevious} onClick={() => handleCopyPrevious(previousClass)}>
+              {copyingPrevious ? "Copying…" : "📋 Copy to This Period"}
+            </button>
+          </div>
+        )}
+        {copyErr && <p className="text-red mb1" style={{ fontSize: "0.8rem" }}>{copyErr}</p>}
         <SetupMyClassForm addGmenClass={addGmenClass} period={period} user={user} />
       </div>
     );
@@ -312,6 +367,30 @@ export default function GmenClassManager({
   const full = seats >= myClass.max_seats;
   const incoming = pendingChangeRequests.filter(r => r.to_class_id === myClass.id && r.status === "pending");
   const outgoing = pendingChangeRequests.filter(r => r.from_class_id === myClass.id && r.status === "pending");
+
+  // Attendance — see the "Attendance" card below. Local taps take priority
+  // over an already-saved status so a resubmit reflects exactly what's on
+  // screen; falling through to today's saved record, then "present" by
+  // default, is what makes marking a full roster present a zero-tap action.
+  const isGmenDay = isGmenDayToday();
+  const existingAttendance = recordsForClass(myClass.id);
+  const existingStatusByStudent = Object.fromEntries(existingAttendance.map(r => [r.student_id, r.status]));
+  const attendanceSubmitted = hasSubmitted(myClass.id);
+  const markableRoster = roster.filter(r => r.student_id);
+
+  function statusFor(studentId) {
+    return attendanceEdits[studentId] ?? existingStatusByStudent[studentId] ?? "present";
+  }
+  function setAttendanceStatus(studentId, status) {
+    setAttendanceEdits(prev => ({ ...prev, [studentId]: status }));
+  }
+  async function handleSubmitAttendance() {
+    if (attendanceSubmitting || markableRoster.length === 0) return;
+    setAttendanceSubmitting(true);
+    const entries = markableRoster.map(r => ({ studentId: r.student_id, status: statusFor(r.student_id) }));
+    await submitAttendance(myClass.id, entries, user.email);
+    setAttendanceSubmitting(false);
+  }
 
   function startEdit() {
     setEditForm({
@@ -422,6 +501,45 @@ export default function GmenClassManager({
         )}
       </div>
 
+      {/* Attendance — the whole point is that this takes under 15 seconds */}
+      {isGmenDay && (
+        <div className="card mb2">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.6rem" }}>
+            <div className="section-title" style={{ margin: 0 }}>Attendance — Today</div>
+            {attendanceSubmitted && <span className="tag tag-green">✓ Submitted</span>}
+          </div>
+          {markableRoster.length === 0 ? (
+            <div className="text-muted" style={{ fontSize: "0.85rem" }}>No students to mark yet.</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.1rem" }}>
+                {markableRoster.map(e => (
+                  <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.35rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span style={{ fontSize: "0.86rem", fontWeight: 500 }}>{e.student_name}</span>
+                    <div style={{ display: "flex", gap: "0.35rem" }}>
+                      {ATTENDANCE_STATUSES.map(s => {
+                        const active = statusFor(e.student_id) === s.key;
+                        return (
+                          <button key={s.key} onClick={() => setAttendanceStatus(e.student_id, s.key)} title={s.key} style={{
+                            width: 30, padding: "0.25rem 0", borderRadius: 6, fontSize: "0.75rem", fontWeight: 800,
+                            cursor: "pointer", border: active ? "none" : "1px solid rgba(255,255,255,0.15)",
+                            background: active ? s.color : "transparent",
+                            color: active ? "#000" : "rgba(255,255,255,0.5)",
+                          }}>{s.label}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="btn btn-primary btn-sm mt1" disabled={attendanceSubmitting} onClick={handleSubmitAttendance}>
+                {attendanceSubmitting ? "Saving…" : attendanceSubmitted ? "Update Attendance" : `Submit Attendance (${markableRoster.length})`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Pending swap requests touching this class */}
       {(incoming.length > 0 || outgoing.length > 0) && (
         <div className="card mb2">
@@ -466,17 +584,23 @@ export default function GmenClassManager({
           <div className="text-muted" style={{ fontSize: "0.85rem" }}>No students enrolled yet.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-            {roster.map(e => (
-              <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{e.student_name}</div>
-                  <div className="text-muted" style={{ fontSize: "0.75rem" }}>{e.student_email}</div>
+            {roster.map(e => {
+              const previousClassName = e.previous_class_id ? classes.find(c => c.id === e.previous_class_id)?.class_name : null;
+              return (
+                <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{e.student_name}</div>
+                    <div className="text-muted" style={{ fontSize: "0.75rem" }}>{e.student_email}</div>
+                    {previousClassName && (
+                      <div style={{ fontSize: "0.72rem", color: "rgba(245,192,37,0.7)", marginTop: 1 }}>← moved from {previousClassName}</div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
+                    Joined {e.assigned_at ? new Date(e.assigned_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                  </span>
                 </div>
-                <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
-                  Joined {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -1681,6 +1681,64 @@ export function useGmenChangeRequests() {
   return { changeRequests, requestChange, approveChange, denyChange };
 }
 
+// ─── G-Men Attendance (Phase 2) ───────────────────────────────────────────
+// Table: gmen_attendance — one row per student per day, whichever class
+// actually marks them (see the migration's own comment for why). Scoped to
+// "today" and the active grading period — the only window either a
+// teacher's own roster or the admin compliance view ever needs. "Today" is
+// computed from the browser's local calendar day (not UTC) and sent
+// explicitly on every write, so what gets queried always matches what got
+// stored regardless of the Postgres server's own timezone.
+export function useGmenAttendance(period) {
+  const [records, setRecords] = useState([]);
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase || !period) return;
+    let active = true;
+    function load() {
+      supabase.from("gmen_attendance").select("*")
+        .eq("grading_period", period).eq("date", today)
+        .then(({ data }) => { if (active && data) setRecords(data); });
+    }
+    load();
+    const ch = supabase.channel(`gmen_attendance_${period}_${today}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmen_attendance",
+        filter: `grading_period=eq.${period}` }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, [period, today]);
+
+  function recordsForClass(classId) {
+    return records.filter(r => r.class_id === classId);
+  }
+
+  // "Submitted" means at least one record exists for that class today —
+  // the whole roster is written in one batch, so partial submission isn't
+  // a state this needs to represent.
+  function hasSubmitted(classId) {
+    return records.some(r => r.class_id === classId);
+  }
+
+  // entries: [{ studentId, status }]. One upsert for the whole roster — the
+  // point of "one Submit stamps the whole roster in a single batch write."
+  // Re-submitting (a correction) overwrites in place via the (date,
+  // student_id) unique constraint rather than creating duplicate rows.
+  async function submitAttendance(classId, entries, markedByEmail) {
+    if (!SUPABASE_READY || !supabase) return { error: { message: "Supabase not ready" } };
+    if (!entries.length) return { error: null };
+    const rows = entries.map(e => ({
+      student_id: e.studentId, class_id: classId, grading_period: period,
+      status: e.status, marked_by: markedByEmail, date: today,
+    }));
+    const { error } = await supabase.from("gmen_attendance")
+      .upsert(rows, { onConflict: "date,student_id" });
+    return { error };
+  }
+
+  return { records, recordsForClass, hasSubmitted, submitAttendance };
+}
+
 // ─── Gradebook ───────────────────────────────────────────────────────────────
 export function useGradebook(teacherEmail) {
   const [assignments, setAssignments] = useState(() => !SUPABASE_READY ? SEED_GRADEBOOK_ASSIGNMENTS : []);
