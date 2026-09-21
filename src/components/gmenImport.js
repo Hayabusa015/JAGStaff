@@ -17,6 +17,7 @@ const H = {
   seats:   ["max seats", "seats", "capacity", "max"],
 };
 const STALE = ["login", "modified", "updated", "seen", "parent", "guardian"];
+const VALID_DAYS = ["Tuesday", "Wednesday", "Thursday"];
 
 function findCol(headers, patterns, avoid = STALE) {
   for (const p of patterns) {
@@ -58,13 +59,27 @@ function splitFullName(raw) {
   return { first: parts[0], last: parts.slice(1).join(" ") };
 }
 
+// "tuesday" / " Thursday " -> canonical "Tuesday" / "Thursday"; anything else
+// (blank, "TWTh", a typo) becomes null rather than tripping the DB's
+// request_day check constraint, which only accepts those three values or null.
+function normalizeDay(raw) {
+  const v = (raw || "").trim();
+  if (!v) return null;
+  return VALID_DAYS.find(d => d.toLowerCase() === v.toLowerCase()) || null;
+}
+
 const normName = (f, l) => `${(f || "").trim()} ${(l || "").trim()}`.trim().toLowerCase();
 const normKey = (s) => (s || "").trim().toLowerCase();
 
-// rows: string[][] from parseCSV. rosterStudents: [{firstName,lastName,studentEmail}]
+// rows: string[][] from parseCSV. rosterStudents: [{id,firstName,lastName,studentEmail}]
 // existingClasses: gmen_classes rows for the CURRENT period only.
 // existingEnrollments: gmen_enrollments rows for the current period.
-export function buildImportPlan({ headers, rows, rosterStudents, existingClasses, existingEnrollments, period }) {
+// staffDirectory: [{email,name}] — required to create a class, since
+// gmen_classes.teacher_email is NOT NULL. A class whose teacher can't be
+// matched here is never silently created with a fabricated email; every
+// student destined for it is skipped instead, with a reason that says to
+// add the class manually with a real teacher and re-run the import.
+export function buildImportPlan({ headers, rows, rosterStudents, existingClasses, existingEnrollments, staffDirectory = [], period }) {
   const m = mapClassRosterHeaders(headers);
   if (m.klass === -1) {
     return { error: "No class-name column found. The sheet needs a column like \"Class\" or \"Class Name\"." };
@@ -73,7 +88,7 @@ export function buildImportPlan({ headers, rows, rosterStudents, existingClasses
     return { error: "No student columns found. Include a Student Name (or First/Last Name) or Student Email column." };
   }
 
-  // Roster lookup: full name -> email (only names that appear exactly once,
+  // Roster lookup: full name -> student (only names that appear exactly once,
   // so an ambiguous duplicate name never silently enrolls the wrong kid).
   const byName = new Map();
   const dupNames = new Set();
@@ -83,13 +98,24 @@ export function buildImportPlan({ headers, rows, rosterStudents, existingClasses
     if (byName.has(k)) { dupNames.add(k); byName.delete(k); }
     else if (!dupNames.has(k)) byName.set(k, s);
   }
+  // Roster lookup by email too, so a row with its own email column still
+  // resolves student_id — not just students matched by name.
+  const byEmail = new Map();
+  for (const s of rosterStudents) {
+    if (s.studentEmail) byEmail.set(normKey(s.studentEmail), s);
+  }
+  // Staff lookup: exact, case-insensitive full-name match only. A sheet's
+  // "Mr. Walker" won't match a directory's "Greg Walker" — that's deliberate:
+  // failing safe (skip + explain) beats guessing which real teacher was meant.
+  const staffByName = new Map(staffDirectory.map(s => [normKey(s.name), s]));
 
   const classByKey = new Map(existingClasses.map(c => [normKey(c.class_name), c]));
   const enrolledEmails = new Set(existingEnrollments.map(e => normKey(e.student_email)));
 
   const classesToCreate = new Map(); // key -> class fields
-  const enrollments = [];            // { classKey, student_email, student_name }
-  const skipped = { alreadyEnrolled: [], noRosterMatch: [], ambiguousName: [], missingFields: [], duplicateInSheet: [] };
+  const blockedClasses = new Map();  // key -> reason no class could be registered
+  const enrollments = [];            // { classKey, student_email, student_name, student_id }
+  const skipped = { alreadyEnrolled: [], noRosterMatch: [], ambiguousName: [], missingFields: [], duplicateInSheet: [], teacherNotFound: [] };
   const seenInSheet = new Set();
 
   rows.forEach((r, idx) => {
@@ -117,7 +143,7 @@ export function buildImportPlan({ headers, rows, rosterStudents, existingClasses
       email = normKey(match.studentEmail);
       displayName = `${match.firstName} ${match.lastName}`;
     } else if (!displayName) {
-      const match = rosterStudents.find(s => normKey(s.studentEmail) === email);
+      const match = byEmail.get(email);
       displayName = match ? `${match.firstName} ${match.lastName}` : email.split("@")[0];
     }
 
@@ -126,21 +152,38 @@ export function buildImportPlan({ headers, rows, rosterStudents, existingClasses
 
     if (enrolledEmails.has(email)) { skipped.alreadyEnrolled.push(`${displayName} is already enrolled this period`); return; }
 
-    // Register the class (create if it doesn't exist for this period).
-    if (!classByKey.has(classKey) && !classesToCreate.has(classKey)) {
-      classesToCreate.set(classKey, {
-        class_name: className,
-        teacher_name: m.teacher >= 0 ? (r[m.teacher] || "").trim() : "",
-        teacher_email: null,
-        room: m.room >= 0 ? (r[m.room] || "").trim() : "",
-        description: "",
-        grading_period: period,
-        request_day: m.day >= 0 ? (r[m.day] || "").trim() : "",
-        max_seats: m.seats >= 0 ? Math.max(1, parseInt(r[m.seats], 10) || 0) : 0, // 0 = fill in after counting
-        is_open: true,
-      });
+    // Register the class (create if it doesn't exist for this period). A new
+    // class needs a real teacher_email — the DB requires one — so resolve it
+    // against the staff directory before ever adding to classesToCreate.
+    if (!classByKey.has(classKey) && !classesToCreate.has(classKey) && !blockedClasses.has(classKey)) {
+      const teacherNameRaw = m.teacher >= 0 ? (r[m.teacher] || "").trim() : "";
+      const staffMatch = teacherNameRaw ? staffByName.get(normKey(teacherNameRaw)) : undefined;
+      if (!staffMatch) {
+        blockedClasses.set(classKey, teacherNameRaw
+          ? `"${teacherNameRaw}" wasn't found in the staff directory`
+          : "no Teacher column matching a name in the staff directory");
+      } else {
+        classesToCreate.set(classKey, {
+          class_name: className,
+          teacher_name: staffMatch.name,
+          teacher_email: staffMatch.email,
+          room: m.room >= 0 ? (r[m.room] || "").trim() : "",
+          description: "",
+          grading_period: period,
+          request_day: normalizeDay(m.day >= 0 ? r[m.day] : ""),
+          max_seats: m.seats >= 0 ? Math.max(1, parseInt(r[m.seats], 10) || 0) : 0, // 0 = fill in after counting
+          is_open: true,
+        });
+      }
     }
-    enrollments.push({ classKey, student_email: email, student_name: displayName });
+
+    if (blockedClasses.has(classKey)) {
+      skipped.teacherNotFound.push(`Row ${rowNo}: ${displayName} — class "${className}" needs a real teacher (${blockedClasses.get(classKey)}). Add it manually first, then re-run the import.`);
+      return;
+    }
+
+    const studentId = byEmail.get(email)?.id || null;
+    enrollments.push({ classKey, student_email: email, student_name: displayName, student_id: studentId });
   });
 
   // Any created class with no explicit seat count gets head-count + headroom.

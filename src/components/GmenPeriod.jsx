@@ -4,8 +4,9 @@ import { GOLD } from "../constants.js";
 import {
   useGmenRequests, useGmenClasses, useGmenEnrollments,
   useGmenChangeRequests, useGmenSettings, useGmailSend, useBellSchedule,
+  useStaffDirectory,
 } from "../supabase.js";
-import { AddGmenClassForm, GmenRosterImport } from "./GmenClassManager.jsx";
+import GmenClassManager, { AddGmenClassForm, GmenRosterImport } from "./GmenClassManager.jsx";
 
 function fmt12(hhmm) {
   if (!hhmm || !hhmm.includes(":")) return "";
@@ -176,6 +177,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
   const { enrollments, enroll, seatCount, adminMoveStudent } = useGmenEnrollments(settings.active_period || 1);
   const { changeRequests, requestChange, approveChange, denyChange } = useGmenChangeRequests();
   const { schedules } = useBellSchedule();
+  const staffDirectory = useStaffDirectory(user);
 
   // G-Men is 4th period on Tue/Wed/Thu — pull its real time from the bell schedule
   const gmenBlock = (schedules?.twt || []).find(p => /g-?men/i.test(p.name));
@@ -422,6 +424,7 @@ export default function GmenPeriod({ setAlerts, students, user, isAdmin }) {
           user={user}
           students={students}
           isAdmin={isAdmin}
+          staffDirectory={staffDirectory}
         />
       )}
     </div>
@@ -488,7 +491,7 @@ function EnrollmentLinkBox({ appUrl }) {
   );
 }
 
-function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, user, students, isAdmin }) {
+function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollmentOpen, setActivePeriod, setPeriodEndDate, approveChange, denyChange, adminMoveStudent, addGmenClass, user, students, isAdmin, staffDirectory }) {
   const [expandedClass, setExpandedClass] = useState(null);
   const [working, setWorking] = useState(null);
   const [pushState, setPushState] = useState("idle"); // idle | confirm | sending | done | error
@@ -915,7 +918,7 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
       {/* ── Build classes: manual add + sheet import ─────────────────────── */}
       <div className="card">
         <div className="section-title">Add a Class — Period {period}</div>
-        <AddGmenClassForm addGmenClass={addGmenClass} period={period} />
+        <AddGmenClassForm addGmenClass={addGmenClass} period={period} staffDirectory={staffDirectory} />
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", margin: "1.1rem 0 0.9rem" }} />
         <div className="section-title">Import Classes &amp; Students from a Sheet</div>
         <GmenRosterImport
@@ -923,6 +926,7 @@ function AdminPanel({ settings, classes, enrollments, changeRequests, setEnrollm
           enrollments={enrollments}
           addGmenClass={addGmenClass}
           students={students}
+          staffDirectory={staffDirectory}
           period={period}
         />
       </div>

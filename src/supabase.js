@@ -1534,9 +1534,19 @@ export function useGmenEnrollments(period) {
     return () => supabase.removeChannel(ch);
   }, [period]);
 
-  async function enroll(studentEmail, studentName, classId, gradingPeriod) {
+  // studentId is optional — pass it when the caller already has it (e.g. from
+  // the shared students list) to skip the lookup; otherwise it's resolved by
+  // email. gmen_enrollments.student_id is nullable, so a student not yet on
+  // the roster (or an unresolved lookup) still enrolls rather than failing.
+  async function enroll(studentEmail, studentName, classId, gradingPeriod, studentId = null) {
     if (!SUPABASE_READY || !supabase) return { error: "Supabase not ready" };
+    let resolvedId = studentId;
+    if (!resolvedId) {
+      const { data: stu } = await supabase.from("students").select("id").eq("student_email", studentEmail).maybeSingle();
+      resolvedId = stu?.id || null;
+    }
     const { data, error } = await supabase.from("gmen_enrollments").insert([{
+      student_id: resolvedId,
       student_email: studentEmail, student_name: studentName,
       class_id: classId, grading_period: gradingPeriod,
     }]).select().single();
