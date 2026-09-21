@@ -104,18 +104,23 @@ once succeeded. Four blockers:
    imported (`GmenPeriod.jsx:8`). Clicking "My Class" throws a ReferenceError.
    The teacher roster tab does not exist.
 
-### The roster email gap
+### The roster email gap — resolved by the login itself, not an export
 
-Only **91 of 398** students have `students.student_email` populated. With Google
-sign-in the JWT email identifies the student fine, but it cannot be joined back
-to the roster for the other 307.
+Only **91 of 398** students have `students.student_email` populated. This is
+**not** a launch blocker requiring an external data export: Google sign-in
+hands the client the student's real school email and their Google display
+name at the moment they log in, which is exactly what's needed to match them
+to their existing (email-less) roster row and backfill it — no SIS export,
+no manual "which of these is you?" step. `enroll_gmen` in Phase 1 does this
+backfill inline, on first signup, for exactly the students who need it.
 
 There is already a solved-once pattern for this: `syncFromClassroom` at
 `src/supabase.js:1875-1895` matches by name against students with a null email
 and backfills, specifically to avoid creating duplicates. Its comment documents
 a past incident where ~80 students ended up duplicated (one row with a grade and
 no email, one with an email and no grade) and showed up twice in the hall-pass
-kiosk. **Reuse that pattern. Do not write a second one.**
+kiosk. **Reuse that pattern's fail-safe shape (unique match or refuse) — see
+`enroll_gmen`'s backfill branch in Phase 1.**
 
 ### Useful live schema facts
 
@@ -230,7 +235,13 @@ begin
   return v_taken < v_max;
 end $$;
 
-create or replace function public.enroll_gmen(p_choice_a uuid, p_choice_b uuid default null)
+-- p_given_name / p_family_name / p_full_name come from the Google profile
+-- (user.user_metadata on the client) and exist solely to resolve the 307
+-- roster rows with no email on file yet — see "The roster email gap" above.
+create or replace function public.enroll_gmen(
+  p_choice_a uuid, p_choice_b uuid default null,
+  p_given_name text default null, p_family_name text default null, p_full_name text default null
+)
 returns table (class_id uuid, choice_rank text)
 language plpgsql security definer set search_path = public as $$
 declare
@@ -238,6 +249,7 @@ declare
   v_period int; v_open boolean;
   v_stu    public.students;
   v_pick   uuid; v_rank text;
+  v_first  text; v_last text; v_matches int;
 begin
   if coalesce(v_email, '') = '' then raise exception 'not signed in'; end if;
 
@@ -246,7 +258,31 @@ begin
   if not v_open then raise exception 'enrollment is closed'; end if;
 
   select * into v_stu from public.students where student_email = v_email;
-  if not found then raise exception 'not on the student roster'; end if;
+
+  -- Not matched by email yet: this is very likely one of the 307 students
+  -- whose roster row predates emails, not a student who doesn't belong on
+  -- the roster at all. Match by name against email-less rows and backfill,
+  -- once — but only on a unique match. An empty or ambiguous match still
+  -- fails below exactly like an unmatched email always would; this never
+  -- silently guesses which real student was meant (same fail-safe shape as
+  -- syncFromClassroom's name-match backfill).
+  if not found then
+    v_first := coalesce(nullif(trim(p_given_name), ''), split_part(trim(coalesce(p_full_name, '')), ' ', 1));
+    v_last  := coalesce(nullif(trim(p_family_name), ''), trim(substring(trim(coalesce(p_full_name, '')) from length(v_first) + 1)));
+
+    select count(*) into v_matches from public.students
+      where student_email is null
+        and lower(trim(first_name)) = lower(v_first) and lower(trim(last_name)) = lower(v_last);
+
+    if v_matches = 1 then
+      update public.students set student_email = v_email
+        where student_email is null
+          and lower(trim(first_name)) = lower(v_first) and lower(trim(last_name)) = lower(v_last)
+        returning * into v_stu;
+    end if;
+  end if;
+
+  if v_stu.id is null then raise exception 'not on the student roster'; end if;
 
   if public.gmen_claim_seat(p_choice_a, v_period) then
     v_pick := p_choice_a; v_rank := 'a';
@@ -272,10 +308,22 @@ begin
   return query select v_pick, v_rank;
 end $$;
 
-grant execute on function public.enroll_gmen(uuid, uuid) to authenticated;
+grant execute on function public.enroll_gmen(uuid, uuid, text, text, text) to authenticated;
 ```
 
-Call it from the client with `supabase.rpc('enroll_gmen', {...})`.
+Call it from the client with:
+```js
+supabase.rpc('enroll_gmen', {
+  p_choice_a: choiceA, p_choice_b: choiceB,
+  p_given_name: user.user_metadata?.given_name,
+  p_family_name: user.user_metadata?.family_name,
+  p_full_name: user.user_metadata?.full_name,
+})
+```
+Always send the name fields, even for students who already have an email on
+file — the function only uses them on the not-found branch, and it's the
+signup flow itself that resolves the 307-student gap, one student at a time,
+with no separate step for anyone to remember to run.
 
 ### Seeding and syncing
 
@@ -295,8 +343,10 @@ no-op. Run it at period start and whenever new students are imported.
   first. Submit calls `enroll_gmen` once.
 - Confirmation states the outcome honestly: first choice, second choice because
   the first filled, or placed in Commons because both filled.
-- If the signed-in email is not on the roster, say so with a "tell the office"
-  message rather than a generic failure.
+- If `enroll_gmen` still raises `'not on the student roster'` after the
+  backfill attempt (no roster row shares that student's name, or more than
+  one does), say so with a "tell the office" message rather than a generic
+  failure — this is now the genuinely rare case, not the common one.
 
 **Done when:** two students racing for the last seat produce one enrollment and
 one fallback, never two enrollments; a student with no choices left still ends
@@ -437,13 +487,20 @@ Three surfaces over the one table:
 
 ## 10. Known open items
 
-- **The 307 missing roster emails.** With Google sign-in this is a launch
-  prerequisite: a student whose roster row has no email cannot be matched by
-  `enroll_gmen`, which raises 'not on the student roster'. Cheapest fix is one
-  SIS export with an email column through the existing importer. Fallback, if
-  that export proves painful: a one-time "which of these is you?" match on first
-  sign-in that backfills the email, reusing the name-match pattern. **ASK the
-  user before building the fallback** — the export may already be on its way.
+- **The 307 missing roster emails — resolved, not a blocker.** Settled with the
+  user: since students authenticate with their Google school account,
+  `enroll_gmen` already receives their real email and Google display name at
+  signup and backfills the matching (email-less) roster row inline, on first
+  use, no SIS export or separate "which of these is you?" step required. This
+  is folded into `enroll_gmen`'s own design in Phase 1, not a prerequisite to
+  it. What's left to verify once it's built: (a) the roster's `first_name`/
+  `last_name` spelling actually matches students' Google display names closely
+  enough for exact-normalized-match to hit — a nickname or a hyphenated last
+  name typed differently in Google could still land a student in the
+  tell-the-office path; watch the "not on the student roster" rate on launch
+  day rather than assuming zero, and (b) two students who share a first+last
+  name both get correctly refused (ambiguous, `v_matches > 1`) rather than one
+  silently stealing the other's row.
 - **Duplicate RLS policies.** `gmen_enrollments` and `gmen_change_requests` each
   carry two near-identical student policies, one on `{public}` and one on
   `{authenticated}` (e.g. "student enroll" vs "student insert own"). Harmless
