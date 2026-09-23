@@ -395,3 +395,13 @@ export const SEED_CEU = [
   { id: "c5", name: "ODE Science Standards Update",        hours: 12, date: "2026-03" },
 ];
 
+
+// Parent-teacher conference reasons — keys must match the check constraint
+// on conference_bookings.reason.
+export const CONFERENCE_REASONS = [
+  { key: "check_in",   label: "Just a check-in" },
+  { key: "struggling", label: "Student is struggling" },
+  { key: "concerns",   label: "I have concerns" },
+  { key: "other",      label: "Other" },
+];
+export const CONFERENCE_TZ = "America/New_York";

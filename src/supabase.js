@@ -2645,3 +2645,119 @@ export function useCeuOpportunities(userEmail) {
 
   return { opportunities, addOpportunity, removeOpportunity, uploadFlyer };
 }
+
+// ─── App Settings (admin-controlled, building-wide) ─────────────────────────
+// Single row (id = 1). hidden_tabs lists school-zone tab keys hidden from
+// everyone; Admin Settings edits it.
+export function useAppSettings() {
+  const [hiddenTabs, setHiddenTabs] = useState(["infractions"]);
+
+  useEffect(() => {
+    if (!SUPABASE_READY || !supabase) return;
+    supabase.from("app_settings").select("hidden_tabs").eq("id", 1).maybeSingle().then(({ data }) => {
+      if (data?.hidden_tabs) setHiddenTabs(data.hidden_tabs);
+    });
+    const ch = supabase.channel("app_settings_ch")
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, ({ new: row }) => {
+        if (row?.hidden_tabs) setHiddenTabs(row.hidden_tabs);
+      }).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  async function saveHiddenTabs(next, userEmail) {
+    const prev = hiddenTabs;
+    setHiddenTabs(next);
+    if (!SUPABASE_READY || !supabase) return { ok: true };
+    const { error } = await supabase.from("app_settings").update({
+      hidden_tabs: next, updated_at: new Date().toISOString(), updated_by: userEmail,
+    }).eq("id", 1);
+    if (error) { setHiddenTabs(prev); return { ok: false, error: error.message }; }
+    return { ok: true };
+  }
+
+  return { hiddenTabs, saveHiddenTabs };
+}
+
+// ─── Parent-Teacher Conferences ─────────────────────────────────────────────
+// Staff side: a teacher's own slots with any booking attached. Parents book
+// through the public /conferences page via the conference_* RPCs and never
+// read these tables directly.
+export function useConferenceSlots(teacherEmail) {
+  const [slots, setSlots] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase || !teacherEmail) { setLoading(false); return; }
+    const { data } = await supabase.from("conference_slots")
+      .select("*, booking:conference_bookings(*)")
+      .eq("teacher_email", teacherEmail)
+      .order("starts_at");
+    setSlots((data || []).map(s => ({
+      ...s,
+      booking: Array.isArray(s.booking) ? (s.booking[0] || null) : s.booking,
+    })));
+    setLoading(false);
+  }, [teacherEmail]);
+
+  useEffect(() => {
+    load();
+    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
+    const ch = supabase.channel(`conferences_${teacherEmail}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conference_slots", filter: `teacher_email=eq.${teacherEmail}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conference_bookings" }, load)
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [teacherEmail, load]);
+
+  async function addSlots(rows) {
+    if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+    const { error } = await supabase.from("conference_slots")
+      .upsert(rows, { onConflict: "teacher_email,starts_at", ignoreDuplicates: true });
+    if (error) return { ok: false, error: error.message };
+    await load();
+    return { ok: true };
+  }
+
+  async function deleteSlot(id) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("conference_slots").delete().eq("id", id);
+    await load();
+  }
+
+  async function cancelBooking(id) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("conference_bookings").delete().eq("id", id);
+    await load();
+  }
+
+  return { slots, loading, addSlots, deleteSlot, cancelBooking, reload: load };
+}
+
+// Public (no sign-in) — thin wrappers over the SECURITY DEFINER RPCs.
+function rpcError(error) {
+  return (error?.message || "Something went wrong.").replace(/^.*?:\s*(?=[A-Z])/, "");
+}
+export async function listConferenceTeachers() {
+  if (!SUPABASE_READY || !supabase) return [];
+  const { data } = await supabase.rpc("conference_teachers");
+  return data || [];
+}
+export async function listOpenConferenceSlots(teacherEmail) {
+  if (!SUPABASE_READY || !supabase) return [];
+  const { data } = await supabase.rpc("conference_open_slots", { p_teacher_email: teacherEmail });
+  return data || [];
+}
+export async function bookConference(f) {
+  if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+  const { data, error } = await supabase.rpc("conference_book", {
+    p_slot_id: f.slotId, p_parent_name: f.parentName, p_parent_email: f.parentEmail,
+    p_parent_phone: f.parentPhone, p_student_name: f.studentName, p_reason: f.reason, p_notes: f.notes,
+  });
+  if (error) return { ok: false, error: rpcError(error) };
+  return { ok: true, token: data };
+}
+export async function cancelConference(token) {
+  if (!SUPABASE_READY || !supabase) return false;
+  const { data } = await supabase.rpc("conference_cancel", { p_token: token });
+  return !!data;
+}

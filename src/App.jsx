@@ -1,11 +1,11 @@
 import LoginScreen from "./components/LoginScreen.jsx";
 import SchoolLogo from "./components/SchoolLogo.jsx";
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal, LayoutDashboard, CalendarDays, MapPinned, AlertTriangle, Briefcase, Settings, LogOut, Command } from "lucide-react";
+import { Lock, Home, Calendar, DoorOpen, MessageSquare, MoreHorizontal, LayoutDashboard, CalendarDays, MapPinned, AlertTriangle, Briefcase, Users, Settings, LogOut, Command } from "lucide-react";
 import "./styles.css";
 import "./portal-theme.css";
 import { ALLOWED_DOMAIN, SESSION_TIMEOUT_MS, GOLD } from "./constants.js";
-import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging } from "./supabase.js";
+import { useAuth, useStudents, useWeeklyEvents, useTripRosters, SUPABASE_READY, isStaffEmail, useAdminStaff, useStaffMessaging, useAppSettings } from "./supabase.js";
 import Dashboard from "./components/Dashboard.jsx";
 import ErrorBoundary, { TabLoading } from "./components/ErrorBoundary.jsx";
 import StaffWelcomeTour, { tourDone } from "./components/StaffWelcomeTour.jsx";
@@ -26,6 +26,7 @@ const Requisition            = lazy(() => import("./components/Requisition.jsx")
 const FieldTrip              = lazy(() => import("./components/FieldTrip.jsx"));
 const StudentRoster          = lazy(() => import("./components/StudentRoster.jsx"));
 const Infractions            = lazy(() => import("./components/Infractions.jsx"));
+const Conferences            = lazy(() => import("./components/Conferences.jsx"));
 // Gradebook + AI Grader now live in the Classroom zone (see ClassroomApp).
 const ClassroomZone          = lazy(() => import("./classroom/ClassroomZone.jsx"));
 
@@ -36,10 +37,16 @@ const TABS = [
   { key: "gmen",        label: "G-Men Period",      Icon: Calendar },
   { key: "hallpass",    label: "Hall Pass",         Icon: DoorOpen },
   { key: "infractions", label: "Infractions",       Icon: AlertTriangle },
+  { key: "conferences", label: "Conferences",       Icon: Users },
   { key: "resources",   label: "Teacher Resources", Icon: Briefcase },
   { key: "messages",    label: "Messages",          Icon: MessageSquare },
   { key: "admin",       label: "⚙ Admin", adminOnly: true, Icon: Settings },
 ];
+
+// Tabs an admin may hide from Admin Settings. Dashboard and Admin always stay.
+const HIDEABLE_TABS = TABS
+  .filter(t => t.key !== "dashboard" && !t.adminOnly)
+  .map(({ key, label }) => ({ key, label }));
 
 // Primary tabs shown in the mobile bottom bar (4 + "More")
 const BOTTOM_NAV_TABS = [
@@ -199,6 +206,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const { staffList } = useAdminStaff();
   const messaging = useStaffMessaging(user?.email);
+  const { hiddenTabs } = useAppSettings();
 
   // ── Command palette (Cmd/Ctrl+K) ────────────────────────────────────────
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -276,11 +284,16 @@ export default function App() {
 
   const sharedProps = { user, students, weeklyEvents, tripRosters, alerts, setAlerts };
 
+  // Tabs visible to this user: admin-only tabs for admins, minus whatever an
+  // admin has hidden building-wide in Admin Settings.
+  const visibleTabs = TABS.filter(t => (!t.adminOnly || isAdmin) && !hiddenTabs.includes(t.key));
+  const tabHidden = (key) => hiddenTabs.includes(key);
+
   // Palette commands are cheap to rebuild every render (a few plain
   // objects) — no memoization needed, and it keeps this in sync with
   // isAdmin/zone without a dependency array to maintain.
   const paletteCommands = zone === "school" ? [
-    ...TABS.filter(t => !t.adminOnly || isAdmin).map(t => ({
+    ...visibleTabs.map(t => ({
       id: `tab-${t.key}`,
       section: "Go to",
       label: t.label.replace(/^⚙\s*/, ""), // strip the emoji glyph used in the tab bar itself
@@ -372,7 +385,7 @@ export default function App() {
         {/* Row 2: school tabs (the Classroom zone has its own SideNav) */}
         {zone === "school" && (
           <div className="nav-row2">
-            {TABS.filter(t => !t.adminOnly || isAdmin).map(t => (
+            {visibleTabs.map(t => (
               <button
                 key={t.key}
                 className={`tab-btn${tab === t.key ? " active" : ""}`}
@@ -423,13 +436,14 @@ export default function App() {
         <div key={tab} className="page-enter">
         <ErrorBoundary resetKey={`${tab}/${resourceTab}`}>
         <Suspense fallback={<TabLoading />}>
-        {tab === "dashboard"   && <Dashboard   {...sharedProps} messaging={messaging} staffList={staffList} onNavigate={setTab} />}
+        {tab === "dashboard"   && <Dashboard   {...sharedProps} messaging={messaging} staffList={staffList} onNavigate={setTab} showInfractions={!tabHidden("infractions")} />}
         {tab === "events"      && <WeeklyEvents weeklyEvents={weeklyEvents} addEvent={addEvent} removeEvent={removeEvent} />}
         {tab === "trips"       && <TripRoster   tripRosters={tripRosters} addRoster={addRoster} removeRoster={removeRoster} students={students} />}
         {tab === "gmen"        && <GmenPeriod   students={students} user={user} setAlerts={setAlerts} isAdmin={isAdmin} />}
-        {tab === "admin"       && isAdmin && <AdminSettings user={user} />}
+        {tab === "admin"       && isAdmin && <AdminSettings user={user} hideableTabs={HIDEABLE_TABS} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
-        {tab === "infractions" && <Infractions  students={students} user={user} />}
+        {tab === "infractions" && !tabHidden("infractions") && <Infractions  students={students} user={user} />}
+        {tab === "conferences" && !tabHidden("conferences") && <Conferences user={user} />}
         {tab === "messages"    && <StaffMessaging user={user} staffList={staffList} {...messaging} />}
 
         {tab === "resources" && (
@@ -472,7 +486,7 @@ export default function App() {
       {zone === "school" && isStaff && (
         <>
           <nav className="bottom-nav" aria-label="Main navigation">
-            {BOTTOM_NAV_TABS.map(t => {
+            {BOTTOM_NAV_TABS.filter(t => !tabHidden(t.key)).map(t => {
               if (t.key === "__more__") {
                 const moreActive = showMoreSheet ||
                   !BOTTOM_NAV_TABS.some(b => b.key === tab);
@@ -523,11 +537,8 @@ export default function App() {
             >
               <div className="more-sheet" onClick={e => e.stopPropagation()}>
                 <div className="more-sheet-handle" aria-hidden="true" />
-                {TABS
-                  .filter(t =>
-                    !BOTTOM_NAV_TABS.some(b => b.key === t.key) &&
-                    (!t.adminOnly || isAdmin)
-                  )
+                {visibleTabs
+                  .filter(t => !BOTTOM_NAV_TABS.some(b => b.key === t.key))
                   .map(t => (
                     <button
                       key={t.key}

@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" }
+    { "source": "/api/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
+    { "source": "/conferences", "destination": "/index.html" }
   ]
 }

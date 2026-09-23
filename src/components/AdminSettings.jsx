@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GOLD, ALLOWED_DOMAIN, SESSION_TIMEOUT_MS } from "../constants.js";
-import { useAdminStaff, useBellSchedule, todayScheduleKey, useStaffSignupCodeStatus, useStaffSignupAttempts, setStaffSignupCode } from "../supabase.js";
+import { useAdminStaff, useBellSchedule, todayScheduleKey, useStaffSignupCodeStatus, useStaffSignupAttempts, setStaffSignupCode, useAppSettings } from "../supabase.js";
 
 function fmt12(hhmm) {
   if (!hhmm || !hhmm.includes(":")) return "—";
@@ -10,7 +10,16 @@ function fmt12(hhmm) {
   return `${hr}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-export default function AdminSettings({ user }) {
+export default function AdminSettings({ user, hideableTabs = [] }) {
+  const { hiddenTabs, saveHiddenTabs } = useAppSettings();
+  const [tabErr, setTabErr] = useState("");
+
+  async function toggleTabHidden(key) {
+    setTabErr("");
+    const next = hiddenTabs.includes(key) ? hiddenTabs.filter(k => k !== key) : [...hiddenTabs, key];
+    const res = await saveHiddenTabs(next, user?.email);
+    if (!res.ok) setTabErr(res.error);
+  }
   const { staffList, toggleAdmin, addStaffMember, removeStaffMember } = useAdminStaff();
   const { schedules, saveSchedule } = useBellSchedule();
   const [schedTab, setSchedTab] = useState("twt"); // "twt" | "mf"
@@ -202,6 +211,48 @@ export default function AdminSettings({ user }) {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Tab Visibility */}
+      <div className="card">
+        <div className="section-title">Tab Visibility</div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
+          Hide tabs the building isn't using. Hidden tabs disappear for all staff (including admins); the data behind them is kept.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          {hideableTabs.map(t => {
+            const shown = !hiddenTabs.includes(t.key);
+            return (
+              <div key={t.key} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "0.45rem 0.75rem", background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)", borderRadius: 7,
+              }}>
+                <span style={{ fontWeight: 600, fontSize: "0.88rem", opacity: shown ? 1 : 0.5 }}>{t.label}</span>
+                <button
+                  onClick={() => toggleTabHidden(t.key)}
+                  title={shown ? "Hide this tab" : "Show this tab"}
+                  aria-label={`${t.label}: ${shown ? "shown" : "hidden"}`}
+                  aria-pressed={shown}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, border: "none",
+                    cursor: "pointer", position: "relative", transition: "background 0.2s",
+                    background: shown ? GOLD : "rgba(255,255,255,0.15)",
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", top: 2,
+                    left: shown ? "calc(100% - 20px)" : 2,
+                    width: 18, height: 18, borderRadius: "50%",
+                    background: shown ? "#000" : "rgba(255,255,255,0.6)",
+                    transition: "left 0.2s",
+                  }} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {tabErr && <p className="text-red mt1" style={{ fontSize: "0.8rem" }}>{tabErr}</p>}
       </div>
 
       {/* Staff Sign-Up Passcode */}

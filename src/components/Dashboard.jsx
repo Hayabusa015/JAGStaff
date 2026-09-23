@@ -351,7 +351,7 @@ function UnreadMessages({ messaging, staffList = [], user, onNavigate }) {
   );
 }
 
-export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user, messaging, staffList, onNavigate }) {
+export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters, user, messaging, staffList, onNavigate, showInfractions = true }) {
   const { infractions } = useInfractions();
   const { requests: gmenRequests, markArrived: markArrivedDB } = useGmenPullRequests();
   const { arrivals: lateArrivals, confirmArrival } = useLateArrivals();
@@ -534,7 +534,7 @@ export default function Dashboard({ alerts, setAlerts, weeklyEvents, tripRosters
           map[r.student_id].count++;
         });
         const watchList = Object.entries(map).filter(([, v]) => v.count >= ESCALATION_THRESHOLD).sort((a, b) => b[1].count - a[1].count);
-        if (!watchList.length) return null;
+        if (!showInfractions || !watchList.length) return null;
         return (
           <div className="card mb2" style={{ borderLeft: "4px solid #f97316" }}>
             <div className="flex items-center gap1 mb1">
