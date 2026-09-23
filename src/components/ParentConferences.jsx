@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import SchoolLogo from "./SchoolLogo.jsx";
 import { GOLD, CONFERENCE_REASONS, CONFERENCE_TZ } from "../constants.js";
-import { listConferenceTeachers, listOpenConferenceSlots, bookConference, cancelConference } from "../supabase.js";
+import { listConferenceTeachers, listOpenConferenceSlots, bookConference, cancelConference, sendConferenceConfirmation } from "../supabase.js";
 
 // Public page at /conferences — no sign-in. Parents pick a teacher, pick an
 // open time, and leave their details. A teacher's direct link is
@@ -27,7 +27,7 @@ export default function ParentConferences() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
-  const [booked, setBooked] = useState(null); // { slot, teacherName, token }
+  const [booked, setBooked] = useState(null); // { slot, teacherName, token, email, emailed }
   const [cancelState, setCancelState] = useState(cancelToken ? "idle" : null);
 
   useEffect(() => { if (!cancelToken) listConferenceTeachers().then(setTeachers); }, [cancelToken]);
@@ -67,7 +67,12 @@ export default function ParentConferences() {
       listOpenConferenceSlots(teacher).then(setSlots);
       return;
     }
-    setBooked({ slot, teacherName, token: res.token });
+    const email = form.parentEmail.trim();
+    setBooked({ slot, teacherName, token: res.token, email, emailed: null });
+    if (email) {
+      sendConferenceConfirmation(res.token).then(r =>
+        setBooked(b => (b && b.token === res.token ? { ...b, emailed: !!r?.sent } : b)));
+    }
     setForm(f => ({ ...EMPTY_FORM, parentName: f.parentName, parentEmail: f.parentEmail, parentPhone: f.parentPhone }));
     setSlot(null);
   }
@@ -114,7 +119,9 @@ export default function ParentConferences() {
             <p style={{ marginBottom: "0.25rem" }}>{fmtDay(booked.slot.starts_at)} at {fmtTime(booked.slot.starts_at)} ({booked.slot.duration_min} min)</p>
             {booked.slot.location && <p className="text-muted">{booked.slot.location}</p>}
             <p className="text-muted" style={{ fontSize: "0.82rem", marginTop: "1rem" }}>
-              Take a screenshot of this page. If you need to cancel, use this link:
+              {booked.emailed
+                ? <>A confirmation was emailed to <strong>{booked.email}</strong> with a link to cancel if plans change. You can also cancel here:</>
+                : <>Take a screenshot of this page. If you need to cancel, use this link:</>}
             </p>
             <a href={cancelUrl} style={{ color: GOLD, fontSize: "0.8rem", wordBreak: "break-all" }}>{cancelUrl}</a>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.25rem", flexWrap: "wrap" }}>

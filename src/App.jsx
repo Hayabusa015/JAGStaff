@@ -443,7 +443,7 @@ export default function App() {
         {tab === "admin"       && isAdmin && <AdminSettings user={user} hideableTabs={HIDEABLE_TABS} />}
         {tab === "hallpass"    && <HallPass      {...sharedProps} />}
         {tab === "infractions" && !tabHidden("infractions") && <Infractions  students={students} user={user} />}
-        {tab === "conferences" && !tabHidden("conferences") && <Conferences user={user} />}
+        {tab === "conferences" && !tabHidden("conferences") && <Conferences user={user} isAdmin={isAdmin} />}
         {tab === "messages"    && <StaffMessaging user={user} staffList={staffList} {...messaging} />}
 
         {tab === "resources" && (

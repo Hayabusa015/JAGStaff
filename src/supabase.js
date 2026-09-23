@@ -2682,41 +2682,36 @@ export function useAppSettings() {
 // Staff side: a teacher's own slots with any booking attached. Parents book
 // through the public /conferences page via the conference_* RPCs and never
 // read these tables directly.
-export function useConferenceSlots(teacherEmail) {
+// Pass a teacher's email for their own schedule, or null (admins only) for
+// every teacher's — the office view and the mailbox print run.
+export function useConferenceSlots(teacherEmail, { all = false } = {}) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!SUPABASE_READY || !supabase || !teacherEmail) { setLoading(false); return; }
-    const { data } = await supabase.from("conference_slots")
+    if (!SUPABASE_READY || !supabase || (!teacherEmail && !all)) { setLoading(false); return; }
+    let q = supabase.from("conference_slots")
       .select("*, booking:conference_bookings(*)")
-      .eq("teacher_email", teacherEmail)
       .order("starts_at");
+    if (!all) q = q.eq("teacher_email", teacherEmail);
+    const { data } = await q;
     setSlots((data || []).map(s => ({
       ...s,
       booking: Array.isArray(s.booking) ? (s.booking[0] || null) : s.booking,
     })));
     setLoading(false);
-  }, [teacherEmail]);
+  }, [teacherEmail, all]);
 
   useEffect(() => {
     load();
-    if (!SUPABASE_READY || !supabase || !teacherEmail) return;
-    const ch = supabase.channel(`conferences_${teacherEmail}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conference_slots", filter: `teacher_email=eq.${teacherEmail}` }, load)
+    if (!SUPABASE_READY || !supabase || (!teacherEmail && !all)) return;
+    const ch = supabase.channel(`conferences_${all ? "all" : teacherEmail}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conference_slots",
+        ...(all ? {} : { filter: `teacher_email=eq.${teacherEmail}` }) }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "conference_bookings" }, load)
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [teacherEmail, load]);
-
-  async function addSlots(rows) {
-    if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
-    const { error } = await supabase.from("conference_slots")
-      .upsert(rows, { onConflict: "teacher_email,starts_at", ignoreDuplicates: true });
-    if (error) return { ok: false, error: error.message };
-    await load();
-    return { ok: true };
-  }
+  }, [teacherEmail, all, load]);
 
   async function deleteSlot(id) {
     if (!SUPABASE_READY || !supabase) return;
@@ -2730,7 +2725,54 @@ export function useConferenceSlots(teacherEmail) {
     await load();
   }
 
-  return { slots, loading, addSlots, deleteSlot, cancelBooking, reload: load };
+  return { slots, loading, deleteSlot, cancelBooking, reload: load };
+}
+
+// Office-set conference nights. Creating one also creates that night's slots
+// for every chosen teacher (admin-only per RLS).
+export function useConferenceSessions() {
+  const [sessions, setSessions] = useState([]);
+
+  const load = useCallback(async () => {
+    if (!SUPABASE_READY || !supabase) return;
+    const { data } = await supabase.from("conference_sessions").select("*").order("date").order("start_time");
+    setSessions(data || []);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // session: { label, date, start_time, end_time, slot_minutes, break_start, break_end }
+  // teachers: [{ email, name, room }]; times: ISO start times from buildSlotTimes
+  async function createSession(session, teachers, times, userEmail) {
+    if (!SUPABASE_READY || !supabase) return { ok: false, error: "Not connected." };
+    const { data: row, error } = await supabase.from("conference_sessions")
+      .insert({ ...session, break_start: session.break_start || null, break_end: session.break_end || null, created_by: userEmail })
+      .select().single();
+    if (error) return { ok: false, error: error.message };
+    const slots = teachers.flatMap(t => times.map(starts_at => ({
+      session_id: row.id,
+      teacher_email: t.email,
+      teacher_name: t.name || null,
+      starts_at,
+      duration_min: session.slot_minutes,
+      location: t.room ? `Room ${t.room}` : null,
+    })));
+    for (let i = 0; i < slots.length; i += 500) {
+      const { error: e2 } = await supabase.from("conference_slots")
+        .upsert(slots.slice(i, i + 500), { onConflict: "teacher_email,starts_at", ignoreDuplicates: true });
+      if (e2) { await supabase.from("conference_sessions").delete().eq("id", row.id); return { ok: false, error: e2.message }; }
+    }
+    await load();
+    return { ok: true, count: slots.length };
+  }
+
+  async function deleteSession(id) {
+    if (!SUPABASE_READY || !supabase) return;
+    await supabase.from("conference_sessions").delete().eq("id", id);
+    await load();
+  }
+
+  return { sessions, createSession, deleteSession, reload: load };
 }
 
 // Public (no sign-in) — thin wrappers over the SECURITY DEFINER RPCs.
@@ -2755,6 +2797,17 @@ export async function bookConference(f) {
   });
   if (error) return { ok: false, error: rpcError(error) };
   return { ok: true, token: data };
+}
+// Fire the confirmation email (parent + teacher heads-up). Harmless if email
+// isn't set up yet — the function answers { sent: false, reason: "not_configured" }.
+export async function sendConferenceConfirmation(token) {
+  if (!SUPABASE_READY || !supabase) return { sent: false };
+  try {
+    const { data } = await supabase.functions.invoke("conference-email", { body: { token } });
+    return data || { sent: false };
+  } catch {
+    return { sent: false };
+  }
 }
 export async function cancelConference(token) {
   if (!SUPABASE_READY || !supabase) return false;
