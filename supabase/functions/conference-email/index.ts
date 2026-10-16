@@ -72,7 +72,13 @@ Deno.serve(async (req) => {
 
   const key = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("CONFERENCE_FROM_EMAIL");
-  if (!key || !from) return json({ sent: false, reason: "not_configured" });
+  if (!key || !from) {
+    // Report which expected secrets are missing, plus any similarly named ones
+    // that are set (names only, never values), so a typo is easy to spot.
+    const missing = [!key && "RESEND_API_KEY", !from && "CONFERENCE_FROM_EMAIL"].filter(Boolean);
+    const similar = Object.keys(Deno.env.toObject()).filter(n => /RESEND|CONFERENCE|FROM_EMAIL|MAIL/i.test(n));
+    return json({ sent: false, reason: "not_configured", missing, similar });
+  }
 
   let token = "";
   try { token = String((await req.json())?.token || ""); } catch { /* fall through */ }
